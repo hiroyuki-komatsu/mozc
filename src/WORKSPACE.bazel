@@ -5,11 +5,11 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl",
 load("//:config.bzl", "QT_BASE_PATH")
 
 # This rule reffers $ANDROID_SDK_HOME
-android_sdk_repository(name = "androidsdk")
+#android_sdk_repository(name = "androidsdk")
 
 # Android NDK version should be r11c+ for Abseil.
 # This rule reffers $ANDROID_NDK_HOME
-android_ndk_repository(name = "androidndk")
+#android_ndk_repository(name = "androidndk")
 
 local_repository(
     name = "com_google_absl",
@@ -58,6 +58,30 @@ new_local_repository(
     # This path should be updated per the environment.
     path = "/usr",  # For Debian
     build_file = "BUILD.ibus.bazel",
+)
+
+# uim
+new_local_repository(
+    name = "uim",
+    # This path should be updated per the environment.
+    path = "/usr",  # For Debian
+    build_file = "BUILD.uim.bazel",
+)
+
+# Fcitx
+new_local_repository(
+    name = "fcitx",
+    # This path should be updated per the environment.
+    path = "/usr",  # For Debian
+    build_file = "BUILD.fcitx.bazel",
+)
+
+# Fcitx 5
+new_local_repository(
+    name = "fcitx5",
+    # This path should be updated per the environment.
+    path = "/usr",  # For Debian
+    build_file = "BUILD.fcitx5.bazel",
 )
 
 # Japanese Usage Dictionary
