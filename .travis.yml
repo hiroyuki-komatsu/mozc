@@ -44,6 +44,12 @@ before_install:
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get update; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install -y libc++-dev libc++abi-dev python3-dev python-six python3-six pkg-config git curl bzip2 unzip make ninja-build; fi
   - if [ $TARGET_PLATFORM == Linux ]; then sudo apt-get install -y libibus-1.0-dev libglib2.0-dev qtbase5-dev libgtk2.0-dev libxcb-xfixes0-dev libjsoncpp-dev; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then sudo apt-get install -y curl gnupg libncurses5; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then sudo curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then sudo mv bazel.gpg /etc/apt/trusted.gpg.d/; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then sudo echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | tee /etc/apt/sources.list.d/bazel.list; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then sudo apt update; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then sudo apt install -y bazel; fi
 
 install:
   - if [ $TRAVIS_OS_NAME == linux ]; then git -C src/third_party clone https://chromium.googlesource.com/chromium/tools/depot_tools.git; fi
@@ -53,8 +59,7 @@ install:
 
 script:
   - cd ./src
-  - if [ $TARGET_PLATFORM == Linux ]; then python3 build_mozc.py gyp --target_platform=Linux; fi
-  - if [ $TARGET_PLATFORM == Linux ]; then python3 build_mozc.py build -c Release package; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then bazel build --config oss_linux //unix/uim:libuim-mozc.so //server:mozc_server //renderer:mozc_renderer //unix/ibus:ibus_mozc //unix:icons //unix/emacs:mozc_emacs_helper //gui/tool:mozc_tool ; fi
 
 matrix:
   exclude:
