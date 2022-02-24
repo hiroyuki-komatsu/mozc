@@ -52,8 +52,6 @@ before_install:
 install:
   - if [ $TRAVIS_OS_NAME == linux ]; then git -C src/third_party clone https://chromium.googlesource.com/chromium/tools/depot_tools.git; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then export PATH="$PATH":`pwd`/src/third_party/depot_tools; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then unset CC; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then unset CXX; fi
 
 script:
   - cd ./src
