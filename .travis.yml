@@ -56,7 +56,7 @@ install:
 script:
   - cd ./src
   - if [ $TARGET_PLATFORM == Linux ]; then bazel build --config oss_linux //unix/uim:libuim-mozc.so //server:mozc_server //renderer:mozc_renderer //unix/ibus:ibus_mozc //unix:icons //unix/emacs:mozc_emacs_helper //gui/tool:mozc_tool ; fi
-  - if [ $TARGET_PLATFORM == Linux ]; then bazel test ... --config oss_linux -c dbg -- -net/... -third_party/... ; fi
+  - if [ $TARGET_PLATFORM == Linux ]; then bazel test ... --config oss_linux -c dbg -- -unix/fcitx/... -unix/fcitx5/... -net/... -third_party/... ; fi
 
 matrix:
   exclude:
