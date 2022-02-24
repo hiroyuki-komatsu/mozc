@@ -203,7 +203,7 @@ class MozcCandidateList final : public CandidateList,
     return labels_[idx];
   }
 
-  const CandidateWord &candidate(int idx) const override {
+  const CandidateWord candidate(int idx) const override {
     checkIndex(idx);
     return *candidateWords_[idx];
   }
