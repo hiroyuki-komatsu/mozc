@@ -8,6 +8,13 @@ Android OS, Apple OS X, Chromium OS, GNU/Linux and Microsoft Windows.  This
 OpenSource project originates from
 [Google Japanese Input](http://www.google.com/intl/ja/ime/).
 
+Build Status
+------------
+
+| Linux |
+|:----------------------------:|
+[![Build Status](https://github.com/shitamo/mozc/actions/workflows/main.yml/badge.svg?branch=uim)](https://github.com/shitamo/mozc/actions?query=main)|
+
 What's Mozc?
 ------------
 For historical reasons, the project name *Mozc* has two different meanings:
