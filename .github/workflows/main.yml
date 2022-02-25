@@ -35,4 +35,5 @@ jobs:
           sudo apt-get install -y libuim-dev fcitx-libs-dev libfcitx5config-dev libfcitx5utils-dev libfcitx5core-dev fcitx5-modules-dev
           sudo wget https://storage.googleapis.com/bazel-apt/pool/jdk1.8/b/bazel/bazel_5.0.0_amd64.deb
           sudo dpkg -i bazel_5.0.0_amd64.deb
+          cd ./src
           bazel build --config oss_linux //unix/uim:libuim-mozc.so //server:mozc_server //renderer:mozc_renderer //unix/ibus:ibus_mozc //unix:icons //unix/emacs:mozc_emacs_helper //gui/tool:mozc_tool
