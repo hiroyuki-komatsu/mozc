@@ -13,7 +13,7 @@ Build Status
 
 | Linux |
 |:----------------------------:|
-[![Build Status](https://github.com/shitamo/mozc/actions/workflows/main.yml/badge.svg?branch=uim)](https://github.com/shitamo/mozc/actions?query=main)|
+[![Build Status](https://github.com/shitamo/mozc/actions/workflows/main.yml/badge.svg?branch=uim)](https://github.com/shitamo/mozc/actions?query=workflow%3ACI++)|
 
 What's Mozc?
 ------------
