@@ -11,7 +11,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-20.04
-    timeout-minutes: 30
+    timeout-minutes: 120
 
     steps:
       - name: checkout
@@ -29,4 +29,8 @@ jobs:
         working-directory: ./src
         run: |
           bazel build --config oss_linux package
+
+      - name: tests
+        working-directory: ./src
+        run: |
           bazel test --config oss_linux ... -- -net/... -third_party/...
