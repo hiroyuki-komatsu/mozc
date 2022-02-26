@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,25 +30,32 @@
 #ifndef MOZC_DICTIONARY_TEXT_DICTIONARY_LOADER_H_
 #define MOZC_DICTIONARY_TEXT_DICTIONARY_LOADER_H_
 
+#include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/port.h"
-#include "base/string_piece.h"
+#include "dictionary/dictionary_token.h"
 #include "testing/base/public/gunit_prod.h"
+#include "absl/strings/string_view.h"
 // for FRIEND_TEST
 
 namespace mozc {
 namespace dictionary {
 
-struct Token;
-class POSMatcher;
+class PosMatcher;
 
 class TextDictionaryLoader {
  public:
   // TODO(noriyukit): Better to pass the pointer of pos_matcher.
-  explicit TextDictionaryLoader(const POSMatcher& pos_matcher);
-  TextDictionaryLoader(uint16 zipcode_id, uint16 isolated_word_id);
+  explicit TextDictionaryLoader(const PosMatcher &pos_matcher);
+  TextDictionaryLoader(uint16_t zipcode_id, uint16_t isolated_word_id);
+
+  TextDictionaryLoader(const TextDictionaryLoader &) = delete;
+  TextDictionaryLoader &operator=(const TextDictionaryLoader &) = delete;
+
   virtual ~TextDictionaryLoader();
 
   // Loads tokens from system dictionary files and reading correction
@@ -57,41 +64,33 @@ class TextDictionaryLoader {
   // that the tokens loaded so far are all cleared and that this class takes the
   // ownership of the loaded tokens, i.e., they are deleted on destruction of
   // this loader instance.
-  void Load(const string &dictionary_filename,
-            const string &reading_correction_filename);
+  void Load(const std::string &dictionary_filename,
+            const std::string &reading_correction_filename);
 
   // The same as Load() method above except that the number of tokens to be
   // loaded is limited up to first |limit| entries.
-  void LoadWithLineLimit(const string &dictionary_filename,
-                         const string &reading_correction_filename,
+  void LoadWithLineLimit(const std::string &dictionary_filename,
+                         const std::string &reading_correction_filename,
                          int limit);
 
   // Clears the loaded tokens.
-  void Clear();
+  void Clear() { tokens_.clear(); }
 
-  // Adds a token.  The ownership is taken by the loader.
-  void AddToken(Token *token) {
-    tokens_.push_back(token);
+  void AddToken(std::unique_ptr<Token> token) {
+    tokens_.push_back(std::move(token));
   }
 
-  const std::vector<Token *> &tokens() const {
-    return tokens_;
-  }
+  const std::vector<std::unique_ptr<Token>> &tokens() const { return tokens_; }
 
   // Appends the tokens owned by this instance to |res|.  Note that the appended
   // tokens are still owned by this instance and deleted on destruction of this
   // instance or when Clear() is called.
   void CollectTokens(std::vector<Token *> *res) const;
 
- protected:
-  // Allows derived classes to implement custom filtering rules.
-  virtual Token *ParseTSV(const std::vector<StringPiece> &columns) const;
-
  private:
-  static void LoadReadingCorrectionTokens(
-      const string &reading_correction_filename,
-      const std::vector<Token *> &ref_sorted_tokens,
-      int *limit, std::vector<Token *> *tokens);
+  static std::vector<std::unique_ptr<Token>> LoadReadingCorrectionTokens(
+      const std::string &reading_correction_filename,
+      const std::vector<std::unique_ptr<Token>> &ref_sorted_tokens, int *limit);
 
   // Encodes special information into |token| with the |label|.
   // Currently, label must be:
@@ -100,13 +99,15 @@ class TextDictionaryLoader {
   //   - "ZIP_CODE", or
   //   - "ENGLISH".
   // Otherwise, the method returns false.
-  bool RewriteSpecialToken(Token *token, StringPiece label) const;
+  bool RewriteSpecialToken(Token *token, absl::string_view label) const;
 
-  Token *ParseTSVLine(StringPiece line) const;
+  std::unique_ptr<Token> ParseTSVLine(absl::string_view line) const;
+  std::unique_ptr<Token> ParseTSV(
+      const std::vector<absl::string_view> &columns) const;
 
-  const uint16 zipcode_id_;
-  const uint16 isolated_word_id_;
-  std::vector<Token *> tokens_;
+  const uint16_t zipcode_id_;
+  const uint16_t isolated_word_id_;
+  std::vector<std::unique_ptr<Token>> tokens_;
 
   FRIEND_TEST(TextDictionaryLoaderTest, RewriteSpecialTokenTest);
 };

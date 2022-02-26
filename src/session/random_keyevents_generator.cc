@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,14 +29,17 @@
 
 #include "session/random_keyevents_generator.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
+#include "base/japanese_util.h"
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "base/port.h"
 #include "base/util.h"
 #include "protocol/commands.pb.h"
+#include "absl/base/call_once.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace session {
@@ -45,82 +48,53 @@ namespace {
 #include "session/session_stress_test_data.h"
 
 // Constants for ProbableKeyEvent.
-const double kMostPossibleKeyProbability = 0.98;
-const size_t kProbableKeyEventSize = 8;
+constexpr double kMostPossibleKeyProbability = 0.98;
+constexpr size_t kProbableKeyEventSize = 8;
 
 const commands::KeyEvent::SpecialKey kSpecialKeys[] = {
-  commands::KeyEvent::SPACE,
-  commands::KeyEvent::BACKSPACE,
-  commands::KeyEvent::DEL,
-  commands::KeyEvent::DOWN,
-  commands::KeyEvent::END,
-  commands::KeyEvent::ENTER,
-  commands::KeyEvent::ESCAPE,
-  commands::KeyEvent::HOME,
-  commands::KeyEvent::INSERT,
-  commands::KeyEvent::HENKAN,
-  commands::KeyEvent::MUHENKAN,
-  commands::KeyEvent::LEFT,
-  commands::KeyEvent::RIGHT,
-  commands::KeyEvent::UP,
-  commands::KeyEvent::DOWN,
-  commands::KeyEvent::PAGE_UP,
-  commands::KeyEvent::PAGE_DOWN,
-  commands::KeyEvent::TAB,
-  commands::KeyEvent::F1,
-  commands::KeyEvent::F2,
-  commands::KeyEvent::F3,
-  commands::KeyEvent::F4,
-  commands::KeyEvent::F5,
-  commands::KeyEvent::F6,
-  commands::KeyEvent::F7,
-  commands::KeyEvent::F8,
-  commands::KeyEvent::F9,
-  commands::KeyEvent::F10,
-  commands::KeyEvent::F11,
-  commands::KeyEvent::F12,
-  commands::KeyEvent::NUMPAD0,
-  commands::KeyEvent::NUMPAD1,
-  commands::KeyEvent::NUMPAD2,
-  commands::KeyEvent::NUMPAD3,
-  commands::KeyEvent::NUMPAD4,
-  commands::KeyEvent::NUMPAD5,
-  commands::KeyEvent::NUMPAD6,
-  commands::KeyEvent::NUMPAD7,
-  commands::KeyEvent::NUMPAD8,
-  commands::KeyEvent::NUMPAD9,
-  commands::KeyEvent::MULTIPLY,
-  commands::KeyEvent::ADD,
-  commands::KeyEvent::SEPARATOR,
-  commands::KeyEvent::SUBTRACT,
-  commands::KeyEvent::DECIMAL,
-  commands::KeyEvent::DIVIDE,
-  commands::KeyEvent::EQUALS,
-  commands::KeyEvent::COMMA,
+    commands::KeyEvent::SPACE,     commands::KeyEvent::BACKSPACE,
+    commands::KeyEvent::DEL,       commands::KeyEvent::DOWN,
+    commands::KeyEvent::END,       commands::KeyEvent::ENTER,
+    commands::KeyEvent::ESCAPE,    commands::KeyEvent::HOME,
+    commands::KeyEvent::INSERT,    commands::KeyEvent::HENKAN,
+    commands::KeyEvent::MUHENKAN,  commands::KeyEvent::LEFT,
+    commands::KeyEvent::RIGHT,     commands::KeyEvent::UP,
+    commands::KeyEvent::DOWN,      commands::KeyEvent::PAGE_UP,
+    commands::KeyEvent::PAGE_DOWN, commands::KeyEvent::TAB,
+    commands::KeyEvent::F1,        commands::KeyEvent::F2,
+    commands::KeyEvent::F3,        commands::KeyEvent::F4,
+    commands::KeyEvent::F5,        commands::KeyEvent::F6,
+    commands::KeyEvent::F7,        commands::KeyEvent::F8,
+    commands::KeyEvent::F9,        commands::KeyEvent::F10,
+    commands::KeyEvent::F11,       commands::KeyEvent::F12,
+    commands::KeyEvent::NUMPAD0,   commands::KeyEvent::NUMPAD1,
+    commands::KeyEvent::NUMPAD2,   commands::KeyEvent::NUMPAD3,
+    commands::KeyEvent::NUMPAD4,   commands::KeyEvent::NUMPAD5,
+    commands::KeyEvent::NUMPAD6,   commands::KeyEvent::NUMPAD7,
+    commands::KeyEvent::NUMPAD8,   commands::KeyEvent::NUMPAD9,
+    commands::KeyEvent::MULTIPLY,  commands::KeyEvent::ADD,
+    commands::KeyEvent::SEPARATOR, commands::KeyEvent::SUBTRACT,
+    commands::KeyEvent::DECIMAL,   commands::KeyEvent::DIVIDE,
+    commands::KeyEvent::EQUALS,    commands::KeyEvent::COMMA,
 };
 
-uint32 GetRandomAsciiKey() {
-  return static_cast<uint32>(' ') +
-      Util::Random(static_cast<uint32>('~' - ' '));
+uint32_t GetRandomAsciiKey() {
+  return static_cast<uint32_t>(' ') +
+         Util::Random(static_cast<uint32_t>('~' - ' '));
 }
 
 void InitSeedWithRandomValue() {
-  uint32 seed = 0;
+  uint32_t seed = 0;
   mozc::Util::GetRandomSequence(reinterpret_cast<char *>(&seed), sizeof(seed));
   Util::SetRandomSeed(seed);
 }
 
-void DoNothing() {
-  // Do nothing.
-  // Used only for marking the seed initialized.
-}
-
-once_t seed_init_once = MOZC_ONCE_INIT;
+absl::once_flag seed_init_once;
 }  // namespace
 
 void RandomKeyEventsGenerator::PrepareForMemoryLeakTest() {
   // Read all kTestSentences and load these to memory.
-  const int size = arraysize(kTestSentences);
+  const int size = std::size(kTestSentences);
   for (int i = 0; i < size; ++i) {
     const char *sentence = kTestSentences[i];
     CHECK_GT(strlen(sentence), 0);
@@ -128,10 +102,10 @@ void RandomKeyEventsGenerator::PrepareForMemoryLeakTest() {
 }
 
 // Generates KeyEvent instances based on |romaji| and stores into |keys|.
-void TypeRawKeys(StringPiece romaji, bool create_probable_key_events,
+void TypeRawKeys(absl::string_view romaji, bool create_probable_key_events,
                  std::vector<commands::KeyEvent> *keys) {
   for (ConstChar32Iterator iter(romaji); !iter.Done(); iter.Next()) {
-    const uint32 ucs4 = iter.Get();
+    const uint32_t ucs4 = iter.Get();
     if (ucs4 < 0x20 || ucs4 > 0x7F) {
       continue;
     }
@@ -140,8 +114,8 @@ void TypeRawKeys(StringPiece romaji, bool create_probable_key_events,
     if (create_probable_key_events) {
       commands::KeyEvent::ProbableKeyEvent *probable_key_event =
           key.add_probable_key_event();
-        probable_key_event->set_key_code(ucs4);
-        probable_key_event->set_probability(kMostPossibleKeyProbability);
+      probable_key_event->set_key_code(ucs4);
+      probable_key_event->set_probability(kMostPossibleKeyProbability);
       for (size_t i = 0; i < kProbableKeyEventSize; ++i) {
         commands::KeyEvent::ProbableKeyEvent *probable_key_event =
             key.add_probable_key_event();
@@ -155,25 +129,24 @@ void TypeRawKeys(StringPiece romaji, bool create_probable_key_events,
 }
 
 // Converts from Hiragana to Romaji.
-string ToRomaji(StringPiece hiragana) {
-  string tmp, result;
-  Util::HiraganaToRomanji(hiragana, &tmp);
-  Util::FullWidthToHalfWidth(tmp, &result);
+std::string ToRomaji(absl::string_view hiragana) {
+  std::string tmp, result;
+  japanese_util::HiraganaToRomanji(hiragana, &tmp);
+  japanese_util::FullWidthToHalfWidth(tmp, &result);
   return result;
 }
 
-void RandomKeyEventsGenerator::InitSeed(uint32 seed) {
-  Util::SetRandomSeed(seed);
-  CallOnce(&seed_init_once, &DoNothing);
+void RandomKeyEventsGenerator::InitSeed(uint32_t seed) {
+  absl::call_once(seed_init_once, &Util::SetRandomSeed, seed);
 }
 
 // Generates KeyEvent instances based on |sentence| and stores into |keys|.
 // And Enter key event is appended at the tail.
 // The instances have ProbableKeyEvent if |create_probable_key_events| is set.
-void GenerateMobileSequenceInternal(
-    StringPiece sentence, bool create_probable_key_events,
-    std::vector<commands::KeyEvent> *keys) {
-  const string input = ToRomaji(sentence);
+void GenerateMobileSequenceInternal(absl::string_view sentence,
+                                    bool create_probable_key_events,
+                                    std::vector<commands::KeyEvent> *keys) {
+  const std::string input = ToRomaji(sentence);
   VLOG(1) << input;
 
   // Type the sentence
@@ -190,16 +163,16 @@ void RandomKeyEventsGenerator::GenerateMobileSequence(
   keys->clear();
 
   // If seed was not initialized, set seed randomly.
-  CallOnce(&seed_init_once, &InitSeedWithRandomValue);
+  absl::call_once(seed_init_once, &InitSeedWithRandomValue);
 
-  const StringPiece sentence(
-      kTestSentences[Util::Random(arraysize(kTestSentences))]);
+  const absl::string_view sentence(
+      kTestSentences[Util::Random(std::size(kTestSentences))]);
   CHECK(!sentence.empty());
-  for (size_t i = 0; i < sentence.size(); ) {
+  for (size_t i = 0; i < sentence.size();) {
     // To simulate mobile key events, split given sentence into smaller parts.
     // Average 5, Min 1, Max 15
     const size_t len = Util::Random(5) + Util::Random(5) + Util::Random(5);
-    GenerateMobileSequenceInternal(ClippedSubstr(sentence, i, len),
+    GenerateMobileSequenceInternal(absl::ClippedSubstr(sentence, i, len),
                                    create_probable_key_events, keys);
     i += len;
   }
@@ -211,13 +184,13 @@ void RandomKeyEventsGenerator::GenerateSequence(
   keys->clear();
 
   // If seed was not initialized, set seed randomly.
-  CallOnce(&seed_init_once, &InitSeedWithRandomValue);
+  absl::call_once(seed_init_once, &InitSeedWithRandomValue);
 
-  const string sentence =
-      kTestSentences[Util::Random(arraysize(kTestSentences))];
+  const std::string sentence =
+      kTestSentences[Util::Random(std::size(kTestSentences))];
   CHECK(!sentence.empty());
 
-  const string input = ToRomaji(sentence);
+  const std::string input = ToRomaji(sentence);
 
   VLOG(1) << input;
 
@@ -281,15 +254,13 @@ void RandomKeyEventsGenerator::GenerateSequence(
             key.add_modifier_keys(commands::KeyEvent::SHIFT);
           }
           break;
-        default:
-          {
-            const size_t space_num = Util::Random(20) + 3;
-            for (size_t i = 0; i < space_num; ++i) {
-              key.set_special_key(commands::KeyEvent::SPACE);
-              keys->push_back(key);
-            }
+        default: {
+          const size_t space_num = Util::Random(20) + 3;
+          for (size_t i = 0; i < space_num; ++i) {
+            key.set_special_key(commands::KeyEvent::SPACE);
+            keys->push_back(key);
           }
-          break;
+        } break;
       }
 
       if (Util::Random(4) == 0) {
@@ -330,14 +301,13 @@ void RandomKeyEventsGenerator::GenerateSequence(
         case 3:
           key.set_special_key(commands::KeyEvent::BACKSPACE);
           break;
-        default:
-          {
-            // add any ascii
-            const size_t insert_num = Util::Random(5) + 1;
-            for (size_t i = 0; i < insert_num; ++i) {
-              key.set_key_code(GetRandomAsciiKey());
-            }
+        default: {
+          // add any ascii
+          const size_t insert_num = Util::Random(5) + 1;
+          for (size_t i = 0; i < insert_num; ++i) {
+            key.set_key_code(GetRandomAsciiKey());
           }
+        }
       }
       keys->push_back(key);
     }
@@ -353,13 +323,13 @@ void RandomKeyEventsGenerator::GenerateSequence(
       commands::KeyEvent key;
       switch (Util::Random(8)) {
         case 0:
-          key.set_key_code(kSpecialKeys[Util::Random(arraysize(kSpecialKeys))]);
+          key.set_key_code(kSpecialKeys[Util::Random(std::size(kSpecialKeys))]);
           break;
         case 1:
           key.set_key_code(GetRandomAsciiKey());
           break;
         default:
-          key.CopyFrom(basic_keys[i]);
+          key = basic_keys[i];
           break;
       }
 
@@ -394,7 +364,7 @@ void RandomKeyEventsGenerator::GenerateSequence(
 
 // static
 const char **RandomKeyEventsGenerator::GetTestSentences(size_t *size) {
-  *size = arraysize(kTestSentences);
+  *size = std::size(kTestSentences);
   return kTestSentences;
 }
 }  // namespace session

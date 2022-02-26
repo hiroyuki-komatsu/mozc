@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,12 @@
   #     to executables and loadable modules.
   'conditions': [
     ['qt_dir and target_platform=="Windows"', {
-      'include_dirs': ['<(qt_dir)/include'],
+      'include_dirs': [
+        '<(qt_dir)/include',
+        '<(qt_dir)/include/QtCore',
+        '<(qt_dir)/include/QtGui',
+        '<(qt_dir)/include/QtWidgets',
+      ],
       'configurations': {
         'Debug_Base': {
           'msvs_settings': {
@@ -74,7 +79,12 @@
     ['target_platform=="Mac"', {
       'conditions': [
         ['qt_dir', {
-          'include_dirs': ['<(qt_dir)/include'],
+          'include_dirs': [
+            '<(qt_dir)/include',
+            '<(qt_dir)/include/QtCore',
+            '<(qt_dir)/include/QtGui',
+            '<(qt_dir)/include/QtWidgets',
+          ],
           'xcode_settings': {
             'WARNING_CFLAGS': ['-Wno-inconsistent-missing-override'],
           },

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@
 
 #include "base/stopwatch.h"
 
+#include <cstdint>
 #include <memory>
 #include <numeric>
 
@@ -40,18 +41,16 @@ namespace mozc {
 
 class StopwatchTest : public testing::Test {
  protected:
-  void SetUp() {
-    clock_mock_.reset(new ClockMock(0, 0));
+  void SetUp() override {
+    clock_mock_ = std::make_unique<ClockMock>(0, 0);
     // 1GHz (Accuracy = 1ns)
-    clock_mock_->SetFrequency(1000000000uLL);
+    clock_mock_->SetFrequency(uint64_t{1000000000});
     Clock::SetClockForUnitTest(clock_mock_.get());
   }
 
-  void TearDown() {
-    Clock::SetClockForUnitTest(nullptr);
-  }
+  void TearDown() override { Clock::SetClockForUnitTest(nullptr); }
 
-  void PutForwardNanoseconds(uint64 nano_sec) {
+  void PutForwardNanoseconds(uint64_t nano_sec) {
     clock_mock_->PutClockForwardByTicks(nano_sec);
   }
 
@@ -59,7 +58,7 @@ class StopwatchTest : public testing::Test {
 };
 
 TEST_F(StopwatchTest, MultipleGetElapsedMillisecondsTest) {
-  const uint64 kWaitNanoseconds = 1000000000uLL;  // 1 sec
+  constexpr uint64_t kWaitNanoseconds = 1000000000uLL;  // 1 sec
 
   Stopwatch stopwatch = Stopwatch::StartNew();
   PutForwardNanoseconds(kWaitNanoseconds);
@@ -67,17 +66,17 @@ TEST_F(StopwatchTest, MultipleGetElapsedMillisecondsTest) {
 
   // GetElapsedX should return the same value if the stopwatch is not running.
   EXPECT_FALSE(stopwatch.IsRunning());
-  const uint64 elapsed_time1 = stopwatch.GetElapsedMilliseconds();
+  const uint64_t elapsed_time1 = stopwatch.GetElapsedMilliseconds();
   PutForwardNanoseconds(kWaitNanoseconds);
-  const uint64 elapsed_time2 = stopwatch.GetElapsedMilliseconds();
+  const uint64_t elapsed_time2 = stopwatch.GetElapsedMilliseconds();
   PutForwardNanoseconds(kWaitNanoseconds);
-  const uint64 elapsed_time3 = stopwatch.GetElapsedMilliseconds();
+  const uint64_t elapsed_time3 = stopwatch.GetElapsedMilliseconds();
   EXPECT_EQ(elapsed_time1, elapsed_time2);
   EXPECT_EQ(elapsed_time1, elapsed_time3);
 }
 
 TEST_F(StopwatchTest, GetElapsedXSecondsTest) {
-  const uint64 kWaitNanoseconds = 1000000000uLL;  // 1 sec
+  constexpr uint64_t kWaitNanoseconds = 1000000000uLL;  // 1 sec
 
   Stopwatch stopwatch = Stopwatch::StartNew();
   PutForwardNanoseconds(kWaitNanoseconds);
@@ -89,9 +88,9 @@ TEST_F(StopwatchTest, GetElapsedXSecondsTest) {
 }
 
 TEST_F(StopwatchTest, RestartTest) {
-  const uint64 kWaitNanoseconds1 = 1000000000uLL;  // 1 sec
-  const uint64 kWaitNanoseconds2 = 2000000000uLL;  // 2 sec
-  const uint64 kWaitNanoseconds3 = 4000000000uLL;  // 4 sec
+  constexpr uint64_t kWaitNanoseconds1 = 1000000000uLL;  // 1 sec
+  constexpr uint64_t kWaitNanoseconds2 = 2000000000uLL;  // 2 sec
+  constexpr uint64_t kWaitNanoseconds3 = 4000000000uLL;  // 4 sec
 
   Stopwatch stopwatch = Stopwatch::StartNew();
   PutForwardNanoseconds(kWaitNanoseconds1);
@@ -101,15 +100,15 @@ TEST_F(StopwatchTest, RestartTest) {
   PutForwardNanoseconds(kWaitNanoseconds3);
   stopwatch.Stop();
 
-  const uint64 kExpected = kWaitNanoseconds1 + kWaitNanoseconds3;
+  constexpr uint64_t kExpected = kWaitNanoseconds1 + kWaitNanoseconds3;
   EXPECT_EQ(kExpected, stopwatch.GetElapsedNanoseconds());
   EXPECT_EQ(kExpected / 1000, stopwatch.GetElapsedMicroseconds());
   EXPECT_EQ(kExpected / 1000000, stopwatch.GetElapsedMilliseconds());
 }
 
 TEST_F(StopwatchTest, ResetTest) {
-  const uint64 kWaitNanoseconds1 = 1000000000uLL;  // 1 sec
-  const uint64 kWaitNanoseconds2 = 2000000000uLL;  // 2 sec
+  constexpr uint64_t kWaitNanoseconds1 = 1000000000uLL;  // 1 sec
+  constexpr uint64_t kWaitNanoseconds2 = 2000000000uLL;  // 2 sec
   Stopwatch stopwatch = Stopwatch::StartNew();
   PutForwardNanoseconds(kWaitNanoseconds1);
   stopwatch.Stop();

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -38,18 +38,19 @@
 #include "composer/internal/composition_input.h"
 #include "composer/internal/transliterators.h"
 #include "composer/table.h"
+#include "absl/container/btree_set.h"
 
 namespace mozc {
 namespace composer {
 
 namespace {
 // Max recursion count for looking up pending loop.
-const int kMaxRecursion = 4;
+constexpr int kMaxRecursion = 4;
 
 // Delete "end" from "target", if "target" ends with the "end".
-bool DeleteEnd(const string &end, string *target) {
-  const string::size_type rindex = target->rfind(end);
-  if (rindex == string::npos) {
+bool DeleteEnd(const std::string &end, std::string *target) {
+  const std::string::size_type rindex = target->rfind(end);
+  if (rindex == std::string::npos) {
     return false;
   }
   target->erase(rindex);
@@ -73,8 +74,8 @@ bool DeleteEnd(const string &end, string *target) {
 // '{*}ぃ' -> '', '{*}い'
 // '{*}い' -> '', '{*}ぃ'
 // Here, we want to get '{*}あ' <-> '{*}ぁ' loop from the input, 'あ'
-bool GetFromPending(const Table *table, const string &key,
-                    int recursion_count, std::set<string> *result) {
+bool GetFromPending(const Table *table, const std::string &key,
+                    int recursion_count, absl::btree_set<std::string> *result) {
   DCHECK(result);
   if (recursion_count == 0) {
     // Don't find the loop within the |recursion_count|.
@@ -99,8 +100,8 @@ bool GetFromPending(const Table *table, const string &key,
       // So here we stop calling recursion.
       return false;
     }
-    if (!GetFromPending(table, entries[i]->pending(),
-                        recursion_count - 1, result)) {
+    if (!GetFromPending(table, entries[i]->pending(), recursion_count - 1,
+                        result)) {
       return false;
     }
   }
@@ -110,57 +111,66 @@ bool GetFromPending(const Table *table, const string &key,
 
 CharChunk::CharChunk(Transliterators::Transliterator transliterator,
                      const Table *table)
-    : transliterator_(transliterator),
-      table_(table),
-      attributes_(NO_TABLE_ATTRIBUTE) {
+    : table_(table),
+      transliterator_(transliterator),
+      attributes_(NO_TABLE_ATTRIBUTE),
+      local_length_cache_(std::string::npos) {
   DCHECK_NE(Transliterators::LOCAL, transliterator);
 }
+
+CharChunk::CharChunk(const CharChunk &x) = default;
+CharChunk &CharChunk::operator=(const CharChunk &x) = default;
 
 void CharChunk::Clear() {
   raw_.clear();
   conversion_.clear();
   pending_.clear();
   ambiguous_.clear();
+  local_length_cache_ = std::string::npos;
 }
 
 size_t CharChunk::GetLength(Transliterators::Transliterator t12r) const {
-  const string t13n = Transliterate(
-      t12r,
-      Table::DeleteSpecialKey(raw_),
-      Table::DeleteSpecialKey(conversion_ + pending_));
-  return Util::CharsLen(t13n);
+  if (t12r == Transliterators::LOCAL &&
+      local_length_cache_ != std::string::npos) {
+    return local_length_cache_;
+  }
+  const std::string t13n =
+      Transliterate(t12r, Table::DeleteSpecialKey(raw_),
+                    Table::DeleteSpecialKey(conversion_ + pending_));
+  size_t length = Util::CharsLen(t13n);
+  if (t12r == Transliterators::LOCAL) {
+    local_length_cache_ = length;
+  }
+  return length;
 }
 
 void CharChunk::AppendResult(Transliterators::Transliterator t12r,
-                             string *result) const {
-  const string t13n = Transliterate(
-      t12r,
-      Table::DeleteSpecialKey(raw_),
-      Table::DeleteSpecialKey(conversion_ + pending_));
+                             std::string *result) const {
+  const std::string t13n =
+      Transliterate(t12r, Table::DeleteSpecialKey(raw_),
+                    Table::DeleteSpecialKey(conversion_ + pending_));
   result->append(t13n);
 }
 
 void CharChunk::AppendTrimedResult(Transliterators::Transliterator t12r,
-                                   string *result) const {
+                                   std::string *result) const {
   // Only determined value (e.g. |conversion_| only) is added.
-  string converted = conversion_;
+  std::string converted = conversion_;
   if (!pending_.empty()) {
     size_t key_length = 0;
     bool fixed = false;
     const Entry *entry = table_->LookUpPrefix(pending_, &key_length, &fixed);
-    if (entry != NULL && entry->input() == entry->result()) {
+    if (entry != nullptr && entry->input() == entry->result()) {
       converted.append(entry->result());
     }
   }
-  result->append(Transliterate(
-      t12r,
-      Table::DeleteSpecialKey(raw_),
-      Table::DeleteSpecialKey(converted)));
+  result->append(Transliterate(t12r, Table::DeleteSpecialKey(raw_),
+                               Table::DeleteSpecialKey(converted)));
 }
 
 void CharChunk::AppendFixedResult(Transliterators::Transliterator t12r,
-                                  string *result) const {
-  string converted = conversion_;
+                                  std::string *result) const {
+  std::string converted = conversion_;
   if (!ambiguous_.empty()) {
     // Add the |ambiguous_| value as a fixed value.  |ambiguous_|
     // contains an undetermined result string like "ん" converted
@@ -173,10 +183,8 @@ void CharChunk::AppendFixedResult(Transliterators::Transliterator t12r,
     // appended.
     converted.append(pending_);
   }
-  result->append(Transliterate(
-      t12r,
-      Table::DeleteSpecialKey(raw_),
-      Table::DeleteSpecialKey(converted)));
+  result->append(Transliterate(t12r, Table::DeleteSpecialKey(raw_),
+                               Table::DeleteSpecialKey(converted)));
 }
 
 // If we have the rule (roman),
@@ -218,7 +226,7 @@ void CharChunk::AppendFixedResult(Transliterators::Transliterator t12r,
 //
 // What we want to append here is the 'looped rule' in |kMaxRecursion| lookup.
 // Here, '{*}ぁ' -> '{*}あ' -> '{*}ぁ' is the loop.
-void CharChunk::GetExpandedResults(std::set<string> *results) const {
+void CharChunk::GetExpandedResults(std::set<std::string> *results) const {
   DCHECK(results);
 
   if (pending_.empty()) {
@@ -237,40 +245,37 @@ void CharChunk::GetExpandedResults(std::set<string> *results) const {
     if (entries[i]->pending().empty()) {
       continue;
     }
-    std::set<string> loop_result;
-    if (!GetFromPending(table_, entries[i]->pending(),
-                        kMaxRecursion, &loop_result)) {
+    absl::btree_set<std::string> loop_result;
+    if (!GetFromPending(table_, entries[i]->pending(), kMaxRecursion,
+                        &loop_result)) {
       continue;
     }
-    for (std::set<string>::const_iterator itr = loop_result.begin();
+    for (absl::btree_set<std::string>::const_iterator itr = loop_result.begin();
          itr != loop_result.end(); ++itr) {
       results->insert(Table::DeleteSpecialKey(*itr));
     }
   }
 }
 
-bool CharChunk::IsFixed() const {
-  return pending_.empty();
-}
+bool CharChunk::IsFixed() const { return pending_.empty(); }
 
 bool CharChunk::IsAppendable(Transliterators::Transliterator t12r,
                              const Table *table) const {
   return !pending_.empty() &&
-      (t12r == Transliterators::LOCAL || t12r == transliterator_) &&
-      table == table_;
+         (t12r == Transliterators::LOCAL || t12r == transliterator_) &&
+         table == table_;
 }
 
-bool CharChunk::IsConvertible(
-    Transliterators::Transliterator t12r,
-    const Table *table,
-    const string &input) const {
+bool CharChunk::IsConvertible(Transliterators::Transliterator t12r,
+                              const Table *table,
+                              const std::string &input) const {
   if (!IsAppendable(t12r, table)) {
     return false;
   }
 
   size_t key_length = 0;
   bool fixed = false;
-  string key = pending_ + input;
+  std::string key = pending_ + input;
   const Entry *entry = table->LookUpPrefix(key, &key_length, &fixed);
 
   return entry && (key.size() == key_length) && fixed;
@@ -279,6 +284,7 @@ bool CharChunk::IsConvertible(
 void CharChunk::Combine(const CharChunk &left_chunk) {
   conversion_ = left_chunk.conversion_ + conversion_;
   raw_ = left_chunk.raw_ + raw_;
+  local_length_cache_ = std::string::npos;
   // TODO(komatsu): This is a hacky way.  We should look up the
   // conversion table with the new |raw_| value.
   if (left_chunk.ambiguous_.empty()) {
@@ -293,15 +299,16 @@ void CharChunk::Combine(const CharChunk &left_chunk) {
   pending_ = left_chunk.pending_ + pending_;
 }
 
-bool CharChunk::AddInputInternal(string *input) {
-  const bool kNoLoop = false;
+bool CharChunk::AddInputInternal(std::string *input) {
+  constexpr bool kNoLoop = false;
 
   size_t key_length = 0;
   bool fixed = false;
-  string key = pending_ + *input;
+  std::string key = pending_ + *input;
   const Entry *entry = table_->LookUpPrefix(key, &key_length, &fixed);
+  local_length_cache_ = std::string::npos;
 
-  if (entry == NULL) {
+  if (entry == nullptr) {
     if (key_length == 0) {
       // No prefix character is not contained in the table, fallback
       // operation is performed.
@@ -324,11 +331,11 @@ bool CharChunk::AddInputInternal(string *input) {
     key_length -= pending_.size();
 
     // Conversion data had only pending.
-    const string new_pending_chars(*input, 0, key_length);
+    const std::string new_pending_chars(*input, 0, key_length);
     raw_.append(new_pending_chars);
     pending_.append(new_pending_chars);
     if (!ambiguous_.empty()) {
-      // If ambiguos_ has already a value, ambiguous_ is appended.
+      // If ambiguous_ has already a value, ambiguous_ is appended.
       // ex. "ny" makes ambiguous_ "んy", but "sh" leaves ambiguous_ empty.
       ambiguous_.append(new_pending_chars);
     }
@@ -336,12 +343,12 @@ bool CharChunk::AddInputInternal(string *input) {
     return kNoLoop;
   }
 
-  // The prefix of key reached a conversion result, thus entry is not NULL.
+  // The prefix of key reached a conversion result, thus entry is not nullptr.
 
   if (key.size() == key_length) {
-    const bool is_following_entry = (
-        !conversion_.empty() ||
-        (!raw_.empty() && !pending_.empty() && raw_ != pending_));
+    const bool is_following_entry =
+        (!conversion_.empty() ||
+         (!raw_.empty() && !pending_.empty() && raw_ != pending_));
 
     raw_.append(*input);
     input->clear();
@@ -382,24 +389,27 @@ bool CharChunk::AddInputInternal(string *input) {
     return kNoLoop;
   }
 
-  const bool kLoop = true;
+  constexpr bool kLoop = true;
   return kLoop;
 }
 
-void CharChunk::AddInput(string *input) {
-  while (AddInputInternal(input)) {}
+void CharChunk::AddInput(std::string *input) {
+  while (AddInputInternal(input)) {
+  }
 }
 
-void CharChunk::AddConvertedChar(string *input) {
+void CharChunk::AddConvertedChar(std::string *input) {
   // TODO(komatsu) Nice to make "string Util::PopOneChar(string *str);".
-  string first_char = Util::SubString(*input, 0, 1);
-  conversion_.append(first_char);
-  raw_.append(first_char);
-  *input = Util::SubString(*input, 1, string::npos);
+  const absl::string_view first_char = Util::Utf8SubString(*input, 0, 1);
+  conversion_.append(first_char.data(), first_char.size());
+  raw_.append(first_char.data(), first_char.size());
+  Util::Utf8SubString(*input, 1, std::string::npos, input);
+  local_length_cache_ = std::string::npos;
 }
 
-void CharChunk::AddInputAndConvertedChar(string *key,
-                                         string *converted_char) {
+void CharChunk::AddInputAndConvertedChar(std::string *key,
+                                         std::string *converted_char) {
+  local_length_cache_ = std::string::npos;
   // If this chunk is empty, the key and converted_char are simply
   // copied.
   if (raw_.empty() && pending_.empty() && conversion_.empty()) {
@@ -407,7 +417,7 @@ void CharChunk::AddInputAndConvertedChar(string *key,
     key->clear();
     pending_ = *converted_char;
     // TODO(komatsu): We should check if the |converted_char| is
-    // really ambigous or not, otherwise the last character of the
+    // really ambiguous or not, otherwise the last character of the
     // preedit on Kana input is always dropped.
     ambiguous_ = *converted_char;
     converted_char->clear();
@@ -415,17 +425,17 @@ void CharChunk::AddInputAndConvertedChar(string *key,
     // If this entry is the first entry, the table attributes are
     // applied to this chunk.
     const Entry *entry = table_->LookUp(pending_);
-    if (entry != NULL) {
+    if (entry != nullptr) {
       attributes_ = entry->attributes();
     }
     return;
   }
 
-  const string input = pending_ + *converted_char;
+  const std::string input = pending_ + *converted_char;
   size_t key_length = 0;
   bool fixed = false;
   const Entry *entry = table_->LookUpPrefix(input, &key_length, &fixed);
-  if (entry == NULL) {
+  if (entry == nullptr) {
     // Do not modify this char_chunk, all key and converted_char
     // values will be used by the next char_chunk.
     return;
@@ -478,12 +488,10 @@ bool CharChunk::ShouldInsertNewChunk(const CompositionInput &input) const {
   }
 
   const bool is_new_input =
-      input.is_new_input() ||
-      ((attributes_ & END_CHUNK) && pending_.empty());
+      input.is_new_input() || ((attributes_ & END_CHUNK) && pending_.empty());
 
-  if (is_new_input &&
-      (table_->HasNewChunkEntry(input.raw()) ||
-          !table_->HasSubRules(input.raw()))) {
+  if (is_new_input && (table_->HasNewChunkEntry(input.raw()) ||
+                       !table_->HasSubRules(input.raw()))) {
     // Such input which is not on the table is treated as NewChunk entry.
     return true;
   }
@@ -491,10 +499,9 @@ bool CharChunk::ShouldInsertNewChunk(const CompositionInput &input) const {
 }
 
 void CharChunk::AddCompositionInput(CompositionInput *input) {
+  local_length_cache_ = std::string::npos;
   if (input->has_conversion()) {
-    AddInputAndConvertedChar(
-                             input->mutable_raw(),
-                             input->mutable_conversion());
+    AddInputAndConvertedChar(input->mutable_raw(), input->mutable_conversion());
     return;
   }
 
@@ -511,84 +518,76 @@ void CharChunk::SetTransliterator(
     // Just ignore.
     return;
   }
+  local_length_cache_ = std::string::npos;
   transliterator_ = transliterator;
 }
 
-const string &CharChunk::raw() const {
-  return raw_;
-}
-
-void CharChunk::set_raw(const string &raw) {
+void CharChunk::set_raw(const std::string &raw) {
   raw_ = raw;
+  local_length_cache_ = std::string::npos;
 }
 
-const string &CharChunk::conversion() const {
-  return conversion_;
-}
-
-void CharChunk::set_conversion(const string &conversion) {
+void CharChunk::set_conversion(const std::string &conversion) {
   conversion_ = conversion;
+  local_length_cache_ = std::string::npos;
 }
 
-const string &CharChunk::pending() const {
-  return pending_;
-}
-
-void CharChunk::set_pending(const string &pending) {
+void CharChunk::set_pending(const std::string &pending) {
   pending_ = pending;
+  local_length_cache_ = std::string::npos;
 }
 
-const string &CharChunk::ambiguous() const {
-  return ambiguous_;
-}
-
-void CharChunk::set_ambiguous(const string &ambiguous) {
+void CharChunk::set_ambiguous(const std::string &ambiguous) {
   ambiguous_ = ambiguous;
+  local_length_cache_ = std::string::npos;
 }
 
-bool CharChunk::SplitChunk(Transliterators::Transliterator t12r,
-                           const size_t position,
-                           CharChunk **left_new_chunk) {
+void CharChunk::set_attributes(TableAttributes attributes) {
+  attributes_ = attributes;
+  local_length_cache_ = std::string::npos;
+}
+
+std::unique_ptr<CharChunk> CharChunk::SplitChunk(
+    Transliterators::Transliterator t12r, const size_t position) {
   if (position <= 0 || position >= GetLength(t12r)) {
     LOG(WARNING) << "Invalid position: " << position;
-    return false;
+    return nullptr;
   }
 
-  string raw_lhs, raw_rhs, converted_lhs, converted_rhs;
-  Transliterators::GetTransliterator(GetTransliterator(t12r))->Split(
-      position,
-      Table::DeleteSpecialKey(raw_),
-      Table::DeleteSpecialKey(conversion_ + pending_),
-      &raw_lhs, &raw_rhs, &converted_lhs, &converted_rhs);
+  local_length_cache_ = std::string::npos;
+  std::string raw_lhs, raw_rhs, converted_lhs, converted_rhs;
+  Transliterators::GetTransliterator(GetTransliterator(t12r))
+      ->Split(position, Table::DeleteSpecialKey(raw_),
+              Table::DeleteSpecialKey(conversion_ + pending_), &raw_lhs,
+              &raw_rhs, &converted_lhs, &converted_rhs);
 
-  *left_new_chunk = new CharChunk(transliterator_, table_);
-  (*left_new_chunk)->set_raw(raw_lhs);
+  auto left_new_chunk = std::make_unique<CharChunk>(transliterator_, table_);
+  left_new_chunk->set_raw(raw_lhs);
   set_raw(raw_rhs);
 
   if (converted_lhs.size() > conversion_.size()) {
     // [ conversion | pending ] => [ conv | pend#1 ] [ pend#2 ]
-    const string pending_lhs(converted_lhs, conversion_.size());
-    (*left_new_chunk)->set_conversion(conversion_);
-    (*left_new_chunk)->set_pending(pending_lhs);
+    const std::string pending_lhs(converted_lhs, conversion_.size());
+    left_new_chunk->set_conversion(conversion_);
+    left_new_chunk->set_pending(pending_lhs);
 
     conversion_.clear();
     pending_ = converted_rhs;
     ambiguous_.clear();
   } else {
     // [ conversion | pending ] => [ conv#1 ] [ conv#2 | pending ]
-    (*left_new_chunk)->set_conversion(converted_lhs);
+    left_new_chunk->set_conversion(converted_lhs);
     // left_new_chunk->set_pending("");
     const size_t pending_pos = converted_rhs.size() - pending_.size();
     conversion_.assign(converted_rhs, 0, pending_pos);
     // pending_ = pending_;
   }
-  return true;
+  return left_new_chunk;
 }
 
-Transliterators::Transliterator
-CharChunk::GetTransliterator(
+Transliterators::Transliterator CharChunk::GetTransliterator(
     Transliterators::Transliterator transliterator) const {
-  if (attributes_ && NO_TRANSLITERATION) {
+  if (attributes_ & NO_TRANSLITERATION) {
     if (transliterator == Transliterators::LOCAL ||
         transliterator == Transliterators::HALF_ASCII ||
         transliterator == Transliterators::FULL_ASCII) {
@@ -597,29 +596,16 @@ CharChunk::GetTransliterator(
     return transliterator;
   }
   if (transliterator == Transliterators::LOCAL) {
-      return transliterator_;
+    return transliterator_;
   }
   return transliterator;
 }
 
-string CharChunk::Transliterate(
-    Transliterators::Transliterator transliterator,
-    const string &raw, const string &converted) const {
-  return Transliterators::GetTransliterator(
-      GetTransliterator(transliterator))->Transliterate(raw, converted);
-}
-
-
-CharChunk *CharChunk::Clone() const {
-  // TODO(hsumita): Implements TransliteratorFactory and uses it instead of
-  // copying a pointer.
-  CharChunk *new_char_chunk = new CharChunk(transliterator_, table_);
-  new_char_chunk->raw_.assign(raw_);
-  new_char_chunk->conversion_.assign(conversion_);
-  new_char_chunk->pending_.assign(pending_);
-  new_char_chunk->ambiguous_.assign(ambiguous_);
-  new_char_chunk->attributes_ = attributes_;
-  return new_char_chunk;
+std::string CharChunk::Transliterate(
+    Transliterators::Transliterator transliterator, const std::string &raw,
+    const std::string &converted) const {
+  return Transliterators::GetTransliterator(GetTransliterator(transliterator))
+      ->Transliterate(raw, converted);
 }
 
 }  // namespace composer

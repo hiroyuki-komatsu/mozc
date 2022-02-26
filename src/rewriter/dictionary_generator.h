@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,91 +32,90 @@
 #ifndef MOZC_REWRITER_DICTIONARY_GENERATOR_H_
 #define MOZC_REWRITER_DICTIONARY_GENERATOR_H_
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "base/freelist.h"
 #include "base/port.h"
 #include "data_manager/data_manager_interface.h"
+#include "dictionary/user_pos.h"
+#include "absl/container/btree_map.h"
 
 namespace mozc {
-
-template <class T> class ObjectPool;
-class UserPOSInterface;
-
 namespace rewriter {
 
-class Token {
+class Token final {
  public:
-  Token();
-  virtual ~Token();
+  Token() = default;
+  ~Token() = default;
+
+  Token(const Token &) = delete;
+  Token &operator=(const Token &) = delete;
 
   // Merge the values of the token.
   void MergeFrom(const Token &token);
 
   // Return the fingerprint of the keys (key, value and pos).
-  uint64 GetID() const;
+  uint64_t GetID() const;
 
   // Accessors
   int sorting_key() const { return sorting_key_; }
   void set_sorting_key(int sorting_key) { sorting_key_ = sorting_key; }
 
-  const string &key() const { return key_; }
-  void set_key(const string &key) { key_ = key; }
+  const std::string &key() const { return key_; }
+  void set_key(const std::string &key) { key_ = key; }
 
-  const string &value() const { return value_; }
-  void set_value(const string &value) { value_ = value; }
+  const std::string &value() const { return value_; }
+  void set_value(const std::string &value) { value_ = value; }
 
-  const string &pos() const { return pos_; }
-  void set_pos(const string &pos) { pos_ = pos; }
+  const std::string &pos() const { return pos_; }
+  void set_pos(const std::string &pos) { pos_ = pos; }
 
-  const string &description() const {
-    return description_;
-  }
-  const string &additional_description() const {
+  const std::string &description() const { return description_; }
+  const std::string &additional_description() const {
     return additional_description_;
   }
-  void set_description(const string &description) {
+  void set_description(const std::string &description) {
     description_ = description;
   }
-  void set_additional_description(const string &additional_description) {
+  void set_additional_description(const std::string &additional_description) {
     additional_description_ = additional_description;
   }
 
  private:
-  int sorting_key_;
-  string key_;
-  string value_;
-  string pos_;
-  string description_;
-  string additional_description_;
+  int sorting_key_ = 0;
+  std::string key_;
+  std::string value_;
+  std::string pos_;
+  std::string description_;
+  std::string additional_description_;
   // NOTE(komatsu): When new arguments are added, MergeFrom function
   // should be updated too.
-
-  DISALLOW_COPY_AND_ASSIGN(Token);
 };
-
 
 class DictionaryGenerator {
  public:
   explicit DictionaryGenerator(const DataManagerInterface &data_manager);
   virtual ~DictionaryGenerator();
 
+  DictionaryGenerator(const DictionaryGenerator &) = delete;
+  DictionaryGenerator &operator=(const DictionaryGenerator &) = delete;
+
   // Add the token into the pool.
   void AddToken(const Token &token);
 
   // Output the tokens into the filename.
-  bool Output(const string &filename) const;
+  bool Output(const std::string &filename) const;
 
  private:
-  std::unique_ptr<ObjectPool<Token>> token_pool_;
-  std::unique_ptr<std::map<uint64, Token *>> token_map_;
-  std::unique_ptr<const UserPOSInterface> user_pos_;
-  uint16 open_bracket_id_;
-  uint16 close_bracket_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(DictionaryGenerator);
+  ObjectPool<Token> token_pool_;
+  absl::btree_map<uint64_t, Token *> token_map_;
+  std::unique_ptr<const UserPosInterface> user_pos_;
+  uint16_t open_bracket_id_;
+  uint16_t close_bracket_id_;
 };
 
 }  // namespace rewriter

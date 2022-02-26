@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,14 +29,12 @@
 
 #import "mac/GoogleJapaneseInputServer.h"
 
-#import "mac/GoogleJapaneseInputController.h"
-
 #include <string>
 
 #include "base/const.h"
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "protocol/commands.pb.h"
+#include "absl/base/call_once.h"
 
 GoogleJapaneseInputServer *g_imkServer = nil;
 
@@ -44,32 +42,23 @@ namespace {
 void InitializeServer() {
   NSBundle *bundle = [NSBundle mainBundle];
   NSDictionary *infoDictionary = [bundle infoDictionary];
-  NSString *connectionName =
-      [infoDictionary objectForKey:@"InputMethodConnectionName"];
-  if (connectionName == nil ||
-      ![connectionName isKindOfClass:[NSString class]]) {
+  NSString *connectionName = [infoDictionary objectForKey:@"InputMethodConnectionName"];
+  if (connectionName == nil || ![connectionName isKindOfClass:[NSString class]]) {
     LOG(ERROR) << "InputMethodConnectionName is not found or incorrect. "
                << "Possibly Info.plist is broken.";
     return;
   }
 
-  g_imkServer = [[[GoogleJapaneseInputServer alloc]
-                   initWithName:connectionName
-               bundleIdentifier:[bundle bundleIdentifier]]
-                  autorelease];
+  g_imkServer = [[GoogleJapaneseInputServer alloc] initWithName:connectionName
+                                               bundleIdentifier:[bundle bundleIdentifier]];
   [g_imkServer registerRendererConnection];
 }
-mozc::once_t gOnceForServer = MOZC_ONCE_INIT;
+absl::once_flag gOnceForServer;
 }
 
 @implementation GoogleJapaneseInputServer
-- (void)dealloc {
-  [renderer_conection_ release];
-  [super dealloc];
-}
-
 - (BOOL)registerRendererConnection {
-  NSString *connectionName = @ kProductPrefix "_Renderer_Connection";
+  NSString *connectionName = @kProductPrefix "_Renderer_Connection";
   renderer_conection_ = [[NSConnection alloc] init];
   [renderer_conection_ setRootObject:g_imkServer];
   return [renderer_conection_ registerName:connectionName];
@@ -102,7 +91,7 @@ mozc::once_t gOnceForServer = MOZC_ONCE_INIT;
 }
 
 + (GoogleJapaneseInputServer *)getServer {
-  mozc::CallOnce(&gOnceForServer, InitializeServer);
+  absl::call_once(gOnceForServer, &InitializeServer);
   return g_imkServer;
 }
 @end

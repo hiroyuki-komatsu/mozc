@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -41,22 +41,20 @@
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
 #include "transliteration/transliteration.h"
-
-DECLARE_string(test_tmpdir);
+#include "absl/flags/flag.h"
 
 namespace mozc {
 namespace {
 
-void AddCandidate(Segment *segment, const string &value) {
+void AddCandidate(Segment *segment, const std::string &value) {
   Segment::Candidate *c = segment->add_candidate();
   c->Init();
   c->value = value;
   c->content_value = value;
 }
 
-void AddCandidateWithContentValue(Segment *segment,
-                                  const string &value,
-                                  const string &content_value) {
+void AddCandidateWithContentValue(Segment *segment, const std::string &value,
+                                  const std::string &content_value) {
   Segment::Candidate *c = segment->add_candidate();
   c->Init();
   c->value = value;
@@ -67,14 +65,12 @@ void AddCandidateWithContentValue(Segment *segment,
 
 class FocusCandidateRewriterTest : public ::testing::Test {
  protected:
-  virtual void SetUp() {
-    SystemUtil::SetUserProfileDirectory(FLAGS_test_tmpdir);
-    rewriter_.reset(new FocusCandidateRewriter(&mock_data_manager_));
+  void SetUp() override {
+    SystemUtil::SetUserProfileDirectory(absl::GetFlag(FLAGS_test_tmpdir));
+    rewriter_ = std::make_unique<FocusCandidateRewriter>(&mock_data_manager_);
   }
 
-  const RewriterInterface *GetRewriter() {
-    return rewriter_.get();
-  }
+  const RewriterInterface *GetRewriter() { return rewriter_.get(); }
 
  private:
   std::unique_ptr<FocusCandidateRewriter> rewriter_;
@@ -187,7 +183,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterRightToLeft) {
 TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterLeftToRightNest) {
   Segments segments;
   Segment *seg[7];
-  for (int i = 0; i < arraysize(seg); ++i) {
+  for (int i = 0; i < std::size(seg); ++i) {
     seg[i] = segments.add_segment();
   }
 
@@ -211,7 +207,6 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterLeftToRightNest) {
   AddCandidate(seg[6], "]");
   AddCandidate(seg[6], "}");
 
-
   EXPECT_TRUE(GetRewriter()->Focus(&segments, 0, 0));
   EXPECT_EQ("｣", seg[6]->candidate(0).content_value);
   EXPECT_EQ("｣", seg[4]->candidate(0).content_value);
@@ -232,7 +227,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterLeftToRightNest) {
 TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterRightToLeftNest) {
   Segments segments;
   Segment *seg[7];
-  for (int i = 0; i < arraysize(seg); ++i) {
+  for (int i = 0; i < std::size(seg); ++i) {
     seg[i] = segments.add_segment();
   }
 
@@ -276,7 +271,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterRightToLeftNest) {
 TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterMetaCandidate) {
   Segments segments;
   Segment *seg[3];
-  for (int i = 0; i < arraysize(seg); ++i) {
+  for (int i = 0; i < std::size(seg); ++i) {
     seg[i] = segments.add_segment();
   }
 
@@ -333,8 +328,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterMetaCandidate) {
   AddCandidate(seg[2], "}");
 
   const int half_index = -transliteration::HALF_KATAKANA - 1;
-  EXPECT_TRUE(GetRewriter()->Focus(&segments, 0,
-                                   half_index));
+  EXPECT_TRUE(GetRewriter()->Focus(&segments, 0, half_index));
   EXPECT_EQ("｢", seg[0]->candidate(0).content_value);
   EXPECT_EQ("｣", seg[2]->candidate(0).content_value);
 
@@ -347,7 +341,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterMetaCandidate) {
 TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterNumber) {
   Segments segments;
   Segment *seg[7];
-  for (int i = 0; i < arraysize(seg); ++i) {
+  for (int i = 0; i < std::size(seg); ++i) {
     seg[i] = segments.add_segment();
   }
 
@@ -357,7 +351,6 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterNumber) {
   AddCandidate(seg[0], "２");
   AddCandidate(seg[0], "ニ");
   AddCandidate(seg[0], "弐");
-
 
   seg[0]->mutable_candidate(2)->style = NumberUtil::NumberString::NUMBER_KANJI;
   seg[0]->mutable_candidate(3)->style =
@@ -401,25 +394,24 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterNumber) {
   EXPECT_EQ("３", seg[2]->candidate(0).content_value);
   EXPECT_EQ("４", seg[3]->candidate(0).content_value);
 
-  EXPECT_EQ("4",  seg[6]->candidate(0).content_value);  // far from
-
+  EXPECT_EQ("4", seg[6]->candidate(0).content_value);  // far from
 
   EXPECT_TRUE(GetRewriter()->Focus(&segments, 0, 2));
   EXPECT_EQ("三", seg[2]->candidate(0).content_value);
   EXPECT_EQ("四", seg[3]->candidate(0).content_value);
 
-  EXPECT_EQ("4",  seg[6]->candidate(0).content_value);  // far from
+  EXPECT_EQ("4", seg[6]->candidate(0).content_value);  // far from
 
   EXPECT_TRUE(GetRewriter()->Focus(&segments, 0, 3));
   EXPECT_EQ("参", seg[2]->candidate(0).content_value);
-  EXPECT_EQ("4",  seg[6]->candidate(0).content_value);  // far from
+  EXPECT_EQ("4", seg[6]->candidate(0).content_value);  // far from
 }
 
 // Bug #4596846: Non-number characters are changed to numbers
 TEST_F(FocusCandidateRewriterTest, DontChangeNonNumberSegment) {
   Segments segments;
   Segment *seg[2];
-  for (int i = 0; i < arraysize(seg); ++i) {
+  for (int i = 0; i < std::size(seg); ++i) {
     seg[i] = segments.add_segment();
   }
 
@@ -440,7 +432,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterSuffix) {
   {
     Segments segments;
     Segment *seg[6];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
@@ -465,7 +457,6 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterSuffix) {
     AddCandidate(seg[5], "回");
     AddCandidate(seg[5], "階");
 
-
     EXPECT_TRUE(GetRewriter()->Focus(&segments, 1, 1));
     EXPECT_EQ("階", seg[3]->candidate(0).content_value);
     EXPECT_EQ("階", seg[5]->candidate(0).content_value);
@@ -475,7 +466,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterSuffix) {
   {
     Segments segments;
     Segment *seg[3];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
@@ -496,7 +487,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterSuffix) {
   {
     Segments segments;
     Segment *seg[3];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
@@ -517,7 +508,7 @@ TEST_F(FocusCandidateRewriterTest, FocusCandidateRewriterSuffix) {
   {
     Segments segments;
     Segment *seg[3];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
@@ -548,7 +539,7 @@ TEST_F(FocusCandidateRewriterTest, NumberAndSuffixCompound) {
     // Then, focusing on (Seg 0, cand 1) should move "二回" in Seg 1 to the top.
     Segments segments;
     Segment *seg[2];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
     seg[0]->set_key("いっかい");
@@ -577,12 +568,12 @@ TEST_F(FocusCandidateRewriterTest, NumberAndSuffixCompound) {
     // Then, focusing on (Seg 0, cand 1) should move "二回" in Seg 1 to the top.
     Segments segments;
     Segment *seg[2];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
-    const int kNounId = 1939;
-    const int kParallelMarkerYa = 290;
+    constexpr int kNounId = 1939;
+    constexpr int kParallelMarkerYa = 290;
 
     seg[0]->set_key("いっかいや");
 
@@ -623,12 +614,12 @@ TEST_F(FocusCandidateRewriterTest, NumberAndSuffixCompound) {
     // " in Seg 2 to the top of each segment.
     Segments segments;
     Segment *seg[3];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
-    const int kNounId = 1939;
-    const int kParallelMarkerYa = 290;
+    constexpr int kNounId = 1939;
+    constexpr int kParallelMarkerYa = 290;
 
     seg[0]->set_key("いっかいや");
 
@@ -678,12 +669,12 @@ TEST_F(FocusCandidateRewriterTest, NumberAndSuffixCompound) {
     // Then, focusing on (Seg 0, cand 1) cannot move "二回" in Seg 3 to the top.
     Segments segments;
     Segment *seg[5];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
-    const int kNounId = 1939;
-    const int kParallelMarkerYa = 290;
+    constexpr int kNounId = 1939;
+    constexpr int kParallelMarkerYa = 290;
 
     seg[0]->set_key("いっかいや");
 
@@ -728,14 +719,14 @@ TEST_F(FocusCandidateRewriterTest, NumberAndSuffixCompound) {
     // 1 to the top.
     Segments segments;
     Segment *seg[3];
-    for (int i = 0; i < arraysize(seg); ++i) {
+    for (int i = 0; i < std::size(seg); ++i) {
       seg[i] = segments.add_segment();
     }
 
-    const int kNounId = 1939;
-    const int kKakariJoshiHa = 299;
-    const int kIkuTaSetsuzoku = 1501;
-    const int kJodoushiTa = 161;
+    constexpr int kNounId = 1939;
+    constexpr int kKakariJoshiHa = 299;
+    constexpr int kIkuTaSetsuzoku = 1501;
+    constexpr int kJodoushiTa = 161;
 
     seg[0]->set_key("いっかいへは");
 

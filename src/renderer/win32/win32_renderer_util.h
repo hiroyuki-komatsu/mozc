@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@ class RendererCommand;
 // allow forward declaration of a nested-type.
 class RendererCommand_ApplicationInfo;
 class RendererCommand_CandidateForm;
-}  // commands
+}  // namespace commands
 
 namespace renderer {
 namespace win32 {
@@ -63,18 +63,18 @@ struct CharacterRange {
 };
 
 struct LineLayout {
-  wstring text;
+  std::wstring text;
   int line_length;
   int line_width;
   int line_start_offset;
-  vector<CharacterRange> character_positions;
+  std::vector<CharacterRange> character_positions;
   LineLayout();
 };
 
 struct SegmentMarkerLayout {
   POINT from;
   POINT to;
-  bool  highlighted;
+  bool highlighted;
   SegmentMarkerLayout();
 };
 
@@ -84,8 +84,8 @@ struct CompositionWindowLayout {
   RECT caret_rect;
   POINT base_position;
   LOGFONT log_font;
-  wstring text;
-  vector<SegmentMarkerLayout> marker_layouts;
+  std::wstring text;
+  std::vector<SegmentMarkerLayout> marker_layouts;
   CompositionWindowLayout();
 };
 
@@ -110,8 +110,8 @@ class CandidateWindowLayout {
 
   // Initializes fields with given target position and exclude region and
   // sets true to |initialized_|.
-  void InitializeWithPositionAndExcludeRegion(
-      const POINT &position, const RECT &exclude_region);
+  void InitializeWithPositionAndExcludeRegion(const POINT &position,
+                                              const RECT &exclude_region);
 
   // Clears fields and sets false to |initialized_|.
   void Clear();
@@ -196,9 +196,9 @@ class WindowPositionInterface {
   // Returns true if this method can convert the given coordinate into
   // physical space.  We do not declare this method as const method so
   // that a mock class can implement this method in non-const way.
-  virtual bool LogicalToPhysicalPoint(
-      HWND window_handle, const POINT &logical_coordinate,
-      POINT *physical_coordinate) = 0;
+  virtual bool LogicalToPhysicalPoint(HWND window_handle,
+                                      const POINT &logical_coordinate,
+                                      POINT *physical_coordinate) = 0;
 
   // This method wraps API call of GetWindowRect.
   virtual bool GetWindowRect(HWND window_handle, RECT *rect) = 0;
@@ -216,7 +216,8 @@ class WindowPositionInterface {
   virtual HWND GetRootWindow(HWND window_handle) = 0;
 
   // This method wraps API call of GetClassName.
-  virtual bool GetWindowClassName(HWND window_handle, wstring *class_name) = 0;
+  virtual bool GetWindowClassName(HWND window_handle,
+                                  std::wstring *class_name) = 0;
 };
 
 // This class implements WindowPositionInterface and emulates APIs
@@ -229,10 +230,11 @@ class WindowPositionEmulator : public WindowPositionInterface {
   // Returns a dummy window handle for this emulator.  You can call methods of
   // WindowPositionInterface with this dummy handle.  You need not to release
   // the returned handle.
-  virtual HWND RegisterWindow(
-      const wstring &class_name, const RECT &window_rect,
-      const POINT &client_area_offset, const SIZE &client_area_size,
-      double scale_factor) = 0;
+  virtual HWND RegisterWindow(const std::wstring &class_name,
+                              const RECT &window_rect,
+                              const POINT &client_area_offset,
+                              const SIZE &client_area_size,
+                              double scale_factor) = 0;
 
   virtual void SetRoot(HWND child_window, HWND root_window) = 0;
 };
@@ -293,8 +295,8 @@ class LayoutManager {
   //    displayed.
   bool LayoutCompositionWindow(
       const commands::RendererCommand &command,
-      vector<CompositionWindowLayout> *composition_window_layouts,
-      CandidateWindowLayout* candidate_layout) const;
+      std::vector<CompositionWindowLayout> *composition_window_layouts,
+      CandidateWindowLayout *candidate_layout) const;
 
   // Returns compatibility bits for given target application.
   int GetCompatibilityMode(
@@ -328,12 +330,12 @@ class LayoutManager {
   // See remarks of the following document for details about the limitations.
   // http://msdn.microsoft.com/en-us/library/ms633533.aspx
   // This method is thread-safe.
-  void GetPointInPhysicalCoords(
-      HWND window_handle, const POINT &point, POINT *result) const;
+  void GetPointInPhysicalCoords(HWND window_handle, const POINT &point,
+                                POINT *result) const;
 
   // RECT version of GetPointInPhysicalCoords.  This method is thread-safe.
-  void GetRectInPhysicalCoords(
-      HWND window_handle, const RECT &rect, RECT *result) const;
+  void GetRectInPhysicalCoords(HWND window_handle, const RECT &rect,
+                               RECT *result) const;
 
   // Converts a local coordinate into a logical screen coordinate assuming
   // |src_point| is the relative offset from the top-left of the
@@ -417,12 +419,11 @@ class LayoutManager {
   //    the |str| starts from if there is enough space to show the first
   //    character.
   //  LineLayout: Layout information for each split line.
-  static bool CalcLayoutWithTextWrapping(
-      const LOGFONTW &font,
-      const wstring &text,
-      int maximum_line_length,
-      int initial_offset,
-      vector<LineLayout> *line_layouts);
+  static bool CalcLayoutWithTextWrapping(const LOGFONTW &font,
+                                         const std::wstring &text,
+                                         int maximum_line_length,
+                                         int initial_offset,
+                                         std::vector<LineLayout> *line_layouts);
 
   std::unique_ptr<SystemPreferenceInterface> system_preference_;
   std::unique_ptr<WindowPositionInterface> window_position_;

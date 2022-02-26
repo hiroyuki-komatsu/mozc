@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,27 +30,27 @@
 #include "win32/base/conversion_mode_util.h"
 
 #if defined(OS_WIN)
-#include <windows.h>
 #include <imm.h>
 #include <msctf.h>
+#include <windows.h>
 #endif  // OS_WIN
 
 #include "base/logging.h"
 
 namespace {
-const uint32 kAlphaNumeric = 0x0;
-const uint32 kNative = 0x1;
-const uint32 kKatakana = 0x2;
-const uint32 kLanguage = 0x3;
-const uint32 kFullShape = 0x8;
-const uint32 kRoman = 0x10;
-const uint32 kCharCode = 0x20;
-const uint32 kHanjiConvert = 0x40;
-const uint32 kSoftKeyboard = 0x80;
-const uint32 kNoConversion = 0x100;
-const uint32 kEUDC = 0x200;
-const uint32 kSymbol = 0x400;
-const uint32 kFixed = 0x800;
+constexpr uint32 kAlphaNumeric = 0x0;
+constexpr uint32 kNative = 0x1;
+constexpr uint32 kKatakana = 0x2;
+constexpr uint32 kLanguage = 0x3;
+constexpr uint32 kFullShape = 0x8;
+constexpr uint32 kRoman = 0x10;
+constexpr uint32 kCharCode = 0x20;
+constexpr uint32 kHanjiConvert = 0x40;
+constexpr uint32 kSoftKeyboard = 0x80;
+constexpr uint32 kNoConversion = 0x100;
+constexpr uint32 kEUDC = 0x200;
+constexpr uint32 kSymbol = 0x400;
+constexpr uint32 kFixed = 0x800;
 
 #if defined(OS_WIN)
 // Check the equality of constans if header files are available.
@@ -62,7 +62,7 @@ static_assert(kAlphaNumeric == TF_CONVERSIONMODE_ALPHANUMERIC,
 
 // kNative
 static_assert(kNative == IME_CMODE_NATIVE, "Renaming Check");
-static_assert(kNative == TF_CONVERSIONMODE_NATIVE,  "Renaming Check");
+static_assert(kNative == TF_CONVERSIONMODE_NATIVE, "Renaming Check");
 
 // kKatakana
 static_assert(kKatakana == IME_CMODE_KATAKANA, "Renaming Check");
@@ -116,11 +116,9 @@ bool TestAndClearBits(uint32 *flag, uint32 bits) {
 
 namespace mozc {
 namespace win32 {
-bool ConversionModeUtil::ToNativeMode(
-    mozc::commands::CompositionMode mode,
-    bool kana_lock_enabled_in_hiragana_mode,
-    uint32 *flag) {
-
+bool ConversionModeUtil::ToNativeMode(mozc::commands::CompositionMode mode,
+                                      bool kana_lock_enabled_in_hiragana_mode,
+                                      uint32 *flag) {
   // b/2189944.
   // Built-in MS-IME and ATOK (as of 22.0.1.0) seem to specify IME_CMODE_ROMAN
   // flag even if the input mode is Half-width Alphanumeric.
@@ -152,20 +150,17 @@ bool ConversionModeUtil::ToNativeMode(
   // [Half-width Alphanumeric]
   //   Conversion Mode = 0x00000010
   //   IME_CMODE_ROMAN (0x00000010)
-  const DWORD roman_flag = kana_lock_enabled_in_hiragana_mode ?
-                           0 : kRoman;
+  const DWORD roman_flag = kana_lock_enabled_in_hiragana_mode ? 0 : kRoman;
   switch (mode) {
     case mozc::commands::DIRECT:
       // We do set |roman_flag|.
       *flag = kAlphaNumeric | roman_flag;
       break;
     case mozc::commands::HIRAGANA:
-      *flag = kNative | kFullShape |
-              roman_flag;
+      *flag = kNative | kFullShape | roman_flag;
       break;
     case mozc::commands::HALF_KATAKANA:
-      *flag = kNative | kKatakana |
-              roman_flag;
+      *flag = kNative | kKatakana | roman_flag;
       break;
     case mozc::commands::HALF_ASCII:
       // We do set |roman_flag|.
@@ -173,12 +168,10 @@ bool ConversionModeUtil::ToNativeMode(
       break;
     case mozc::commands::FULL_ASCII:
       // We do set |roman_flag|.
-      *flag = kAlphaNumeric | kFullShape |
-              roman_flag;
+      *flag = kAlphaNumeric | kFullShape | roman_flag;
       break;
     case mozc::commands::FULL_KATAKANA:
-      *flag =  kNative | kKatakana |
-               kFullShape | roman_flag;
+      *flag = kNative | kKatakana | kFullShape | roman_flag;
       break;
     default:
       LOG(ERROR) << "Unknown composition mode: " << mode;
@@ -187,10 +180,10 @@ bool ConversionModeUtil::ToNativeMode(
   return true;
 }
 
-bool ConversionModeUtil::ToMozcMode(
-      uint32 flag, mozc::commands::CompositionMode *mode) {
+bool ConversionModeUtil::ToMozcMode(uint32 flag,
+                                    mozc::commands::CompositionMode *mode) {
   if (mode == nullptr) {
-    LOG(ERROR) << "|mode| is NULL";
+    LOG(ERROR) << "|mode| is nullptr";
     return false;
   }
 
@@ -294,10 +287,8 @@ bool ConversionModeUtil::ToMozcMode(
 
 bool ConversionModeUtil::ConvertStatusFromMozcToNative(
     const mozc::commands::Status &status,
-    bool kana_lock_enabled_in_hiragana_mode,
-    bool *is_open,
-    DWORD *logical_imm32_mode,
-    DWORD *visible_imm32_mode) {
+    bool kana_lock_enabled_in_hiragana_mode, bool *is_open,
+    DWORD *logical_imm32_mode, DWORD *visible_imm32_mode) {
   if (!status.has_activated() || !status.has_mode() ||
       !status.has_comeback_mode()) {
     return false;
@@ -319,7 +310,7 @@ bool ConversionModeUtil::ConvertStatusFromMozcToNative(
   if (!ConversionModeUtil::ToNativeMode(status.mode(),
                                         kana_lock_enabled_in_hiragana_mode,
                                         &visible_native_mode)) {
-      return false;
+    return false;
   }
 
   if (is_open != nullptr) {
@@ -335,8 +326,7 @@ bool ConversionModeUtil::ConvertStatusFromMozcToNative(
 }
 
 bool ConversionModeUtil::GetMozcModeFromNativeMode(
-    DWORD imm32_mode,
-    mozc::commands::CompositionMode *mozc_mode) {
+    DWORD imm32_mode, mozc::commands::CompositionMode *mozc_mode) {
   const uint32 native_mode = static_cast<uint32>(imm32_mode);
   *mozc_mode = mozc::commands::HIRAGANA;
   if (!ConversionModeUtil::ToMozcMode(native_mode, mozc_mode)) {

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,25 +30,24 @@
 #include "prediction/predictor.h"
 
 #include <algorithm>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/flags.h"
 #include "base/logging.h"
 #include "converter/segments.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
-
-DECLARE_bool(enable_expansion_for_dictionary_predictor);
-DECLARE_bool(enable_expansion_for_user_history_predictor);
+#include "absl/flags/flag.h"
 
 namespace mozc {
 namespace {
 
-const int kPredictionSize = 100;
+constexpr int kPredictionSize = 100;
 // On Mobile mode PREDICTION (including PARTIAL_PREDICTION) behaves like as
 // conversion so the limit is same as conversion's one.
-const int kMobilePredictionSize = 200;
+constexpr int kMobilePredictionSize = 200;
 
 size_t GetCandidatesSize(const Segments &segments) {
   if (segments.conversion_segments_size() <= 0) {
@@ -64,18 +63,30 @@ bool IsZeroQuery(const ConversionRequest &request) {
   return request.request().zero_query_suggestion();
 }
 
+size_t GetHistoryPredictionSizeFromRequest(const ConversionRequest &request) {
+  if (!IsZeroQuery(request)) {
+    return 2;
+  }
+  if (request.request().has_decoder_experiment_params() &&
+      request.request()
+          .decoder_experiment_params()
+          .has_mobile_history_prediction_size()) {
+    return request.request()
+        .decoder_experiment_params()
+        .mobile_history_prediction_size();
+  }
+  return 3;
+}
+
 }  // namespace
 
-BasePredictor::BasePredictor(PredictorInterface *dictionary_predictor,
-                             PredictorInterface *user_history_predictor)
-    : dictionary_predictor_(dictionary_predictor),
-      user_history_predictor_(user_history_predictor) {
-  DCHECK(dictionary_predictor_.get());
-  DCHECK(user_history_predictor_.get());
-  // TODO(noriyukit): Now the following features are stable, so remove these
-  // flags.
-  FLAGS_enable_expansion_for_dictionary_predictor = true;
-  FLAGS_enable_expansion_for_user_history_predictor = true;
+BasePredictor::BasePredictor(
+    std::unique_ptr<PredictorInterface> dictionary_predictor,
+    std::unique_ptr<PredictorInterface> user_history_predictor)
+    : dictionary_predictor_(std::move(dictionary_predictor)),
+      user_history_predictor_(std::move(user_history_predictor)) {
+  DCHECK(dictionary_predictor_);
+  DCHECK(user_history_predictor_);
 }
 
 BasePredictor::~BasePredictor() {}
@@ -114,36 +125,33 @@ bool BasePredictor::ClearUnusedHistory() {
   return user_history_predictor_->ClearUnusedHistory();
 }
 
-bool BasePredictor::ClearHistoryEntry(const string &key, const string &value) {
+bool BasePredictor::ClearHistoryEntry(const std::string &key,
+                                      const std::string &value) {
   return user_history_predictor_->ClearHistoryEntry(key, value);
 }
 
-bool BasePredictor::Wait() {
-  return user_history_predictor_->Wait();
-}
+bool BasePredictor::Wait() { return user_history_predictor_->Wait(); }
 
-bool BasePredictor::Sync() {
-  return user_history_predictor_->Sync();
-}
+bool BasePredictor::Sync() { return user_history_predictor_->Sync(); }
 
-bool BasePredictor::Reload() {
-  return user_history_predictor_->Reload();
-}
+bool BasePredictor::Reload() { return user_history_predictor_->Reload(); }
 
 // static
-PredictorInterface *DefaultPredictor::CreateDefaultPredictor(
-    PredictorInterface *dictionary_predictor,
-    PredictorInterface *user_history_predictor) {
-  return new DefaultPredictor(dictionary_predictor, user_history_predictor);
+std::unique_ptr<PredictorInterface> DefaultPredictor::CreateDefaultPredictor(
+    std::unique_ptr<PredictorInterface> dictionary_predictor,
+    std::unique_ptr<PredictorInterface> user_history_predictor) {
+  return std::make_unique<DefaultPredictor>(std::move(dictionary_predictor),
+                                            std::move(user_history_predictor));
 }
 
-DefaultPredictor::DefaultPredictor(PredictorInterface *dictionary_predictor,
-                                   PredictorInterface *user_history_predictor)
-    : BasePredictor(dictionary_predictor, user_history_predictor),
-      empty_request_(),
+DefaultPredictor::DefaultPredictor(
+    std::unique_ptr<PredictorInterface> dictionary_predictor,
+    std::unique_ptr<PredictorInterface> user_history_predictor)
+    : BasePredictor(std::move(dictionary_predictor),
+                    std::move(user_history_predictor)),
       predictor_name_("DefaultPredictor") {}
 
-DefaultPredictor::~DefaultPredictor() {}
+DefaultPredictor::~DefaultPredictor() = default;
 
 bool DefaultPredictor::PredictForRequest(const ConversionRequest &request,
                                          Segments *segments) const {
@@ -158,14 +166,17 @@ bool DefaultPredictor::PredictForRequest(const ConversionRequest &request,
 
   int size = kPredictionSize;
   if (segments->request_type() == Segments::SUGGESTION) {
-    size = std::min(
-        9, std::max(1, static_cast<int>(request.config().suggestions_size())));
+    size = std::min(9, std::max<int>(1, request.config().suggestions_size()));
   }
 
   bool result = false;
   int remained_size = size;
-  segments->set_max_prediction_candidates_size(static_cast<size_t>(size));
-  result |= user_history_predictor_->PredictForRequest(request, segments);
+  ConversionRequest request_for_prediction = request;
+  request_for_prediction.set_max_user_history_prediction_candidates_size(size);
+  request_for_prediction
+      .set_max_user_history_prediction_candidates_size_for_zero_query(size);
+  result |= user_history_predictor_->PredictForRequest(request_for_prediction,
+                                                       segments);
   remained_size = size - static_cast<size_t>(GetCandidatesSize(*segments));
 
   // Do not call dictionary_predictor if the size of candidates get
@@ -174,33 +185,62 @@ bool DefaultPredictor::PredictForRequest(const ConversionRequest &request,
     return result;
   }
 
-  segments->set_max_prediction_candidates_size(remained_size);
-  result |= dictionary_predictor_->PredictForRequest(request, segments);
-  remained_size = size - static_cast<size_t>(GetCandidatesSize(*segments));
-
-  // Do not call extra_predictor if the size of candidates get
-  // >= suggestions_size.
-  if (remained_size <= 0) {
-    return result;
-  }
-
+  request_for_prediction.set_max_dictionary_prediction_candidates_size(
+      remained_size);
+  result |= dictionary_predictor_->PredictForRequest(request_for_prediction,
+                                                     segments);
   return result;
 }
 
 // static
-PredictorInterface *MobilePredictor::CreateMobilePredictor(
-    PredictorInterface *dictionary_predictor,
-    PredictorInterface *user_history_predictor) {
-  return new MobilePredictor(dictionary_predictor, user_history_predictor);
+std::unique_ptr<PredictorInterface> MobilePredictor::CreateMobilePredictor(
+    std::unique_ptr<PredictorInterface> dictionary_predictor,
+    std::unique_ptr<PredictorInterface> user_history_predictor) {
+  return std::make_unique<MobilePredictor>(std::move(dictionary_predictor),
+                                           std::move(user_history_predictor));
 }
 
-MobilePredictor::MobilePredictor(PredictorInterface *dictionary_predictor,
-                                 PredictorInterface *user_history_predictor)
-    : BasePredictor(dictionary_predictor, user_history_predictor),
-      empty_request_(),
+MobilePredictor::MobilePredictor(
+    std::unique_ptr<PredictorInterface> dictionary_predictor,
+    std::unique_ptr<PredictorInterface> user_history_predictor)
+    : BasePredictor(std::move(dictionary_predictor),
+                    std::move(user_history_predictor)),
       predictor_name_("MobilePredictor") {}
 
 MobilePredictor::~MobilePredictor() {}
+
+ConversionRequest MobilePredictor::GetRequestForPredict(
+    const ConversionRequest &request, const Segments &segments) {
+  ConversionRequest ret = request;
+  size_t history_prediction_size = GetHistoryPredictionSizeFromRequest(request);
+  switch (segments.request_type()) {
+    case Segments::SUGGESTION: {
+      ret.set_max_user_history_prediction_candidates_size(
+          history_prediction_size);
+      ret.set_max_user_history_prediction_candidates_size_for_zero_query(4);
+      ret.set_max_dictionary_prediction_candidates_size(20);
+      break;
+    }
+    case Segments::PARTIAL_SUGGESTION: {
+      ret.set_max_dictionary_prediction_candidates_size(20);
+      break;
+    }
+    case Segments::PARTIAL_PREDICTION: {
+      ret.set_max_dictionary_prediction_candidates_size(kMobilePredictionSize);
+      break;
+    }
+    case Segments::PREDICTION: {
+      ret.set_max_user_history_prediction_candidates_size(
+          history_prediction_size);
+      ret.set_max_user_history_prediction_candidates_size_for_zero_query(4);
+      ret.set_max_dictionary_prediction_candidates_size(kMobilePredictionSize);
+      break;
+    }
+    default:
+      DLOG(ERROR) << "Never reach here.";
+  }
+  return ret;
+}
 
 bool MobilePredictor::PredictForRequest(const ConversionRequest &request,
                                         Segments *segments) const {
@@ -216,45 +256,37 @@ bool MobilePredictor::PredictForRequest(const ConversionRequest &request,
   DCHECK(segments);
 
   bool result = false;
-  size_t size = 0;
-  size_t history_suggestion_size = IsZeroQuery(request) ? 3 : 2;
+  const ConversionRequest request_for_predict =
+      GetRequestForPredict(request, *segments);
 
   // TODO(taku,toshiyuki): Must rewrite the logic.
   switch (segments->request_type()) {
     case Segments::SUGGESTION: {
       // Suggestion is triggered at every character insertion.
       // So here we should use slow predictors.
-      size = GetCandidatesSize(*segments) + history_suggestion_size;
-      segments->set_max_prediction_candidates_size(size);
-      result |= user_history_predictor_->PredictForRequest(request, segments);
-
-      size = GetCandidatesSize(*segments) + 20;
-      segments->set_max_prediction_candidates_size(size);
-      result |= dictionary_predictor_->PredictForRequest(request, segments);
-
+      result |= user_history_predictor_->PredictForRequest(request_for_predict,
+                                                           segments);
+      result |= dictionary_predictor_->PredictForRequest(request_for_predict,
+                                                         segments);
       break;
     }
     case Segments::PARTIAL_SUGGESTION: {
       // PARTIAL SUGGESTION can be triggered in a similar manner to that of
       // SUGGESTION. We don't call slow predictors by the same reason.
-      size = GetCandidatesSize(*segments) + 20;
-      segments->set_max_prediction_candidates_size(size);
-      result |= dictionary_predictor_->PredictForRequest(request, segments);
-
+      result |= dictionary_predictor_->PredictForRequest(request_for_predict,
+                                                         segments);
       break;
     }
     case Segments::PARTIAL_PREDICTION: {
-      segments->set_max_prediction_candidates_size(kMobilePredictionSize);
-      result |= dictionary_predictor_->PredictForRequest(request, segments);
+      result |= dictionary_predictor_->PredictForRequest(request_for_predict,
+                                                         segments);
       break;
     }
     case Segments::PREDICTION: {
-      size = GetCandidatesSize(*segments) + history_suggestion_size;
-      segments->set_max_prediction_candidates_size(size);
-      result |= user_history_predictor_->PredictForRequest(request, segments);
-
-      segments->set_max_prediction_candidates_size(kMobilePredictionSize);
-      result |= dictionary_predictor_->PredictForRequest(request, segments);
+      result |= user_history_predictor_->PredictForRequest(request_for_predict,
+                                                           segments);
+      result |= dictionary_predictor_->PredictForRequest(request_for_predict,
+                                                         segments);
       break;
     }
     default: {

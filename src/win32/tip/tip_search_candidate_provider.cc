@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,9 +32,9 @@
 #include <Windows.h>
 #define _ATL_NO_AUTOMATIC_NAMESPACE
 #define _WTL_NO_AUTOMATIC_NAMESPACE
+#include <Ctffunc.h>
 #include <atlbase.h>
 #include <atlcom.h>
-#include <Ctffunc.h>
 
 #include <memory>
 #include <vector>
@@ -45,7 +45,6 @@
 #include "win32/tip/tip_ref_count.h"
 
 using ::ATL::CComPtr;
-using ::std::unique_ptr;
 
 namespace mozc {
 namespace win32 {
@@ -53,8 +52,7 @@ namespace tsf {
 namespace {
 
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
-const wchar_t kSearchCandidateProviderName[] =
-    L"Google Japanese Input";
+const wchar_t kSearchCandidateProviderName[] = L"Google Japanese Input";
 #else
 const wchar_t kSearchCandidateProviderName[] = L"Mozc";
 #endif
@@ -62,8 +60,7 @@ const wchar_t kSearchCandidateProviderName[] = L"Mozc";
 class SearchCandidateProviderImpl : public ITfFnSearchCandidateProvider {
  public:
   explicit SearchCandidateProviderImpl(TipQueryProvider *provider)
-      : provider_(provider) {
-  }
+      : provider_(provider) {}
 
  private:
   // The IUnknown interface methods.
@@ -90,9 +87,7 @@ class SearchCandidateProviderImpl : public ITfFnSearchCandidateProvider {
     return S_OK;
   }
 
-  virtual ULONG STDMETHODCALLTYPE AddRef() {
-    return ref_count_.AddRefImpl();
-  }
+  virtual ULONG STDMETHODCALLTYPE AddRef() { return ref_count_.AddRefImpl(); }
 
   virtual ULONG STDMETHODCALLTYPE Release() {
     const ULONG count = ref_count_.ReleaseImpl();
@@ -113,13 +108,11 @@ class SearchCandidateProviderImpl : public ITfFnSearchCandidateProvider {
 
   // The ITfFnSearchCandidateProvider interface method.
   virtual HRESULT STDMETHODCALLTYPE GetSearchCandidates(
-      BSTR query,
-      BSTR application_id,
-      ITfCandidateList **candidate_list) {
+      BSTR query, BSTR application_id, ITfCandidateList **candidate_list) {
     if (candidate_list == nullptr) {
       return E_INVALIDARG;
     }
-    std::vector<wstring> candidates;
+    std::vector<std::wstring> candidates;
     if (!provider_->Query(query, TipQueryProvider::kDefault, &candidates)) {
       return E_FAIL;
     }
@@ -128,15 +121,14 @@ class SearchCandidateProviderImpl : public ITfFnSearchCandidateProvider {
     return S_OK;
   }
 
-  virtual HRESULT STDMETHODCALLTYPE SetResult(BSTR query,
-                                              BSTR application_id,
+  virtual HRESULT STDMETHODCALLTYPE SetResult(BSTR query, BSTR application_id,
                                               BSTR result) {
     // Not implemented.
     return S_OK;
   }
 
   TipRefCount ref_count_;
-  unique_ptr<TipQueryProvider> provider_;
+  std::unique_ptr<TipQueryProvider> provider_;
 
   DISALLOW_COPY_AND_ASSIGN(SearchCandidateProviderImpl);
 };

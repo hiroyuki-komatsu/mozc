@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,8 +32,7 @@
 #ifndef MOZC_GUI_ABOUT_DIALOG_ABOUT_DIALOG_H_
 #define MOZC_GUI_ABOUT_DIALOG_ABOUT_DIALOG_H_
 
-#include <QtWidgets/QDialog>
-
+#include <QDialog>
 #include <memory>
 
 #include "base/port.h"
@@ -50,14 +49,14 @@ class LinkCallbackInterface {
   virtual void linkActivated(const QString &str) = 0;
 };
 
-class AboutDialog : public QDialog,
-                    private Ui::AboutDialog {
+class AboutDialog : public QDialog, private Ui::AboutDialog {
   Q_OBJECT;
+
  public:
   explicit AboutDialog(QWidget *parent = nullptr);
   void SetLinkCallback(LinkCallbackInterface *callback);
 
-  void paintEvent(QPaintEvent *event);
+  void paintEvent(QPaintEvent *event) override;
 
  public slots:
   void linkActivated(const QString &link);
@@ -67,7 +66,7 @@ class AboutDialog : public QDialog,
   std::unique_ptr<QImage> product_image_;
 };
 
-}  // namespace mozc::gui
+}  // namespace gui
 }  // namespace mozc
 
 #endif  // MOZC_GUI_ABOUT_DIALOG_ABOUT_DIALOG_H_

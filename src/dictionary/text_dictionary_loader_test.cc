@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,32 +27,32 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "dictionary/text_dictionary_loader.h"
+
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "base/file_stream.h"
 #include "base/file_util.h"
 #include "base/util.h"
 #include "data_manager/testing/mock_data_manager.h"
 #include "dictionary/dictionary_token.h"
 #include "dictionary/pos_matcher.h"
-#include "dictionary/text_dictionary_loader.h"
+#include "testing/base/public/gmock.h"
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
-
-using std::unique_ptr;
+#include "absl/flags/flag.h"
 
 namespace mozc {
 namespace dictionary {
 namespace {
 
-const char kTextLines[] =
+constexpr char kTextLines[] =
     "key_test1\t0\t0\t1\tvalue_test1\n"
     "foo\t1\t2\t3\tbar\n"
     "buz\t10\t20\t30\tfoobar\n";
 
-const char kReadingCorrectionLines[] =
+constexpr char kReadingCorrectionLines[] =
     "bar\tfoo\tfoo_correct\n"
     "foobar\tfoobar_error\tfoobar_correct\n";
 
@@ -65,14 +65,14 @@ class TextDictionaryLoaderTest : public ::testing::Test {
   TextDictionaryLoaderTest() {}
 
   void SetUp() override {
-    pos_matcher_.Set(mock_data_manager_.GetPOSMatcherData());
+    pos_matcher_.Set(mock_data_manager_.GetPosMatcherData());
   }
 
-  TextDictionaryLoader *CreateTextDictionaryLoader() {
-    return new TextDictionaryLoader(pos_matcher_);
+  std::unique_ptr<TextDictionaryLoader> CreateTextDictionaryLoader() {
+    return std::make_unique<TextDictionaryLoader>(pos_matcher_);
   }
 
-  POSMatcher pos_matcher_;
+  PosMatcher pos_matcher_;
 
  private:
   const testing::MockDataManager mock_data_manager_;
@@ -80,22 +80,20 @@ class TextDictionaryLoaderTest : public ::testing::Test {
 
 TEST_F(TextDictionaryLoaderTest, BasicTest) {
   {
-    unique_ptr<TextDictionaryLoader> loader(CreateTextDictionaryLoader());
+    std::unique_ptr<TextDictionaryLoader> loader = CreateTextDictionaryLoader();
     std::vector<Token *> tokens;
     loader->CollectTokens(&tokens);
     EXPECT_TRUE(tokens.empty());
   }
 
-  const string filename = FileUtil::JoinPath(FLAGS_test_tmpdir, "test.tsv");
-  {
-    OutputFileStream ofs(filename.c_str());
-    ofs << kTextLines;
-  }
+  const std::string filename =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test.tsv");
+  ASSERT_OK(FileUtil::SetContents(filename, kTextLines));
 
   {
-    unique_ptr<TextDictionaryLoader> loader(CreateTextDictionaryLoader());
+    std::unique_ptr<TextDictionaryLoader> loader = CreateTextDictionaryLoader();
     loader->Load(filename, "");
-    const std::vector<Token *> &tokens = loader->tokens();
+    const std::vector<std::unique_ptr<Token>> &tokens = loader->tokens();
 
     EXPECT_EQ(3, tokens.size());
 
@@ -122,9 +120,9 @@ TEST_F(TextDictionaryLoaderTest, BasicTest) {
   }
 
   {
-    unique_ptr<TextDictionaryLoader> loader(CreateTextDictionaryLoader());
+    std::unique_ptr<TextDictionaryLoader> loader = CreateTextDictionaryLoader();
     loader->LoadWithLineLimit(filename, "", 2);
-    const std::vector<Token *> &tokens = loader->tokens();
+    const std::vector<std::unique_ptr<Token>> &tokens = loader->tokens();
 
     EXPECT_EQ(2, tokens.size());
 
@@ -145,19 +143,19 @@ TEST_F(TextDictionaryLoaderTest, BasicTest) {
   }
 
   {
-    unique_ptr<TextDictionaryLoader> loader(CreateTextDictionaryLoader());
+    std::unique_ptr<TextDictionaryLoader> loader = CreateTextDictionaryLoader();
     // open twice -- tokens are cleared everytime
     loader->Load(filename, "");
     loader->Load(filename, "");
-    const std::vector<Token *> &tokens = loader->tokens();
+    const std::vector<std::unique_ptr<Token>> &tokens = loader->tokens();
     EXPECT_EQ(3, tokens.size());
   }
 
-  FileUtil::Unlink(filename);
+  EXPECT_OK(FileUtil::Unlink(filename));
 }
 
 TEST_F(TextDictionaryLoaderTest, RewriteSpecialTokenTest) {
-  unique_ptr<TextDictionaryLoader> loader(CreateTextDictionaryLoader());
+  std::unique_ptr<TextDictionaryLoader> loader = CreateTextDictionaryLoader();
   {
     Token token;
     token.lid = 100;
@@ -210,48 +208,40 @@ TEST_F(TextDictionaryLoaderTest, RewriteSpecialTokenTest) {
 }
 
 TEST_F(TextDictionaryLoaderTest, LoadMultipleFilesTest) {
-  const string filename1 = FileUtil::JoinPath(FLAGS_test_tmpdir, "test1.tsv");
-  const string filename2 = FileUtil::JoinPath(FLAGS_test_tmpdir, "test2.tsv");
-  const string filename = filename1 + "," + filename2;
+  const std::string filename1 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test1.tsv");
+  const std::string filename2 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test2.tsv");
+  const std::string filename = filename1 + "," + filename2;
+
+  ASSERT_OK(FileUtil::SetContents(filename1, kTextLines));
+  FileUnlinker unlinker1(filename1);
+  ASSERT_OK(FileUtil::SetContents(filename2, kTextLines));
+  FileUnlinker unlinker2(filename2);
 
   {
-    OutputFileStream ofs(filename1.c_str());
-    ofs << kTextLines;
-  }
-  {
-    OutputFileStream ofs(filename2.c_str());
-    ofs << kTextLines;
-  }
-
-  {
-    unique_ptr<TextDictionaryLoader> loader(CreateTextDictionaryLoader());
+    std::unique_ptr<TextDictionaryLoader> loader = CreateTextDictionaryLoader();
     loader->Load(filename, "");
     EXPECT_EQ(6, loader->tokens().size());
   }
-
-  FileUtil::Unlink(filename1);
-  FileUtil::Unlink(filename2);
 }
 
 TEST_F(TextDictionaryLoaderTest, ReadingCorrectionTest) {
-  unique_ptr<TextDictionaryLoader> loader(CreateTextDictionaryLoader());
+  std::unique_ptr<TextDictionaryLoader> loader = CreateTextDictionaryLoader();
 
-  const string dic_filename =
-      FileUtil::JoinPath(FLAGS_test_tmpdir, "test.tsv");
-  const string reading_correction_filename =
-      FileUtil::JoinPath(FLAGS_test_tmpdir, "reading_correction.tsv");
+  const std::string dic_filename =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test.tsv");
+  const std::string reading_correction_filename = FileUtil::JoinPath(
+      absl::GetFlag(FLAGS_test_tmpdir), "reading_correction.tsv");
 
-  {
-    OutputFileStream ofs(dic_filename.c_str());
-    ofs << kTextLines;
-  }
-  {
-    OutputFileStream ofs(reading_correction_filename.c_str());
-    ofs << kReadingCorrectionLines;
-  }
+  ASSERT_OK(FileUtil::SetContents(dic_filename, kTextLines));
+  FileUnlinker dic_unlinker(dic_filename);
+  ASSERT_OK(FileUtil::SetContents(reading_correction_filename,
+                                  kReadingCorrectionLines));
+  FileUnlinker reading_correction_unlinker(reading_correction_filename);
 
   loader->Load(dic_filename, reading_correction_filename);
-  const std::vector<Token *> &tokens = loader->tokens();
+  const std::vector<std::unique_ptr<Token>> &tokens = loader->tokens();
   ASSERT_EQ(tokens.size(), 4);
   EXPECT_EQ("foobar_error", tokens[3]->key);
   EXPECT_EQ("foobar", tokens[3]->value);

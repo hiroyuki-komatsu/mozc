@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,11 @@
 #ifndef MOZC_IPC_IPC_PATH_MANAGER_H_
 #define MOZC_IPC_IPC_PATH_MANAGER_H_
 
+#include <cstdint>
 #ifdef OS_WIN
-#include <time.h>  // for time_t
-#else
-#include <sys/time.h>  // for time_t
+#include <time.h>
+#else  // OS_WIN
+#include <sys/time.h>
 #endif  // OS_WIN
 #ifdef OS_WIN
 #include <map>
@@ -41,10 +42,10 @@
 #include <memory>
 #include <string>
 
-#include "base/mutex.h"
 #include "base/port.h"
 // For FRIEND_TEST
 #include "testing/base/public/gunit_prod.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 
@@ -76,18 +77,18 @@ class IPCPathManager {
   bool LoadPathName();
 
   // Get a pathanem from the heap. If pathanme is empty, returns false.
-  bool GetPathName(string *path_name) const;
+  bool GetPathName(std::string *path_name) const;
 
   // return protocol version.
   // return 0 if protocol version is not defined.
-  uint32 GetServerProtocolVersion() const;
+  uint32_t GetServerProtocolVersion() const;
 
   // return product version.
   // return "0.0.0.0" if product version is not defined
-  const string &GetServerProductVersion() const;
+  const std::string &GetServerProductVersion() const;
 
   // return process id of the server
-  uint32 GetServerProcessId() const;
+  uint32_t GetServerProcessId() const;
 
   // Checks the server pid is the valid server specified with server_path.
   // server pid can be obtained by OS dependent method.
@@ -100,18 +101,18 @@ class IPCPathManager {
   // when pid of 0 is passed, IsValidServer() returns true.
   // when pid of static_cast<size_t>(-1) is passed, IsValidServer()
   // returns false.
-  // To keep backward compatibility and other operationg system
+  // To keep backward compatibility and other operating system
   // having no support of getting peer's pid, you can set 0 pid.
-  bool IsValidServer(uint32 pid, const string &server_path);
+  bool IsValidServer(uint32_t pid, const std::string &server_path);
 
   // clear ipc_key;
   void Clear();
 
   // return singleton instance corresponding to "name"
-  static IPCPathManager *GetIPCPathManager(const string &name);
+  static IPCPathManager *GetIPCPathManager(const std::string &name);
 
   // do not call constructor directly.
-  explicit IPCPathManager(const string &name);
+  explicit IPCPathManager(const std::string &name);
   virtual ~IPCPathManager();
 
  private:
@@ -123,18 +124,20 @@ class IPCPathManager {
   // Returns true if the ipc file is updated after it load.
   bool ShouldReload() const;
 
+  bool CreateNewPathNameUnlocked();
+
   // Returns the last modified timestamp of the IPC file.
   time_t GetIPCFileTimeStamp() const;
 
-  std::unique_ptr<ProcessMutex> path_mutex_;   // lock ipc path file
-  std::unique_ptr<Mutex> mutex_;   // mutex for methods
+  std::unique_ptr<ProcessMutex> path_mutex_;  // lock ipc path file
+  mutable absl::Mutex mutex_;                 // mutex for methods
   std::unique_ptr<ipc::IPCPathInfo> ipc_path_info_;
-  string name_;
-  string server_path_;   // cache for server_path
-  uint32 server_pid_;    // cache for pid of server_path
+  std::string name_;
+  std::string server_path_;  // cache for server_path
+  uint32_t server_pid_;      // cache for pid of server_path
   time_t last_modified_;
 #ifdef OS_WIN
-  map<string, wstring> expected_server_ntpath_cache_;
+  std::map<std::string, std::wstring> expected_server_ntpath_cache_;
 #endif  // OS_WIN
 };
 

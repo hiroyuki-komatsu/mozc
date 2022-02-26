@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,59 +30,60 @@
 #include "converter/segments.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <sstream>  // For DebugString()
 #include <string>
 
 #include "base/logging.h"
 #include "base/util.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace {
-const size_t kMaxHistorySize = 32;
-const size_t kMaxConversionCandidatesSize = 200;
+constexpr size_t kMaxHistorySize = 32;
+}  // namespace
+
+absl::string_view Segment::Candidate::functional_key() const {
+  return key.size() <= content_key.size()
+             ? absl::string_view()
+             : absl::string_view(key.data() + content_key.size(),
+                                 key.size() - content_key.size());
 }
 
-StringPiece Segment::Candidate::functional_key() const {
-  return key.size() <= content_key.size() ?
-      StringPiece() : StringPiece(key.data() + content_key.size(),
-                                  key.size() - content_key.size());
+absl::string_view Segment::Candidate::functional_value() const {
+  return value.size() <= content_value.size()
+             ? absl::string_view()
+             : absl::string_view(value.data() + content_value.size(),
+                                 value.size() - content_value.size());
 }
 
-StringPiece Segment::Candidate::functional_value() const {
-  return value.size() <= content_value.size() ?
-      StringPiece() : StringPiece(value.data() + content_value.size(),
-                                  value.size() - content_value.size());
-}
-
-void Segment::Candidate::CopyFrom(const Candidate &src) {
-  Init();
-
-  key = src.key;
-  value = src.value;
-  content_key = src.content_key;
-  content_value = src.content_value;
-  consumed_key_size = src.consumed_key_size;
-
-  prefix = src.prefix;
-  suffix = src.suffix;
-  usage_id = src.usage_id;
-  description = src.description;
-  usage_title = src.usage_title;
-  usage_description = src.usage_description;
-
-  cost = src.cost;
-  wcost = src.wcost;
-  structure_cost = src.structure_cost;
-
-  lid = src.lid;
-  rid = src.rid;
-
-  attributes = src.attributes;
-
-  style = src.style;
-  command = src.command;
-
-  inner_segment_boundary = src.inner_segment_boundary;
+void Segment::Candidate::Init() {
+  key.clear();
+  value.clear();
+  content_value.clear();
+  content_key.clear();
+  consumed_key_size = 0;
+  prefix.clear();
+  suffix.clear();
+  description.clear();
+  usage_title.clear();
+  usage_description.clear();
+  cost = 0;
+  structure_cost = 0;
+  wcost = 0;
+  lid = 0;
+  rid = 0;
+  usage_id = 0;
+  attributes = 0;
+  source_info = SOURCE_INFO_NONE;
+  style = NumberUtil::NumberString::DEFAULT_STYLE;
+  command = DEFAULT_COMMAND;
+  inner_segment_boundary.clear();
+#ifndef NDEBUG
+  log.clear();
+#endif  // NDEBUG
 }
 
 bool Segment::Candidate::IsValid() const {
@@ -100,8 +101,7 @@ bool Segment::Candidate::IsValid() const {
     sum_content_key_len += iter.GetContentKey().size();
     sum_content_value_len += iter.GetContentValue().size();
   }
-  if (sum_key_len != key.size() ||
-      sum_value_len != value.size() ||
+  if (sum_key_len != key.size() || sum_value_len != value.size() ||
       sum_content_key_len != content_key.size() ||
       sum_content_value_len != content_value.size()) {
     return false;
@@ -109,24 +109,27 @@ bool Segment::Candidate::IsValid() const {
   return true;
 }
 
-bool Segment::Candidate::EncodeLengths(
-    size_t key_len, size_t value_len,
-    size_t content_key_len, size_t content_value_len, uint32 *result) {
-  if (key_len > kuint8max || value_len > kuint8max ||
-      content_key_len > kuint8max || content_value_len > kuint8max) {
+bool Segment::Candidate::EncodeLengths(size_t key_len, size_t value_len,
+                                       size_t content_key_len,
+                                       size_t content_value_len,
+                                       uint32_t *result) {
+  if (key_len > std::numeric_limits<uint8_t>::max() ||
+      value_len > std::numeric_limits<uint8_t>::max() ||
+      content_key_len > std::numeric_limits<uint8_t>::max() ||
+      content_value_len > std::numeric_limits<uint8_t>::max()) {
     return false;
   }
-  *result = (static_cast<uint32>(key_len) << 24) |
-            (static_cast<uint32>(value_len) << 16) |
-            (static_cast<uint32>(content_key_len) << 8) |
-            static_cast<uint32>(content_value_len);
+  *result = (static_cast<uint32_t>(key_len) << 24) |
+            (static_cast<uint32_t>(value_len) << 16) |
+            (static_cast<uint32_t>(content_key_len) << 8) |
+            static_cast<uint32_t>(content_value_len);
   return true;
 }
 
 bool Segment::Candidate::PushBackInnerSegmentBoundary(
-    size_t key_len, size_t value_len,
-    size_t content_key_len, size_t content_value_len) {
-  uint32 encoded;
+    size_t key_len, size_t value_len, size_t content_key_len,
+    size_t content_value_len) {
+  uint32_t encoded;
   if (EncodeLengths(key_len, value_len, content_key_len, content_value_len,
                     &encoded)) {
     inner_segment_boundary.push_back(encoded);
@@ -135,18 +138,12 @@ bool Segment::Candidate::PushBackInnerSegmentBoundary(
   return false;
 }
 
-string Segment::Candidate::DebugString() const {
+std::string Segment::Candidate::DebugString() const {
   std::stringstream os;
-  os << "(key=" << key
-     << " ckey=" << content_key
-     << " val=" << value
-     << " cval=" << content_value
-     << " cost=" << cost
-     << " scost=" << structure_cost
-     << " wcost=" << wcost
-     << " lid=" << lid
-     << " rid=" << rid
-     << " attributes=" << attributes
+  os << "(key=" << key << " ckey=" << content_key << " val=" << value
+     << " cval=" << content_value << " cost=" << cost
+     << " scost=" << structure_cost << " wcost=" << wcost << " lid=" << lid
+     << " rid=" << rid << " attributes=" << attributes
      << " consumed_key_size=" << consumed_key_size;
   if (!prefix.empty()) {
     os << " prefix=" << prefix;
@@ -160,13 +157,13 @@ string Segment::Candidate::DebugString() const {
   if (!inner_segment_boundary.empty()) {
     os << " segbdd=";
     for (size_t i = 0; i < inner_segment_boundary.size(); ++i) {
-      const uint32 encoded_lengths = inner_segment_boundary[i];
+      const uint32_t encoded_lengths = inner_segment_boundary[i];
       const int key_len = encoded_lengths >> 24;
       const int value_len = (encoded_lengths >> 16) & 0xff;
       const int content_key_len = (encoded_lengths >> 8) & 0xff;
       const int content_value_len = encoded_lengths & 0xff;
-      os << Util::StringPrintf("<%d,%d,%d,%d>", key_len, value_len,
-                               content_key_len, content_value_len);
+      os << absl::StrFormat("<%d,%d,%d,%d>", key_len, value_len,
+                            content_key_len, content_value_len);
     }
   }
   os << ")" << std::endl;
@@ -175,61 +172,90 @@ string Segment::Candidate::DebugString() const {
 
 void Segment::Candidate::InnerSegmentIterator::Next() {
   DCHECK_LT(index_, candidate_->inner_segment_boundary.size());
-  const uint32 encoded_lengths = candidate_->inner_segment_boundary[index_++];
+  const uint32_t encoded_lengths = candidate_->inner_segment_boundary[index_++];
   key_offset_ += encoded_lengths >> 24;
   value_offset_ += (encoded_lengths >> 16) & 0xff;
 }
 
-StringPiece Segment::Candidate::InnerSegmentIterator::GetKey() const {
+absl::string_view Segment::Candidate::InnerSegmentIterator::GetKey() const {
   DCHECK_LT(index_, candidate_->inner_segment_boundary.size());
-  const uint32 encoded_lengths = candidate_->inner_segment_boundary[index_];
-  return StringPiece(key_offset_, encoded_lengths >> 24);
+  const uint32_t encoded_lengths = candidate_->inner_segment_boundary[index_];
+  return absl::string_view(key_offset_, encoded_lengths >> 24);
 }
 
-StringPiece Segment::Candidate::InnerSegmentIterator::GetValue() const {
+absl::string_view Segment::Candidate::InnerSegmentIterator::GetValue() const {
   DCHECK_LT(index_, candidate_->inner_segment_boundary.size());
-  const uint32 encoded_lengths = candidate_->inner_segment_boundary[index_];
-  return StringPiece(value_offset_, (encoded_lengths >> 16) & 0xff);
+  const uint32_t encoded_lengths = candidate_->inner_segment_boundary[index_];
+  return absl::string_view(value_offset_, (encoded_lengths >> 16) & 0xff);
 }
 
-StringPiece Segment::Candidate::InnerSegmentIterator::GetContentKey() const {
+absl::string_view Segment::Candidate::InnerSegmentIterator::GetContentKey()
+    const {
   DCHECK_LT(index_, candidate_->inner_segment_boundary.size());
-  const uint32 encoded_lengths = candidate_->inner_segment_boundary[index_];
-  return StringPiece(key_offset_, (encoded_lengths >> 8) & 0xff);
+  const uint32_t encoded_lengths = candidate_->inner_segment_boundary[index_];
+  return absl::string_view(key_offset_, (encoded_lengths >> 8) & 0xff);
 }
 
-StringPiece Segment::Candidate::InnerSegmentIterator::GetContentValue() const {
+absl::string_view Segment::Candidate::InnerSegmentIterator::GetContentValue()
+    const {
   DCHECK_LT(index_, candidate_->inner_segment_boundary.size());
-  const uint32 encoded_lengths = candidate_->inner_segment_boundary[index_];
-  return StringPiece(value_offset_, encoded_lengths & 0xff);
+  const uint32_t encoded_lengths = candidate_->inner_segment_boundary[index_];
+  return absl::string_view(value_offset_, encoded_lengths & 0xff);
 }
 
-Segment::Segment()
-    : segment_type_(FREE),
-      pool_(new ObjectPool<Candidate>(16)) {}
+constexpr int kCandidatesPoolSize = 16;
+Segment::Segment() : segment_type_(FREE), pool_(kCandidatesPoolSize) {}
 
-Segment::~Segment() {}
-
-Segment::SegmentType Segment::segment_type() const {
-  return segment_type_;
+Segment::Segment(const Segment &x)
+    : removed_candidates_for_debug_(x.removed_candidates_for_debug_),
+      segment_type_(x.segment_type_),
+      key_(x.key_),
+      meta_candidates_(x.meta_candidates_),
+      pool_(x.pool_.size()) {
+  // Deep-copy candidates.
+  for (const Candidate *cand : x.candidates_) {
+    *add_candidate() = *cand;
+  }
 }
 
-void Segment::set_segment_type(
-    const Segment::SegmentType &segment_type) {
+Segment &Segment::operator=(const Segment &x) {
+  removed_candidates_for_debug_ = x.removed_candidates_for_debug_;
+  segment_type_ = x.segment_type_;
+  key_ = x.key_;
+  meta_candidates_ = x.meta_candidates_;
+  // Deep-copy candidates.
+  clear_candidates();
+  for (const Candidate *cand : x.candidates_) {
+    *add_candidate() = *cand;
+  }
+  return *this;
+}
+
+Segment::~Segment() = default;
+
+Segment::SegmentType Segment::segment_type() const { return segment_type_; }
+
+void Segment::set_segment_type(const Segment::SegmentType &segment_type) {
   segment_type_ = segment_type;
 }
 
-const string& Segment::key() const {
-  return key_;
+const std::string &Segment::key() const { return key_; }
+
+void Segment::set_key(absl::string_view key) {
+  key_.assign(key.data(), key.size());
 }
 
-void Segment::set_key(const string &key) {
-  key_ = key;
+bool Segment::is_valid_index(int i) const {
+  if (i < 0) {
+    return (-i - 1 < meta_candidates_.size());
+  } else {
+    return (i < candidates_.size());
+  }
 }
 
 const Segment::Candidate &Segment::candidate(int i) const {
   if (i < 0) {
-    return meta_candidate(-i-1);
+    return meta_candidate(-i - 1);
   }
   DCHECK(i < candidates_.size());
   return *candidates_[i];
@@ -237,7 +263,7 @@ const Segment::Candidate &Segment::candidate(int i) const {
 
 Segment::Candidate *Segment::mutable_candidate(int i) {
   if (i < 0) {
-    const size_t meta_index = -i-1;
+    const size_t meta_index = -i - 1;
     DCHECK_LT(meta_index, meta_candidates_.size());
     return &meta_candidates_[meta_index];
   }
@@ -245,65 +271,41 @@ Segment::Candidate *Segment::mutable_candidate(int i) {
   return candidates_[i];
 }
 
-int Segment::indexOf(const Segment::Candidate *candidate) {
-  if (candidate == NULL) {
-    return static_cast<int>(candidates_size());
-  }
-
-  for (int i = 0; i < static_cast<int>(candidates_.size()); ++i) {
-    if (candidates_[i] == candidate) {
-      return i;
-    }
-  }
-
-  for (int i = 0; i < static_cast<int>(meta_candidates_.size()); ++i) {
-    if (&(meta_candidates_[i]) == candidate) {
-      return -i-1;
-    }
-  }
-
-  return static_cast<int>(candidates_size());
-}
-
-size_t Segment::candidates_size() const {
-  return candidates_.size();
-}
+size_t Segment::candidates_size() const { return candidates_.size(); }
 
 void Segment::clear_candidates() {
-  pool_->Free();
+  pool_.Free();
   candidates_.clear();
 }
 
 Segment::Candidate *Segment::push_back_candidate() {
-  Candidate *candidate = pool_->Alloc();
+  Candidate *candidate = pool_.Alloc();
   candidate->Init();
   candidates_.push_back(candidate);
   return candidate;
 }
 
 Segment::Candidate *Segment::push_front_candidate() {
-  Candidate *candidate = pool_->Alloc();
+  Candidate *candidate = pool_.Alloc();
   candidate->Init();
   candidates_.push_front(candidate);
   return candidate;
 }
 
-Segment::Candidate *Segment::add_candidate() {
-  return push_back_candidate();
-}
+Segment::Candidate *Segment::add_candidate() { return push_back_candidate(); }
 
 Segment::Candidate *Segment::insert_candidate(int i) {
   if (i < 0) {
-    LOG(WARNING) << "Invalid insert position [negative]: "
-                 << i << " / " << candidates_.size();
+    LOG(WARNING) << "Invalid insert position [negative]: " << i << " / "
+                 << candidates_.size();
     return nullptr;
   }
   if (i > static_cast<int>(candidates_.size())) {
-    LOG(DFATAL) << "Invalid insert position [out of bounds]: "
-                << i << " / " << candidates_.size();
+    LOG(DFATAL) << "Invalid insert position [out of bounds]: " << i << " / "
+                << candidates_.size();
     i = static_cast<int>(candidates_.size());
   }
-  Candidate *candidate = pool_->Alloc();
+  Candidate *candidate = pool_.Alloc();
   candidate->Init();
   candidates_.insert(candidates_.begin() + i, candidate);
   return candidate;
@@ -312,7 +314,7 @@ Segment::Candidate *Segment::insert_candidate(int i) {
 void Segment::pop_front_candidate() {
   if (!candidates_.empty()) {
     Candidate *c = candidates_.front();
-    pool_->Release(c);
+    pool_.Release(c);
     candidates_.pop_front();
   }
 }
@@ -320,7 +322,7 @@ void Segment::pop_front_candidate() {
 void Segment::pop_back_candidate() {
   if (!candidates_.empty()) {
     Candidate *c = candidates_.back();
-    pool_->Release(c);
+    pool_.Release(c);
     candidates_.pop_back();
   }
 }
@@ -330,32 +332,26 @@ void Segment::erase_candidate(int i) {
     LOG(WARNING) << "invalid index";
     return;
   }
-  pool_->Release(mutable_candidate(i));
+  pool_.Release(mutable_candidate(i));
   candidates_.erase(candidates_.begin() + i);
 }
 
 void Segment::erase_candidates(int i, size_t size) {
   const size_t end = i + size;
-  if (i < 0 ||
-      i >= static_cast<int>(candidates_size()) ||
+  if (i < 0 || i >= static_cast<int>(candidates_size()) ||
       end > candidates_size()) {
     LOG(WARNING) << "invalid index";
     return;
   }
   for (int j = i; j < static_cast<int>(end); ++j) {
-    pool_->Release(mutable_candidate(j));
+    pool_.Release(mutable_candidate(j));
   }
-  candidates_.erase(candidates_.begin() + i,
-                    candidates_.begin() + end);
+  candidates_.erase(candidates_.begin() + i, candidates_.begin() + end);
 }
 
-size_t Segment::meta_candidates_size() const {
-  return meta_candidates_.size();
-}
+size_t Segment::meta_candidates_size() const { return meta_candidates_.size(); }
 
-void Segment::clear_meta_candidates() {
-  meta_candidates_.clear();
-}
+void Segment::clear_meta_candidates() { meta_candidates_.clear(); }
 
 const std::vector<Segment::Candidate> &Segment::meta_candidates() const {
   return meta_candidates_;
@@ -385,13 +381,13 @@ Segment::Candidate *Segment::add_meta_candidate() {
   Candidate candidate;
   candidate.Init();
   meta_candidates_.push_back(candidate);
-  return &meta_candidates_[meta_candidates_size()-1];
+  return &meta_candidates_[meta_candidates_size() - 1];
 }
 
 void Segment::move_candidate(int old_idx, int new_idx) {
   // meta candidates
   if (old_idx < 0) {
-    const int meta_idx = -old_idx-1;
+    const int meta_idx = -old_idx - 1;
     DCHECK_LT(meta_idx, meta_candidates_size());
     Candidate *c = insert_candidate(new_idx);
     *c = meta_candidates_[meta_idx];
@@ -412,7 +408,7 @@ void Segment::move_candidate(int old_idx, int new_idx) {
     candidates_[new_idx] = c;
   } else {  // demotion
     Candidate *c = candidates_[old_idx];
-    for (int i = old_idx; i <  new_idx; ++i) {
+    for (int i = old_idx; i < new_idx; ++i) {
       candidates_[i] = candidates_[i + 1];
     }
     candidates_[new_idx] = c;
@@ -426,28 +422,10 @@ void Segment::Clear() {
   segment_type_ = FREE;
 }
 
-void Segment::CopyFrom(const Segment &src) {
-  Clear();
-
-  key_ = src.key();
-  segment_type_ = src.segment_type();
-
-  for (size_t i = 0; i < src.candidates_size(); ++i) {
-    Candidate *candidate = add_candidate();
-    candidate->CopyFrom(src.candidate(i));
-  }
-
-  for (size_t i = 0; i < src.meta_candidates_size(); ++i) {
-    Candidate *meta_candidate = add_meta_candidate();
-    meta_candidate->CopyFrom(src.meta_candidate(i));
-  }
-}
-
-string Segment::DebugString() const {
+std::string Segment::DebugString() const {
   std::stringstream os;
   os << "[segtype=" << segment_type() << " key=" << key() << std::endl;
-  const int size =
-      static_cast<int>(candidates_size() + meta_candidates_size());
+  const int size = static_cast<int>(candidates_size() + meta_candidates_size());
   for (int l = 0; l < size; ++l) {
     int j = 0;
     if (l < meta_candidates_size()) {
@@ -461,28 +439,51 @@ string Segment::DebugString() const {
   return os.str();
 }
 
-void Segments::RevertEntry::CopyFrom(const RevertEntry &src) {
-  revert_entry_type = src.revert_entry_type;
-  id = src.id;
-  timestamp = src.timestamp;
-  key = src.key;
-}
-
 Segments::Segments()
-  : max_history_segments_size_(0),
-    max_prediction_candidates_size_(0),
-    max_conversion_candidates_size_(kMaxConversionCandidatesSize),
-    resized_(false),
-    user_history_enabled_(true),
-    request_type_(Segments::CONVERSION),
-    pool_(new ObjectPool<Segment>(32)),
-    cached_lattice_(new Lattice()) {}
+    : max_history_segments_size_(0),
+      resized_(false),
+      user_history_enabled_(true),
+      request_type_(Segments::CONVERSION),
+      pool_(32),
+      cached_lattice_(new Lattice()) {}
 
-Segments::~Segments() {}
-
-Segments::RequestType Segments::request_type() const {
-  return request_type_;
+Segments::Segments(const Segments &x)
+    : max_history_segments_size_(x.max_history_segments_size_),
+      resized_(x.resized_),
+      user_history_enabled_(x.user_history_enabled_),
+      request_type_(x.request_type_),
+      pool_(32),
+      revert_entries_(x.revert_entries_),
+      cached_lattice_(new Lattice()) {
+  // Deep-copy segments.
+  for (const Segment *segment : x.segments_) {
+    *add_segment() = *segment;
+  }
+  // Note: cached_lattice_ is not copied to follow the old copy policy.
+  // TODO(noriyukit): This design is not intuitive. It'd be better to manage
+  // cached_lattice_ in a better way.
 }
+
+Segments &Segments::operator=(const Segments &x) {
+  Clear();
+
+  max_history_segments_size_ = x.max_history_segments_size_;
+  resized_ = x.resized_;
+  user_history_enabled_ = x.user_history_enabled_;
+  request_type_ = x.request_type_;
+  // Deep-copy segments.
+  for (const Segment *segment : x.segments_) {
+    *add_segment() = *segment;
+  }
+  revert_entries_ = x.revert_entries_;
+  // Note: cached_lattice_ is not copied; see the comment for the copy
+  // constructor.
+  return *this;
+}
+
+Segments::~Segments() = default;
+
+Segments::RequestType Segments::request_type() const { return request_type_; }
 
 void Segments::set_request_type(Segments::RequestType request_type) {
   request_type_ = request_type;
@@ -492,25 +493,17 @@ void Segments::set_user_history_enabled(bool user_history_enabled) {
   user_history_enabled_ = user_history_enabled;
 }
 
-bool Segments::user_history_enabled() const {
-  return user_history_enabled_;
-}
+bool Segments::user_history_enabled() const { return user_history_enabled_; }
 
-const Segment &Segments::segment(size_t i) const {
-  return *segments_[i];
-}
+const Segment &Segments::segment(size_t i) const { return *segments_[i]; }
 
-Segment *Segments::mutable_segment(size_t i) {
-  return segments_[i];
-}
+Segment *Segments::mutable_segment(size_t i) { return segments_[i]; }
 
 const Segment &Segments::history_segment(size_t i) const {
   return *segments_[i];
 }
 
-Segment *Segments::mutable_history_segment(size_t i) {
-  return segments_[i];
-}
+Segment *Segments::mutable_history_segment(size_t i) { return segments_[i]; }
 
 const Segment &Segments::conversion_segment(size_t i) const {
   return *segments_[i + history_segments_size()];
@@ -520,34 +513,30 @@ Segment *Segments::mutable_conversion_segment(size_t i) {
   return segments_[i + history_segments_size()];
 }
 
-Segment *Segments::add_segment() {
-  return push_back_segment();
-}
+Segment *Segments::add_segment() { return push_back_segment(); }
 
 Segment *Segments::insert_segment(size_t i) {
-  Segment *segment = pool_->Alloc();
+  Segment *segment = pool_.Alloc();
   segment->Clear();
   segments_.insert(segments_.begin() + i, segment);
   return segment;
 }
 
 Segment *Segments::push_back_segment() {
-  Segment *segment = pool_->Alloc();
+  Segment *segment = pool_.Alloc();
   segment->Clear();
   segments_.push_back(segment);
   return segment;
 }
 
 Segment *Segments::push_front_segment() {
-  Segment *segment = pool_->Alloc();
+  Segment *segment = pool_.Alloc();
   segment->Clear();
   segments_.push_front(segment);
   return segment;
 }
 
-size_t Segments::segments_size() const {
-  return segments_.size();
-}
+size_t Segments::segments_size() const { return segments_.size(); }
 
 size_t Segments::history_segments_size() const {
   size_t result = 0;
@@ -569,7 +558,7 @@ void Segments::erase_segment(size_t i) {
   if (i >= segments_size()) {
     return;
   }
-  pool_->Release(mutable_segment(i));
+  pool_.Release(mutable_segment(i));
   segments_.erase(segments_.begin() + i);
 }
 
@@ -578,17 +567,16 @@ void Segments::erase_segments(size_t i, size_t size) {
   if (i >= segments_size() || end > segments_size()) {
     return;
   }
-  for (size_t j = i ; j < end; ++j) {
-    pool_->Release(mutable_segment(j));
+  for (size_t j = i; j < end; ++j) {
+    pool_.Release(mutable_segment(j));
   }
-  segments_.erase(segments_.begin() + i,
-                  segments_.begin() + end);
+  segments_.erase(segments_.begin() + i, segments_.begin() + end);
 }
 
 void Segments::pop_front_segment() {
   if (!segments_.empty()) {
     Segment *seg = segments_.front();
-    pool_->Release(seg);
+    pool_.Release(seg);
     segments_.pop_front();
   }
 }
@@ -596,7 +584,7 @@ void Segments::pop_front_segment() {
 void Segments::pop_back_segment() {
   if (!segments_.empty()) {
     Segment *seg = segments_.back();
-    pool_->Release(seg);
+    pool_.Release(seg);
     segments_.pop_back();
   }
 }
@@ -606,29 +594,8 @@ void Segments::Clear() {
   clear_revert_entries();
 }
 
-void Segments::CopyFrom(const Segments &src) {
-  Clear();
-  max_history_segments_size_ = src.max_history_segments_size();
-  max_prediction_candidates_size_ = src.max_prediction_candidates_size();
-  max_conversion_candidates_size_ = src.max_conversion_candidates_size();
-  resized_ = src.resized();
-  user_history_enabled_ = src.user_history_enabled();
-
-  request_type_ = src.request_type();
-
-  for (size_t i = 0; i < src.segments_size(); ++i) {
-    Segment *segment = add_segment();
-    segment->CopyFrom(src.segment(i));
-  }
-
-  for (size_t i = 0; i < src.revert_entries_size(); ++i) {
-    RevertEntry *revert_entry = push_back_revert_entry();
-    revert_entry->CopyFrom(src.revert_entry(i));
-  }
-}
-
 void Segments::clear_segments() {
-  pool_->Free();
+  pool_.Free();
   resized_ = false;
   segments_.clear();
 }
@@ -647,7 +614,7 @@ void Segments::clear_history_segments() {
 void Segments::clear_conversion_segments() {
   const size_t size = history_segments_size();
   for (size_t i = size; i < segments_size(); ++i) {
-    pool_->Release(mutable_segment(i));
+    pool_.Release(mutable_segment(i));
   }
   resized_ = false;
   segments_.resize(size);
@@ -663,37 +630,13 @@ void Segments::set_max_history_segments_size(size_t max_history_segments_size) {
                std::min(max_history_segments_size, kMaxHistorySize));
 }
 
-void Segments::set_resized(bool resized) {
-  resized_ = resized;
-}
+void Segments::set_resized(bool resized) { resized_ = resized; }
 
-bool Segments::resized() const {
-  return resized_;
-}
+bool Segments::resized() const { return resized_; }
 
-size_t Segments::max_prediction_candidates_size() const {
-  return max_prediction_candidates_size_;
-}
+void Segments::clear_revert_entries() { revert_entries_.clear(); }
 
-void Segments::set_max_prediction_candidates_size(size_t size) {
-  max_prediction_candidates_size_ = size;
-}
-
-size_t Segments::max_conversion_candidates_size() const {
-  return max_conversion_candidates_size_;
-}
-
-void Segments::set_max_conversion_candidates_size(size_t size) {
-  max_conversion_candidates_size_ = size;
-}
-
-void Segments::clear_revert_entries() {
-  revert_entries_.clear();
-}
-
-size_t Segments::revert_entries_size() const {
-  return revert_entries_.size();
-}
+size_t Segments::revert_entries_size() const { return revert_entries_.size(); }
 
 Segments::RevertEntry *Segments::push_back_revert_entry() {
   revert_entries_.resize(revert_entries_.size() + 1);
@@ -713,11 +656,9 @@ Segments::RevertEntry *Segments::mutable_revert_entry(size_t i) {
   return &revert_entries_[i];
 }
 
-Lattice *Segments::mutable_cached_lattice() {
-  return cached_lattice_.get();
-}
+Lattice *Segments::mutable_cached_lattice() { return cached_lattice_.get(); }
 
-string Segments::DebugString() const {
+std::string Segments::DebugString() const {
   std::stringstream os;
   os << "{" << std::endl;
   for (size_t i = 0; i < segments_size(); ++i) {

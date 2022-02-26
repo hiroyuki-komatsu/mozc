@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,9 +32,9 @@
 
 #include <memory>
 
-#include "base/mutex.h"
 #include "renderer/renderer_server.h"
 #include "renderer/unix/gtk_wrapper_interface.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace renderer {
@@ -49,31 +49,30 @@ class UnixServer : public RendererServer {
     GPollFD poll_fd;
     UnixServer *unix_server;
   };
+
   // UnixServer takes arguments' ownership.
   explicit UnixServer(GtkWrapperInterface *gtk);
-  ~UnixServer();
+  ~UnixServer() override;
 
-  virtual void AsyncHide();
-  virtual void AsyncQuit();
-  virtual bool AsyncExecCommand(string *proto_message);
-  virtual int StartMessageLoop();
+  void AsyncHide() override;
+  void AsyncQuit() override;
+  bool AsyncExecCommand(std::string *proto_message) override;
+  int StartMessageLoop() override;
 
   virtual bool Render();
 
   void OpenPipe();
 
  private:
-  string message_;
-  Mutex mutex_;
+  std::string message_;
+  absl::Mutex mutex_;
   std::unique_ptr<GtkWrapperInterface> gtk_;
 
-  // Following pipe is used to communicate IPC recieving thread and
+  // Following pipe is used to communicate IPC receiving thread and
   // rendering(gtk-main) thread. The gtk-main loop polls following pipe and IPC
-  // recieving thread writes small data to notify gtk-main thread to update when
+  // receiving thread writes small data to notify gtk-main thread to update when
   // new packet is arrived.
   int pipefd_[2];
-
-  DISALLOW_COPY_AND_ASSIGN(UnixServer);
 };
 
 }  // namespace gtk

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,9 @@
 
 __author__ = "taku"
 
+import codecs
 import optparse
+import re
 import struct
 
 from build_tools import serialized_string_array_builder
@@ -39,20 +41,29 @@ from build_tools import serialized_string_array_builder
 def _ParseOptions():
   parser = optparse.OptionParser()
   parser.add_option('--input', dest='input', help='Input suffix file')
-  parser.add_option('--output_key_array', dest='output_key_array',
-                    help='Output serialized string array for keys')
-  parser.add_option('--output_value_array', dest='output_value_array',
-                    help='Output serialized string array for values')
-  parser.add_option('--output_token_array', dest='output_token_array',
-                    help='Output uint32 array for lid, rid and cost.')
+  parser.add_option(
+      '--output_key_array',
+      dest='output_key_array',
+      help='Output serialized string array for keys')
+  parser.add_option(
+      '--output_value_array',
+      dest='output_value_array',
+      help='Output serialized string array for values')
+  parser.add_option(
+      '--output_token_array',
+      dest='output_token_array',
+      help='Output uint32 array for lid, rid and cost.')
   return parser.parse_args()[0]
 
 
 def main():
   opts = _ParseOptions()
 
+  # Remove noisy and unuseful words.
+  invalid_re = re.compile(r'^[→↓↑→─あいうえおぁぃぅぇぉつっょ]$')
+
   result = []
-  with open(opts.input, 'r') as stream:
+  with codecs.open(opts.input, 'r', encoding='utf-8') as stream:
     for line in stream:
       line = line.rstrip('\r\n')
       fields = line.split('\t')
@@ -61,6 +72,9 @@ def main():
       rid = int(fields[2])
       cost = int(fields[3])
       value = fields[4]
+
+      if invalid_re.match(value):
+        continue
 
       if key == value:
         value = ''
@@ -84,7 +98,7 @@ def main():
   with open(opts.output_token_array, 'wb') as f:
     for _, _, lid, rid, cost in result:
       f.write(struct.pack('<I', lid))
-      f.write(struct.pack('<I', lid))
+      f.write(struct.pack('<I', rid))
       f.write(struct.pack('<I', cost))
 
 

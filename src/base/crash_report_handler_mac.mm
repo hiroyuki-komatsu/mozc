@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifdef OS_MACOSX
+#ifdef __APPLE__
 
 #import "base/crash_report_handler.h"
 
@@ -46,14 +46,13 @@ BreakpadRef g_breakpad = nullptr;
 bool CrashReportHandler::Initialize(bool check_address) {
   ++g_reference_count;
   @autoreleasepool {
-    NSMutableDictionary *plist =
-        [[[NSBundle mainBundle] infoDictionary] mutableCopy];
+    NSMutableDictionary *plist = [[[NSBundle mainBundle] infoDictionary] mutableCopy];
     if (g_reference_count == 1 && plist != nullptr && g_breakpad == nullptr) {
       // Create a crash reports directory under tmpdir, and set it to the plist
       NSString *tmpDir = NSTemporaryDirectory();
       // crashDir will be $TMPDIR/GoogleJapaneseInput/CrashReports
-      NSString *crashDir = [NSString
-          pathWithComponents:@[tmpDir, @kProductPrefix, @"CrashReports"]];
+      NSString *crashDir =
+          [NSString pathWithComponents:@[ tmpDir, @kProductPrefix, @"CrashReports" ]];
       [[NSFileManager defaultManager] createDirectoryAtPath:crashDir
                                 withIntermediateDirectories:YES
                                                  attributes:nil
@@ -78,4 +77,4 @@ bool CrashReportHandler::Uninitialize() {
 
 }  // namespace mozc
 
-#endif  // OS_MACOSX
+#endif  // __APPLE__

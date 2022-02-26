@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@
       ],
       'dependencies': [
         'codec_util',
+        '../../base/absl.gyp:absl_status',
         '../../base/base.gyp:base_core',
       ],
     },
@@ -62,6 +63,8 @@
         'codec_util.cc',
       ],
       'dependencies': [
+        '../../base/absl.gyp:absl_strings',
+        '../../base/absl.gyp:absl_status',
         '../../base/base.gyp:base_core',
       ],
     },
@@ -74,6 +77,8 @@
       ],
       'dependencies': [
         'codec',
+        '../../base/absl.gyp:absl_strings',
+        '../../base/absl.gyp:absl_status',
         '../../base/base.gyp:base_core',
       ],
     },

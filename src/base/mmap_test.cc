@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,30 +32,27 @@
 #include <cstring>
 #include <memory>
 
-#include "base/file_stream.h"
 #include "base/file_util.h"
-#include "base/flags.h"
 #include "base/util.h"
+#include "testing/base/public/gmock.h"
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
+#include "absl/flags/flag.h"
 
 namespace mozc {
 namespace {
 
 TEST(MmapTest, MmapTest) {
-  const string filename = FileUtil::JoinPath(FLAGS_test_tmpdir, "test.db");
+  const std::string filename =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test.db");
 
-  const size_t kFileNameSize[] = { 1, 100, 1024, 8192 };
-  for (int i = 0; i < arraysize(kFileNameSize); ++i) {
-    FileUtil::Unlink(filename);
-    std::unique_ptr<char[]> buf(new char[kFileNameSize[i]]);
+  constexpr size_t kFileNameSize[] = {1, 100, 1024, 8192};
+  for (int i = 0; i < std::size(kFileNameSize); ++i) {
+    ASSERT_OK(FileUtil::UnlinkIfExists(filename));
+    auto buf = std::make_unique<char[]>(kFileNameSize[i]);
     memset(buf.get(), 0, kFileNameSize[i]);
-
-    {
-      OutputFileStream ofs(filename.c_str(), std::ios::out | std::ios::binary);
-      EXPECT_TRUE(ofs.good());
-      ofs.write(buf.get(), kFileNameSize[i]);
-    }
+    ASSERT_OK(FileUtil::SetContents(
+        filename, absl::string_view(buf.get(), kFileNameSize[i])));
 
     Util::GetRandomSequence(buf.get(), kFileNameSize[i]);
 
@@ -93,7 +90,7 @@ TEST(MmapTest, MmapTest) {
       }
     }
 
-    FileUtil::Unlink(filename);
+    EXPECT_OK(FileUtil::Unlink(filename));
   }
 }
 

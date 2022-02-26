@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,8 @@
 
 #import <InputMethodKit/InputMethodKit.h>
 #import "mac/common.h"
+
+#include <string>
 
 // For mozc::commands::CompositionMode
 #include "protocol/renderer_command.pb.h"
@@ -91,7 +93,7 @@ class RendererInterface;
 
   // |clientBundle_| is the Bundle ID of the client application which
   // the controller communicates with.
-  string *clientBundle_;
+  std::string *clientBundle_;
 
   NSRange replacementRange_;
 
@@ -140,14 +142,6 @@ class RendererInterface;
 // registerWordClicked: is called when the user clicks "Add a word..."
 // menu item.
 - (IBAction)registerWordClicked:(id)sender;
-
-// characterPaletteClicked: is called when the user clicks
-// "Character Palette..." menu item.
-- (IBAction)characterPaletteClicked:(id)sender;
-
-// handWritingClicked: is called when the user clicks "Hand Wrinting..."
-// menu item.
-- (IBAction)handWritingClicked:(id)sender;
 
 // aboutDialogClicked: is called when the user clicks "About Mozc..."
 // menu item.

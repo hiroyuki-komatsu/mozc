@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,8 +30,11 @@
 #ifndef MOZC_ENGINE_OSS_ENGINE_FACTORY_H_
 #define MOZC_ENGINE_OSS_ENGINE_FACTORY_H_
 
+#include <memory>
+
 #include "data_manager/oss/oss_data_manager.h"
 #include "engine/engine.h"
+#include "absl/status/statusor.h"
 
 namespace mozc {
 
@@ -39,10 +42,12 @@ namespace mozc {
 // equipped with the data set for OSS (i.e., mozc/data/dictionary_oss).
 class OssEngineFactory {
  public:
-  // Creates an instance of Engine class. The caller is responsible for deleting
-  // the returned object.
-  static Engine *Create() {
-    return Engine::CreateMobileEngineHelper<oss::OssDataManager>().release();
+  static absl::StatusOr<std::unique_ptr<Engine>> Create() {
+#ifdef OS_ANDROID
+    return Engine::CreateMobileEngineHelper<oss::OssDataManager>();
+#else
+    return Engine::CreateDesktopEngineHelper<oss::OssDataManager>();
+#endif  // OS_ANDROID
   }
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@
 
 #include "composer/internal/composition.h"
 
+#include <iterator>
 #include <memory>
 
 #include "base/logging.h"
@@ -37,34 +38,51 @@
 #include "composer/internal/composition_input.h"
 #include "composer/internal/transliterators.h"
 #include "composer/table.h"
+#include "absl/strings/match.h"
 
 namespace mozc {
 namespace composer {
+namespace {
+
+CharChunkList DeepCopyCharChunkList(const CharChunkList &chunks) {
+  CharChunkList copy;
+  for (const std::unique_ptr<CharChunk> &chunk : chunks) {
+    copy.push_back(std::make_unique<CharChunk>(*chunk));
+  }
+  return copy;
+}
+
+}  // namespace
 
 Composition::Composition(const Table *table)
     : table_(table), input_t12r_(Transliterators::CONVERSION_STRING) {}
 
-Composition::~Composition() {
+Composition::Composition(const Composition &x)
+    : table_(x.table_),
+      chunks_(DeepCopyCharChunkList(x.chunks_)),
+      input_t12r_(x.input_t12r_) {}
+
+Composition &Composition::operator=(const Composition &x) {
   Erase();
+  table_ = x.table_;
+  chunks_ = DeepCopyCharChunkList(x.chunks_);
+  input_t12r_ = x.input_t12r_;
+  return *this;
 }
 
-void Composition::Erase() {
-  CharChunkList::iterator it;
-  for (it = chunks_.begin(); it != chunks_.end(); ++it) {
-    delete *it;
-  }
-  chunks_.clear();
-}
+Composition::~Composition() = default;
 
-size_t Composition::InsertAt(size_t pos, const string &input) {
+void Composition::Erase() { chunks_.clear(); }
+
+size_t Composition::InsertAt(size_t pos, const std::string &input) {
   CompositionInput composition_input;
   composition_input.set_raw(input);
   return InsertInput(pos, composition_input);
 }
 
 size_t Composition::InsertKeyAndPreeditAt(const size_t pos,
-                                          const string &key,
-                                          const string &preedit) {
+                                          const std::string &key,
+                                          const std::string &preedit) {
   CompositionInput composition_input;
   composition_input.set_raw(key);
   composition_input.set_conversion(preedit);
@@ -79,17 +97,16 @@ size_t Composition::InsertInput(size_t pos, const CompositionInput &input) {
   CharChunkList::iterator right_chunk;
   MaybeSplitChunkAt(pos, &right_chunk);
 
-  CharChunkList::iterator left_chunk = GetInsertionChunk(&right_chunk);
+  CharChunkList::iterator left_chunk = GetInsertionChunk(right_chunk);
   CombinePendingChunks(left_chunk, input);
 
-  CompositionInput mutable_input;
-  mutable_input.CopyFrom(input);
+  CompositionInput mutable_input = input;
   while (true) {
     (*left_chunk)->AddCompositionInput(&mutable_input);
     if (mutable_input.Empty()) {
       break;
     }
-    left_chunk = InsertChunk(&right_chunk);
+    left_chunk = InsertChunk(right_chunk);
     mutable_input.set_is_new_input(false);
   }
 
@@ -118,14 +135,12 @@ size_t Composition::DeleteAt(const size_t position) {
     // If a chunk contains only invisible characters,
     // the result of GetLength is 0.
     if ((*chunk_it)->GetLength(Transliterators::LOCAL) <= 1) {
-      delete *chunk_it;
       chunks_.erase(chunk_it);
       continue;
     }
 
-    CharChunk *left_deleted_chunk_ptr = NULL;
-    (*chunk_it)->SplitChunk(Transliterators::LOCAL, 1, &left_deleted_chunk_ptr);
-    std::unique_ptr<CharChunk> left_deleted_chunk(left_deleted_chunk_ptr);
+    std::unique_ptr<CharChunk> left_deleted_chunk =
+        (*chunk_it)->SplitChunk(Transliterators::LOCAL, 1);
   }
   return new_position;
 }
@@ -133,16 +148,15 @@ size_t Composition::DeleteAt(const size_t position) {
 size_t Composition::ConvertPosition(
     const size_t position_from,
     Transliterators::Transliterator transliterator_from,
-    Transliterators::Transliterator transliterator_to) {
+    Transliterators::Transliterator transliterator_to) const {
   // TODO(komatsu) This is a hacky way.
   if (transliterator_from == transliterator_to) {
     return position_from;
   }
 
-  CharChunkList::iterator chunk_it;
   size_t inner_position_from;
-  GetChunkAt(position_from, transliterator_from,
-             &chunk_it, &inner_position_from);
+  auto chunk_it =
+      GetChunkAt(position_from, transliterator_from, &inner_position_from);
 
   // No chunk was found, return 0 as a fallback.
   if (chunk_it == chunks_.end()) {
@@ -167,7 +181,6 @@ size_t Composition::ConvertPosition(
     return position_to + chunk_length_to;
   }
 
-
   if (inner_position_from > chunk_length_to) {
     // When inner_position_from is greater than chunk_length_to
     // (ex. "ts|u" vs "つ", inner_position_from is 2 and
@@ -185,16 +198,14 @@ size_t Composition::ConvertPosition(
 }
 
 size_t Composition::SetDisplayMode(
-    const size_t position,
-    Transliterators::Transliterator transliterator) {
+    const size_t position, Transliterators::Transliterator transliterator) {
   SetTransliterator(0, GetLength(), transliterator);
   SetInputMode(transliterator);
   return GetLength();
 }
 
 void Composition::SetTransliterator(
-    const size_t position_from,
-    const size_t position_to,
+    const size_t position_from, const size_t position_to,
     Transliterators::Transliterator transliterator) {
   if (position_from > position_to) {
     LOG(ERROR) << "position_from should not be greater than position_to.";
@@ -205,14 +216,13 @@ void Composition::SetTransliterator(
     return;
   }
 
-  CharChunkList::iterator chunk_it;
   size_t inner_position_from;
-  GetChunkAt(position_from, Transliterators::LOCAL, &chunk_it,
-             &inner_position_from);
+  auto chunk_it =
+      GetChunkAt(position_from, Transliterators::LOCAL, &inner_position_from);
 
-  CharChunkList::iterator end_it;
   size_t inner_position_to;
-  GetChunkAt(position_to, Transliterators::LOCAL, &end_it, &inner_position_to);
+  auto end_it =
+      GetChunkAt(position_to, Transliterators::LOCAL, &inner_position_to);
 
   // chunk_it and end_it can be the same iterator from the beginning.
   while (chunk_it != end_it) {
@@ -222,13 +232,12 @@ void Composition::SetTransliterator(
   (*end_it)->SetTransliterator(transliterator);
 }
 
-Transliterators::Transliterator
-Composition::GetTransliterator(size_t position) {
-  // Due to GetChunkAt is not a const funcion, this function cannot be
-  // a const function.
-  CharChunkList::iterator chunk_it;
-  size_t inner_position;
-  GetChunkAt(position, Transliterators::LOCAL, &chunk_it, &inner_position);
+Transliterators::Transliterator Composition::GetTransliterator(
+    size_t position) const {
+  size_t inner_position = 0;
+  const auto chunk_it =
+      GetChunkAt(position, Transliterators::LOCAL, &inner_position);
+  DCHECK(chunk_it != chunks_.end());
   return (*chunk_it)->GetTransliterator(Transliterators::LOCAL);
 }
 
@@ -237,9 +246,8 @@ size_t Composition::GetLength() const {
 }
 
 void Composition::GetStringWithModes(
-    Transliterators::Transliterator transliterator,
-    const TrimMode trim_mode,
-    string* composition) const {
+    Transliterators::Transliterator transliterator, const TrimMode trim_mode,
+    std::string *composition) const {
   composition->clear();
   if (chunks_.empty()) {
     // This is not an error. For example, the composition should be empty for
@@ -269,15 +277,14 @@ void Composition::GetStringWithModes(
   }
 }
 
-void Composition::GetExpandedStrings(string *base,
-                                     std::set<string> *expanded) const {
+void Composition::GetExpandedStrings(std::string *base,
+                                     std::set<std::string> *expanded) const {
   GetExpandedStringsWithTransliterator(Transliterators::LOCAL, base, expanded);
 }
 
 void Composition::GetExpandedStringsWithTransliterator(
-    Transliterators::Transliterator transliterator,
-    string *base,
-    std::set<string> *expanded) const {
+    Transliterators::Transliterator transliterator, std::string *base,
+    std::set<std::string> *expanded) const {
   DCHECK(base);
   DCHECK(expanded);
   base->clear();
@@ -297,71 +304,74 @@ void Composition::GetExpandedStringsWithTransliterator(
   chunks_.back()->GetExpandedResults(expanded);
 }
 
-void Composition::GetString(string *composition) const {
+void Composition::GetString(std::string *composition) const {
   composition->clear();
   if (chunks_.empty()) {
     VLOG(1) << "The composition size is zero.";
     return;
   }
 
-  for (CharChunkList::const_iterator it = chunks_.begin();
-       it != chunks_.end();
+  for (CharChunkList::const_iterator it = chunks_.begin(); it != chunks_.end();
        ++it) {
     (*it)->AppendResult(Transliterators::LOCAL, composition);
   }
 }
 
 void Composition::GetStringWithTransliterator(
-    Transliterators::Transliterator transliterator,
-    string* output) const {
+    Transliterators::Transliterator transliterator, std::string *output) const {
   GetStringWithModes(transliterator, FIX, output);
 }
 
 void Composition::GetStringWithTrimMode(const TrimMode trim_mode,
-                                        string* output) const {
+                                        std::string *output) const {
   GetStringWithModes(Transliterators::LOCAL, trim_mode, output);
 }
 
-void Composition::GetPreedit(
-    size_t position, string *left, string *focused, string *right) const {
-  string composition;
+void Composition::GetPreedit(size_t position, std::string *left,
+                             std::string *focused, std::string *right) const {
+  std::string composition;
   GetString(&composition);
-  left->assign(Util::SubString(composition, 0, position));
-  focused->assign(Util::SubString(composition, position, 1));
-  right->assign(Util::SubString(composition, position + 1, string::npos));
+  Util::Utf8SubString(composition, 0, position, left);
+  Util::Utf8SubString(composition, position, 1, focused);
+  Util::Utf8SubString(composition, position + 1, std::string::npos, right);
 }
 
-// This function is essentialy a const function, but chunks_.begin()
-// violates the constness of this function.
-void Composition::GetChunkAt(const size_t position,
-                             Transliterators::Transliterator transliterator,
-                             CharChunkList::iterator *chunk_it,
-                             size_t *inner_position) {
+// This function is essentialy a const function, but it cannot be const because
+// it outputs a mutable CharChunkList::iterator.  Const version is provided
+// below.
+CharChunkList::iterator Composition::GetChunkAt(
+    const size_t position, Transliterators::Transliterator transliterator,
+    size_t *inner_position) {
   if (chunks_.empty()) {
     *inner_position = 0;
-    *chunk_it = chunks_.begin();
-    return;
+    return chunks_.begin();
   }
 
   size_t rest_pos = position;
-  CharChunkList::iterator it;
-  for (it = chunks_.begin(); it != chunks_.end(); ++it) {
+  for (auto it = chunks_.begin(); it != chunks_.end(); ++it) {
     const size_t chunk_length = (*it)->GetLength(transliterator);
     if (rest_pos <= chunk_length) {
       *inner_position = rest_pos;
-      *chunk_it = it;
-      return;
+      return it;
     }
     rest_pos -= chunk_length;
   }
-  *chunk_it = chunks_.end();
-  --(*chunk_it);
-  *inner_position = (**chunk_it)->GetLength(transliterator);
+  auto it = chunks_.end();
+  --it;
+  *inner_position = (*it)->GetLength(transliterator);
+  return it;
 }
 
-size_t Composition::GetPosition(
-    Transliterators::Transliterator transliterator,
-    const CharChunkList::const_iterator &cur_it) const {
+CharChunkList::const_iterator Composition::GetChunkAt(
+    size_t position, Transliterators::Transliterator transliterator,
+    size_t *inner_position) const {
+  // This const_cast is safe as GetChunkAt() above doesn't mutate any members.
+  return const_cast<Composition *>(this)->GetChunkAt(position, transliterator,
+                                                     inner_position);
+}
+
+size_t Composition::GetPosition(Transliterators::Transliterator transliterator,
+                                CharChunkList::const_iterator cur_it) const {
   size_t position = 0;
   CharChunkList::const_iterator it;
   for (it = chunks_.begin(); it != cur_it; ++it) {
@@ -376,57 +386,54 @@ CharChunk *Composition::MaybeSplitChunkAt(const size_t pos,
   // The position is the beginning of composition.
   if (pos <= 0) {
     *it = chunks_.begin();
-    return NULL;
+    return nullptr;
   }
 
   size_t inner_position;
-  GetChunkAt(pos, Transliterators::LOCAL, it, &inner_position);
+  *it = GetChunkAt(pos, Transliterators::LOCAL, &inner_position);
 
-  CharChunk *chunk = **it;
+  CharChunk *chunk = (*it)->get();
   if (inner_position == chunk->GetLength(Transliterators::LOCAL)) {
     ++(*it);
     return chunk;
   }
 
-  CharChunk *left_chunk = NULL;
-  chunk->SplitChunk(Transliterators::LOCAL, inner_position, &left_chunk);
-  chunks_.insert(*it, left_chunk);
-  return left_chunk;
+  std::unique_ptr<CharChunk> left_chunk =
+      chunk->SplitChunk(Transliterators::LOCAL, inner_position);
+  CharChunk *ret = left_chunk.get();
+  chunks_.insert(*it, std::move(left_chunk));
+  return ret;
 }
 
-void Composition::CombinePendingChunks(
-    CharChunkList::iterator it, const CompositionInput &input) {
+void Composition::CombinePendingChunks(CharChunkList::iterator it,
+                                       const CompositionInput &input) {
   // Combine |**it| and |**(--it)| into |**it| as long as possible.
-  const string &next_input =
-    input.has_conversion() ? input.conversion() : input.raw();
+  const std::string &next_input =
+      input.has_conversion() ? input.conversion() : input.raw();
 
   while (it != chunks_.begin()) {
     CharChunkList::iterator left_it = it;
     --left_it;
-    if (!(*left_it)->IsConvertible(
-            input_t12r_, table_, (*it)->pending() + next_input)) {
+    if (!(*left_it)->IsConvertible(input_t12r_, table_,
+                                   (*it)->pending() + next_input)) {
       return;
     }
 
     (*it)->Combine(**left_it);
-    delete *left_it;
     chunks_.erase(left_it);
   }
 }
 
 // Insert a chunk to the prev of it.
-CharChunkList::iterator Composition::InsertChunk(CharChunkList::iterator *it) {
-  CharChunk *new_chunk = new CharChunk(input_t12r_, table_);
-  return chunks_.insert(*it, new_chunk);
+CharChunkList::iterator Composition::InsertChunk(
+    CharChunkList::const_iterator it) {
+  return chunks_.insert(it, std::make_unique<CharChunk>(input_t12r_, table_));
 }
 
-const CharChunkList &Composition::GetCharChunkList() const {
-  return chunks_;
-}
+const CharChunkList &Composition::GetCharChunkList() const { return chunks_; }
 
 bool Composition::ShouldCommit() const {
-  for (CharChunkList::const_iterator it = chunks_.begin();
-       it != chunks_.end();
+  for (CharChunkList::const_iterator it = chunks_.begin(); it != chunks_.end();
        ++it) {
     if (!(*it)->ShouldCommit()) {
       return false;
@@ -435,35 +442,14 @@ bool Composition::ShouldCommit() const {
   return true;
 }
 
-CompositionInterface *Composition::Clone() const {
-  return CloneImpl();
-}
-
-Composition *Composition::CloneImpl() const {
-  Composition *object = new Composition(table_);
-
-  // TODO(hsumita): Implements TableFactory and TransliteratorFactory and uses
-  // it instead of copying pointers.
-  object->input_t12r_ = input_t12r_;
-  object->table_ = table_;
-
-  for (CharChunkList::const_iterator it = chunks_.begin();
-       it != chunks_.end(); ++it) {
-    object->chunks_.push_back((*it)->Clone());
-  }
-
-  return object;
-}
-
 // Return charchunk to be inserted and iterator of the *next* char chunk.
 CharChunkList::iterator Composition::GetInsertionChunk(
-    CharChunkList::iterator *it) {
-  if (*it == chunks_.begin()) {
+    CharChunkList::iterator it) {
+  if (it == chunks_.begin()) {
     return InsertChunk(it);
   }
 
-  CharChunkList::iterator left_it = *it;
-  --left_it;
+  const CharChunkList::iterator left_it = std::prev(it);
   if ((*left_it)->IsAppendable(input_t12r_, table_)) {
     return left_it;
   }
@@ -474,8 +460,15 @@ void Composition::SetInputMode(Transliterators::Transliterator transliterator) {
   input_t12r_ = transliterator;
 }
 
-void Composition::SetTable(const Table *table) {
-  table_ = table;
+void Composition::SetTable(const Table *table) { table_ = table; }
+
+bool Composition::IsToggleable(size_t position) const {
+  size_t inner_position = 0;
+  const auto it = GetChunkAt(position, Transliterators::LOCAL, &inner_position);
+  if (it == chunks_.end()) {
+    return false;
+  }
+  return absl::StartsWith((*it)->pending(), Table::ParseSpecialKey("{?}"));
 }
 
 }  // namespace composer

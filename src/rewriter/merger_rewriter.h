@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,9 +30,10 @@
 #ifndef MOZC_REWRITER_MERGER_REWRITER_H_
 #define MOZC_REWRITER_MERGER_REWRITER_H_
 
+#include <memory>
+#include <utility>
 #include <vector>
 
-#include "base/stl_util.h"
 #include "config/config_handler.h"
 #include "converter/segments.h"
 #include "protocol/commands.pb.h"
@@ -44,31 +45,33 @@ namespace mozc {
 
 class MergerRewriter : public RewriterInterface {
  public:
-  MergerRewriter() {}
-  virtual ~MergerRewriter() {
-    STLDeleteElements(&rewriters_);
-  }
+  MergerRewriter() = default;
+  ~MergerRewriter() override = default;
 
-  // return true if rewriter can be called with the segments.
-  bool CheckCapablity(const ConversionRequest &request, Segments *segments,
-                      RewriterInterface *rewriter) const {
-    if (segments == NULL) {
+  MergerRewriter(const MergerRewriter &) = delete;
+  MergerRewriter &operator=(const MergerRewriter &) = delete;
+
+  // Returns true if rewriter can be called with the segments.
+  bool CheckCapability(const ConversionRequest &request,
+                       const Segments *segments,
+                       const RewriterInterface &rewriter) const {
+    if (segments == nullptr) {
       return false;
     }
     switch (segments->request_type()) {
       case Segments::CONVERSION:
-        return ((rewriter->capability(request) & RewriterInterface::CONVERSION)
-                != 0);
+        return ((rewriter.capability(request) &
+                 RewriterInterface::CONVERSION) != 0);
 
       case Segments::PREDICTION:
       case Segments::PARTIAL_PREDICTION:
-        return ((rewriter->capability(request) & RewriterInterface::PREDICTION)
-                != 0);
+        return ((rewriter.capability(request) &
+                 RewriterInterface::PREDICTION) != 0);
 
       case Segments::SUGGESTION:
       case Segments::PARTIAL_SUGGESTION:
-        return ((rewriter->capability(request) & RewriterInterface::SUGGESTION)
-                != 0);
+        return ((rewriter.capability(request) &
+                 RewriterInterface::SUGGESTION) != 0);
 
       case Segments::REVERSE_CONVERSION:
       default:
@@ -76,17 +79,16 @@ class MergerRewriter : public RewriterInterface {
     }
   }
 
-  // This instance owns the rewriter.
-  void AddRewriter(RewriterInterface *rewriter) {
-    rewriters_.push_back(rewriter);
+  void AddRewriter(std::unique_ptr<RewriterInterface> rewriter) {
+    rewriters_.push_back(std::move(rewriter));
   }
 
-  virtual bool Rewrite(const ConversionRequest &request,
-                       Segments *segments) const {
+  bool Rewrite(const ConversionRequest &request,
+               Segments *segments) const override {
     bool result = false;
-    for (size_t i = 0; i < rewriters_.size(); ++i) {
-      if (CheckCapablity(request, segments, rewriters_[i])) {
-        result |= rewriters_[i]->Rewrite(request, segments);
+    for (const std::unique_ptr<RewriterInterface> &rewriter : rewriters_) {
+      if (CheckCapability(request, segments, *rewriter)) {
+        result |= rewriter->Rewrite(request, segments);
       }
     }
 
@@ -109,54 +111,49 @@ class MergerRewriter : public RewriterInterface {
   // In this method, Converter will find bracketing matching.
   // e.g., when user selects "「",  corresponding closing bracket "」"
   // is chosen in the preedit.
-  virtual bool Focus(Segments *segments,
-                     size_t segment_index,
-                     int candidate_index) const {
+  bool Focus(Segments *segments, size_t segment_index,
+             int candidate_index) const override {
     bool result = false;
-    for (size_t i = 0; i < rewriters_.size(); ++i) {
-      result |= rewriters_[i]->Focus(segments,
-                                     segment_index,
-                                     candidate_index);
+    for (const std::unique_ptr<RewriterInterface> &rewriter : rewriters_) {
+      result |= rewriter->Focus(segments, segment_index, candidate_index);
     }
     return result;
   }
 
   // Hook(s) for all mutable operations
-  virtual void Finish(const ConversionRequest &request, Segments *segments) {
-    for (size_t i = 0; i < rewriters_.size(); ++i) {
-      rewriters_[i]->Finish(request, segments);
+  void Finish(const ConversionRequest &request, Segments *segments) override {
+    for (const std::unique_ptr<RewriterInterface> &rewriter : rewriters_) {
+      rewriter->Finish(request, segments);
     }
   }
 
   // Syncs internal data to local file system.
-  virtual bool Sync() {
+  bool Sync() override {
     bool result = false;
-    for (size_t i = 0; i < rewriters_.size(); ++i) {
-      result |= rewriters_[i]->Sync();
+    for (const std::unique_ptr<RewriterInterface> &rewriter : rewriters_) {
+      result |= rewriter->Sync();
     }
     return result;
   }
 
   // Reloads internal data from local file system.
-  virtual bool Reload() {
+  bool Reload() override {
     bool result = false;
-    for (size_t i = 0; i < rewriters_.size(); ++i) {
-      result |= rewriters_[i]->Reload();
+    for (const std::unique_ptr<RewriterInterface> &rewriter : rewriters_) {
+      result |= rewriter->Reload();
     }
     return result;
   }
 
   // Clears internal data
-  virtual void Clear() {
-    for (size_t i = 0; i < rewriters_.size(); ++i) {
-      rewriters_[i]->Clear();
+  void Clear() override {
+    for (const std::unique_ptr<RewriterInterface> &rewriter : rewriters_) {
+      rewriter->Clear();
     }
   }
 
  private:
-  std::vector<RewriterInterface *> rewriters_;
-
-  DISALLOW_COPY_AND_ASSIGN(MergerRewriter);
+  std::vector<std::unique_ptr<RewriterInterface>> rewriters_;
 };
 
 }  // namespace mozc

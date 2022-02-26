@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,11 @@
 #include "win32/ime/ime_candidate_info.h"
 
 #include <safeint.h>
-#include <windows.h>  // windows.h must be included before strsafe.h
 #include <strsafe.h>
+#include <windows.h>  // windows.h must be included before strsafe.h
 
 #include <algorithm>
+#include <limits>
 
 #include "google/protobuf/stubs/common.h"
 #include "base/logging.h"
@@ -55,28 +56,35 @@ using ::msl::utilities::SafeSubtract;
 
 // Since IMM32 uses DWORD rather than size_t for data size in data structures,
 // relevant data size are stored into DWORD constants here.
-static_assert(sizeof(DWORD) <= kint32max, "Check DWORD size.");
+static_assert(sizeof(DWORD) <= std::numeric_limits<int32>::max(),
+              "Check DWORD size.");
 
-const DWORD kSizeOfDWORD = static_cast<DWORD>(sizeof(DWORD));
+constexpr DWORD kSizeOfDWORD = static_cast<DWORD>(sizeof(DWORD));
 
-static_assert(sizeof(wchar_t) <= kint32max, "Check wchar_t size.");
-const DWORD kSizeOfWCHAR = static_cast<DWORD>(sizeof(wchar_t));
+static_assert(sizeof(wchar_t) <= std::numeric_limits<int32>::max(),
+              "Check wchar_t size.");
+constexpr DWORD kSizeOfWCHAR = static_cast<DWORD>(sizeof(wchar_t));
 
-static_assert(sizeof(CANDIDATEINFO) <= kint32max, "Check CANDIDATEINFO size.");
-const DWORD kSizeOfCANDIDATEINFO = static_cast<DWORD>(sizeof(CANDIDATEINFO));
+static_assert(sizeof(CANDIDATEINFO) <= std::numeric_limits<int32>::max(),
+              "Check CANDIDATEINFO size.");
+constexpr DWORD kSizeOfCANDIDATEINFO =
+    static_cast<DWORD>(sizeof(CANDIDATEINFO));
 
-static_assert(sizeof(CANDIDATELIST) <= kint32max, "Check CANDIDATELIST size.");
-const DWORD kSizeOfCANDIDATELIST = static_cast<DWORD>(sizeof(CANDIDATELIST));
+static_assert(sizeof(CANDIDATELIST) <= std::numeric_limits<int32>::max(),
+              "Check CANDIDATELIST size.");
+constexpr DWORD kSizeOfCANDIDATELIST =
+    static_cast<DWORD>(sizeof(CANDIDATELIST));
 
 static_assert(sizeof(CANDIDATELIST) > sizeof(DWORD),
               "Check CANDIDATELIST size.");
-const DWORD kSizeOfCANDIDATELISTHeader =
+constexpr DWORD kSizeOfCANDIDATELISTHeader =
     static_cast<DWORD>(sizeof(CANDIDATELIST) - sizeof(DWORD));
 
 static_assert((static_cast<int64>(sizeof(CANDIDATEINFO)) +
-               static_cast<int64>(sizeof(CANDIDATELIST))) < kint32max,
-               "Check CANDIDATEINFO + CANDIDATELIST size.");
-const DWORD kSizeOfCANDIDATEINFOAndCANDIDATELIST =
+               static_cast<int64>(sizeof(CANDIDATELIST))) <
+              std::numeric_limits<int32>::max(),
+              "Check CANDIDATEINFO + CANDIDATELIST size.");
+constexpr DWORD kSizeOfCANDIDATEINFOAndCANDIDATELIST =
     static_cast<DWORD>(sizeof(CANDIDATEINFO) + sizeof(CANDIDATELIST));
 
 // Some games such as EMIL CHRONICLE ONLINE assumes that
@@ -85,10 +93,10 @@ const DWORD kSizeOfCANDIDATEINFOAndCANDIDATELIST =
 // We conform to those applications by always setting a safe number.
 // Note that Office-IME 2010 always returns 9 CANDIDATELIST::dwPageSize
 // regardless of the actual number of candidates.  So we use the same strategy.
-const int kSafePageSize = 9;
+constexpr int kSafePageSize = 9;
 
-bool GetCandidateCountInternal(
-    const CANDIDATEINFO *info, DWORD buffer_size, DWORD *count) {
+bool GetCandidateCountInternal(const CANDIDATEINFO *info, DWORD buffer_size,
+                               DWORD *count) {
   DCHECK_NE(nullptr, info);
   DCHECK_NE(nullptr, count);
 
@@ -117,7 +125,7 @@ bool GetCandidateCountInternal(
 
   // Dereference the data.
   *count = *reinterpret_cast<const DWORD *>(
-    reinterpret_cast<const BYTE *>(info) + count_data_offset);
+      reinterpret_cast<const BYTE *>(info) + count_data_offset);
 
   return true;
 }
@@ -256,8 +264,8 @@ bool CandidateInfoUtil::Convert(const mozc::commands::Output &output,
     }
     info->offsets.push_back(offset);
 
-    wstring value;
-    if (mozc::Util::UTF8ToWide(candidate_list.candidates(i).value(), &value) ==
+    std::wstring value;
+    if (mozc::Util::Utf8ToWide(candidate_list.candidates(i).value(), &value) ==
         0) {
       value.clear();
     }
@@ -314,7 +322,7 @@ void CandidateInfoUtil::Write(const CandidateInfo &info,
     target->dwCount = 0;
     target->dwPrivateOffset = 0;
     target->dwPrivateSize = 0;
-    for (size_t i = 0; i < arraysize(target->dwOffset); ++i) {
+    for (size_t i = 0; i < std::size(target->dwOffset); ++i) {
       target->dwOffset[i] = 0;
     }
     return;
@@ -325,14 +333,13 @@ void CandidateInfoUtil::Write(const CandidateInfo &info,
   target->dwPrivateSize = 0;
   target->dwOffset[0] = kSizeOfCANDIDATEINFO;
 
-  for (size_t i = 1; i < arraysize(target->dwOffset); ++i) {
+  for (size_t i = 1; i < std::size(target->dwOffset); ++i) {
     // CANDIDATELIST is to be placed just after CANDIDATEINFO.
     target->dwOffset[i] = 0;
   }
 
-  CANDIDATELIST *candidate_list =
-      reinterpret_cast<CANDIDATELIST *>(reinterpret_cast<BYTE *>(target) +
-                                        kSizeOfCANDIDATEINFO);
+  CANDIDATELIST *candidate_list = reinterpret_cast<CANDIDATELIST *>(
+      reinterpret_cast<BYTE *>(target) + kSizeOfCANDIDATEINFO);
 
   candidate_list->dwSize = info.candidate_list_size;
   candidate_list->dwStyle = IME_CAND_READ;
@@ -365,7 +372,7 @@ HIMCC CandidateInfoUtil::Initialize(HIMCC current_handle) {
 
 HIMCC CandidateInfoUtil::Update(HIMCC current_handle,
                                 const mozc::commands::Output &output,
-                                vector<UIMessage> *messages) {
+                                std::vector<UIMessage> *messages) {
   CandidateInfo info;
   Convert(output, &info);
 
@@ -403,8 +410,8 @@ HIMCC CandidateInfoUtil::Update(HIMCC current_handle,
   return new_handle;
 }
 
-HIMCC CandidateInfoUtil::UpdateCandidateInfo(
-    HIMCC current_handle, const CandidateInfo &list) {
+HIMCC CandidateInfoUtil::UpdateCandidateInfo(HIMCC current_handle,
+                                             const CandidateInfo &list) {
   DCHECK_GE(list.candidate_info_size, kSizeOfCANDIDATEINFOAndCANDIDATELIST);
 
   HIMCC new_handle = nullptr;

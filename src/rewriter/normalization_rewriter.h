@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
 #ifndef MOZC_REWRITER_NORMALIZATION_REWRITER_H_
 #define MOZC_REWRITER_NORMALIZATION_REWRITER_H_
 
+#include "base/text_normalizer.h"
 #include "rewriter/rewriter_interface.h"
 
 namespace mozc {
@@ -37,16 +38,20 @@ namespace mozc {
 class ConversionRequest;
 class Segments;
 
-class NormalizationRewriter : public RewriterInterface  {
+class NormalizationRewriter : public RewriterInterface {
  public:
-  NormalizationRewriter();
-  virtual ~NormalizationRewriter();
+  NormalizationRewriter() = default;
+  ~NormalizationRewriter() override = default;
 
-  virtual int capability(const ConversionRequest &request) const;
+  int capability(const ConversionRequest &request) const override;
 
-  virtual bool Rewrite(const ConversionRequest &request,
-                       Segments *segments) const;
+  bool Rewrite(const ConversionRequest &request,
+               Segments *segments) const override;
+  void SetNormalizationFlag(TextNormalizer::Flag flag) { flag_ = flag; }
+
+ private:
+  // Controls the normalization behavior.
+  TextNormalizer::Flag flag_ = TextNormalizer::kDefault;
 };
-
 }  // namespace mozc
 #endif  // MOZC_REWRITER_NORMALIZATION_REWRITER_H_

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,9 +35,7 @@
 #include <string>
 #include <vector>
 
-#include "base/flags.h"
 #include "base/port.h"
-#include "base/string_piece.h"
 #include "composer/internal/composition.h"
 #include "composer/internal/composition_input.h"
 #include "composer/internal/typing_model.h"
@@ -45,23 +43,21 @@
 #include "composer/type_corrected_query.h"
 #include "config/config_handler.h"
 #include "protocol/config.pb.h"
-
-DEFINE_bool(enable_typing_correction, false,
-            "Force enabling typing correction feature "
-            "regardless of the specified config.");
+#include "absl/container/btree_set.h"
+#include "absl/flags/flag.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace composer {
-
 namespace {
 
 // Looks up model cost for current key given previous keys.
-int LookupModelCost(const string &prev, const string &current,
+int LookupModelCost(const std::string &prev, const std::string &current,
                     const TypingModel &typing_model) {
   if (current.size() != 1) {
     return TypingModel::kInfinity;
   }
-  char trigram[4] = { '^', '^', current[0], '\0' };
+  char trigram[4] = {'^', '^', current[0], '\0'};
   if (prev.size() == 1) {
     trigram[1] = prev[0];
   } else if (prev.size() >= 2) {
@@ -73,12 +69,9 @@ int LookupModelCost(const string &prev, const string &current,
   return cost == TypingModel::kNoData ? TypingModel::kInfinity : cost;
 }
 
-inline int Cost(double prob) {
-  return static_cast<int>(-500.0 * log(prob));
-}
+int Cost(double prob) { return static_cast<int>(-500.0 * log(prob)); }
 
 }  // namespace
-
 
 struct TypingCorrector::KeyAndPenaltyLess {
   bool operator()(const KeyAndPenalty &l, const KeyAndPenalty &r) const {
@@ -96,13 +89,10 @@ TypingCorrector::TypingCorrector(const Table *table,
   Reset();
 }
 
-TypingCorrector::~TypingCorrector() {}
-
 void TypingCorrector::InsertCharacter(
-    const StringPiece key,
-    const ProbableKeyEvents &probable_key_events) {
+    const absl::string_view key, const ProbableKeyEvents &probable_key_events) {
   raw_key_.append(key.data(), key.size());
-  if (!IsAvailable() || probable_key_events.size() == 0) {
+  if (!IsAvailable() || probable_key_events.empty()) {
     // If this corrector is not available or no ProbableKeyEvent is available,
     // just append |key| to each corrections.
     for (size_t i = 0; i < top_n_.size(); ++i) {
@@ -118,14 +108,13 @@ void TypingCorrector::InsertCharacter(
   tmp.reserve(top_n_.size() * probable_key_events.size());
   for (size_t i = 0; i < top_n_.size(); ++i) {
     for (size_t j = 0; j < probable_key_events.size(); ++j) {
-      const ProbableKeyEvent& event = probable_key_events.Get(j);
-      const string key_as_string(1, event.key_code());
-      const int new_cost = top_n_[i].second + Cost(event.probability())
-          + LookupModelCost(top_n_[i].first, key_as_string,
-                            *table_->typing_model());
+      const ProbableKeyEvent &event = probable_key_events.Get(j);
+      const std::string key_as_string(1, event.key_code());
+      const int new_cost = top_n_[i].second + Cost(event.probability()) +
+                           LookupModelCost(top_n_[i].first, key_as_string,
+                                           *table_->typing_model());
       if (new_cost < TypingModel::kInfinity) {
-        tmp.push_back(
-            std::make_pair(top_n_[i].first + key_as_string, new_cost));
+        tmp.emplace_back(top_n_[i].first + key_as_string, new_cost);
       }
     }
   }
@@ -140,27 +129,15 @@ void TypingCorrector::InsertCharacter(
 void TypingCorrector::Reset() {
   raw_key_.clear();
   top_n_.clear();
-  top_n_.push_back(KeyAndPenalty("", 0));
+  top_n_.emplace_back("", 0);
   available_ = true;
 }
 
-void TypingCorrector::Invalidate() {
-  available_ = false;
-}
+void TypingCorrector::Invalidate() { available_ = false; }
 
 bool TypingCorrector::IsAvailable() const {
-  return (config_->use_typing_correction() ||
-          FLAGS_enable_typing_correction) &&
-         available_ && table_ && table_->typing_model();
-}
-
-void TypingCorrector::CopyFrom(const TypingCorrector &src) {
-  available_ = src.available_;
-  table_ = src.table_;
-  config_ = src.config_;
-  max_correction_query_candidates_ = src.max_correction_query_candidates_;
-  max_correction_query_results_ = src.max_correction_query_results_;
-  top_n_ = src.top_n_;
+  return config_->use_typing_correction() && available_ && table_ &&
+         table_->typing_model();
 }
 
 void TypingCorrector::SetTable(const Table *table) {
@@ -180,7 +157,7 @@ void TypingCorrector::SetConfig(const config::Config *config) {
 void TypingCorrector::GetQueriesForPrediction(
     std::vector<TypeCorrectedQuery> *queries) const {
   queries->clear();
-  if (!IsAvailable() || table_ == NULL || raw_key_.empty()) {
+  if (!IsAvailable() || table_ == nullptr || raw_key_.empty()) {
     return;
   }
   // These objects are for cache. Used and reset repeatedly.
@@ -207,20 +184,19 @@ void TypingCorrector::GetQueriesForPrediction(
   // e.g. "shamoji" -> "しゃもじ"
   // If there is ambiguity, queries are created.
   // e.g. "kaish" -> "かいしゃ", "かいしゅ" and "かいしょ".
-  std::set<string> raw_queries;
+  absl::btree_set<std::string> raw_queries;
   {
     input.set_raw(raw_key_);
     input.set_is_new_input(true);
     c.InsertInput(0, input);
-    string raw_base;
-    std::set<string> raw_expanded;
+    std::string raw_base;
+    std::set<std::string> raw_expanded;
     c.GetExpandedStrings(&raw_base, &raw_expanded);
     if (raw_expanded.empty()) {
       raw_queries.insert(raw_base);
     } else {
-      for (std::set<string>::iterator it = raw_expanded.begin();
-           it != raw_expanded.end();
-           ++it) {
+      for (std::set<std::string>::iterator it = raw_expanded.begin();
+           it != raw_expanded.end(); ++it) {
         raw_queries.insert(raw_base + *it);
       }
     }
@@ -233,8 +209,7 @@ void TypingCorrector::GetQueriesForPrediction(
   queries->resize(top_n_.size());
   size_t result_count = 0;
   for (size_t i = 0;
-       i < top_n_.size() && result_count < max_correction_query_results_;
-       ++i) {
+       i < top_n_.size() && result_count < max_correction_query_results_; ++i) {
     const KeyAndPenalty &correction = top_n_[i];
     if (correction.first == raw_key_) {
       // If typing correction input is identical to raw input,
@@ -265,7 +240,7 @@ void TypingCorrector::GetQueriesForPrediction(
       // This typing correction input has ambiguity.
       // e.g. "kaish" -> "かいしゃ", "かいしゅ" and "かいしょ".
       // So we have to check expanded queries.
-      for (std::set<string>::iterator it = query->expanded.begin();
+      for (std::set<std::string>::iterator it = query->expanded.begin();
            it != query->expanded.end();) {
         if (raw_queries.find(query->base + *it) != raw_queries.end()) {
           query->expanded.erase(it++);

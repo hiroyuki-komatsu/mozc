@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,6 @@
 namespace mozc {
 namespace {
 
-#ifdef OS_WIN
 // Unicode vender specific character table:
 // http://hp.vector.co.jp/authors/VA010341/unicode/
 // http://www.notoinsatu.co.jp/font/omake/OTF_other.pdf
@@ -51,30 +50,41 @@ namespace {
 // the number of characters to be normalized.
 inline char32 NormalizeCharForWindows(char32 c) {
   switch (c) {
-    case 0x301C:  // WAVE DASH
-      return 0xFF5E;   // FULLWIDTH TILDE
+    case 0x301C:      // WAVE DASH
+      return 0xFF5E;  // FULLWIDTH TILDE
       break;
-    case 0x2212:  // MINUS SIGN
-      return 0xFF0D;   // FULLWIDTH HYPHEN MINUS
+    case 0x2212:      // MINUS SIGN
+      return 0xFF0D;  // FULLWIDTH HYPHEN MINUS
       break;
     default:
       return c;
       break;
   }
 }
-#endif  // OS_WIN
 
+std::string NormalizeTextForWindows(absl::string_view input) {
+  std::string output;
+  for (ConstChar32Iterator iter(input); !iter.Done(); iter.Next()) {
+    Util::Ucs4ToUtf8Append(NormalizeCharForWindows(iter.Get()), &output);
+  }
+  return output;
+}
 }  // namespace
 
-void TextNormalizer::NormalizeText(StringPiece input, string *output) {
+std::string TextNormalizer::NormalizeTextWithFlag(absl::string_view input,
+                                                  TextNormalizer::Flag flag) {
+  if (flag == TextNormalizer::kDefault) {
 #ifdef OS_WIN
-  output->clear();
-  for (ConstChar32Iterator iter(input); !iter.Done(); iter.Next()) {
-    Util::UCS4ToUTF8Append(NormalizeCharForWindows(iter.Get()), output);
+    flag = TextNormalizer::kAll;
+#else  // OS_WIN
+    flag = TextNormalizer::kNone;
+#endif  // OS_WIN
   }
-#else
-  output->assign(input.data(), input.size());
-#endif
-}
 
+  if (flag != TextNormalizer::kAll) {
+    return std::string(input.data(), input.size());
+  }
+
+  return NormalizeTextForWindows(input);
+}
 }  // namespace mozc

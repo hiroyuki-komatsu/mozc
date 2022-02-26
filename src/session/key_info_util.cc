@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,7 @@
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "session/internal/keymap.h"
+#include "absl/strings/str_split.h"
 
 namespace mozc {
 using commands::KeyEvent;
@@ -54,22 +55,22 @@ using config::Config;
 
 std::vector<KeyInformation> ExtractSortedDirectModeKeysFromStream(
     std::istream *ifs) {
-  const char kModeDirect[] = "Direct";
-  const char kModeDirectInput[] = "DirectInput";
+  constexpr char kModeDirect[] = "Direct";
+  constexpr char kModeDirectInput[] = "DirectInput";
 
   std::vector<KeyInformation> result;
 
-  string line;
-  getline(*ifs, line);  // Skip the first line.
+  std::string line;
+  std::getline(*ifs, line);  // Skip the first line.
   while (!ifs->eof()) {
-    getline(*ifs, line);
+    std::getline(*ifs, line);
     Util::ChopReturns(&line);
     if (line.empty() || line[0] == '#') {
       // empty or comment
       continue;
     }
-    std::vector<string> rules;
-    Util::SplitStringUsing(line, "\t", &rules);
+    std::vector<std::string> rules =
+        absl::StrSplit(line, '\t', absl::SkipEmpty());
     if (rules.size() != 3) {
       LOG(ERROR) << "Invalid format: " << line;
       continue;
@@ -91,9 +92,9 @@ std::vector<KeyInformation> ExtractSortedDirectModeKeysFromStream(
 }
 
 std::vector<KeyInformation> ExtractSortedDirectModeKeysFromFile(
-      const string &filename) {
+    const std::string &filename) {
   std::unique_ptr<std::istream> ifs(ConfigFileStream::LegacyOpen(filename));
-  if (ifs.get() == NULL) {
+  if (ifs == nullptr) {
     DLOG(FATAL) << "could not open file: " << filename;
     return std::vector<KeyInformation>();
   }
@@ -106,7 +107,7 @@ std::vector<KeyInformation> KeyInfoUtil::ExtractSortedDirectModeKeys(
     const config::Config &config) {
   const config::Config::SessionKeymap &keymap = config.session_keymap();
   if (keymap == Config::CUSTOM) {
-    const string &custom_keymap_table = config.custom_keymap_table();
+    const std::string &custom_keymap_table = config.custom_keymap_table();
     if (custom_keymap_table.empty()) {
       LOG(WARNING) << "custom_keymap_table is empty. use default setting";
       const char *default_keymapfile = keymap::KeyMapManager::GetKeyMapFileName(

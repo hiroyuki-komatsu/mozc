@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,7 @@
 
 #include "gui/dictionary_tool/dictionary_content_table_widget.h"
 
-#include <QtGui/QtGui>
+#include <QtGui>
 
 DictionaryContentTableWidget::DictionaryContentTableWidget(QWidget *parent)
     : QTableWidget(parent) {}
@@ -37,14 +37,14 @@ DictionaryContentTableWidget::DictionaryContentTableWidget(QWidget *parent)
 void DictionaryContentTableWidget::paintEvent(QPaintEvent *event) {
   QTableView::paintEvent(event);
 
-#ifdef OS_MACOSX
+#ifdef __APPLE__
   if (!isEnabled()) {
     return;
   }
 
   // TODO(taku): we don't want to use the fixed size, because
   // the row height would change according to the users' environment
-  const int kDefaultHeight = 19;
+  constexpr int kDefaultHeight = 19;
 
   QRect rect;
   int alternate_index = 0;
@@ -53,7 +53,7 @@ void DictionaryContentTableWidget::paintEvent(QPaintEvent *event) {
     alternate_index = 1;
   } else {
     QTableWidgetItem *last_item = item(rowCount() - 1, 0);
-    if (last_item == NULL) {
+    if (last_item == nullptr) {
       return;
     }
     rect = visualItemRect(last_item);
@@ -70,20 +70,20 @@ void DictionaryContentTableWidget::paintEvent(QPaintEvent *event) {
     start_offset += rect.height();
     ++alternate_index;
   }
-#endif  // OS_MACOSX
+#endif  // __APPLE__
 }
 
 void DictionaryContentTableWidget::mouseDoubleClickEvent(QMouseEvent *event) {
   QTableView::mouseDoubleClickEvent(event);
 
   // When empty area is double-clicked, emit a signal
-#ifdef OS_MACOSX
-  if (NULL == itemAt(event->pos())) {
+#ifdef __APPLE__
+  if (nullptr == itemAt(event->pos())) {
     emit emptyAreaClicked();
   }
-#endif  // OS_MACOSX
+#endif  // __APPLE__
 }
 
 void DictionaryContentTableWidget::focusInEvent(QFocusEvent *event) {
-  setStyleSheet("");
+  setStyleSheet(QLatin1String(""));
 }

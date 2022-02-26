@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,8 +30,11 @@
 #ifndef MOZC_WIN32_BASE_IMM_RECONVERT_STRING_H_
 #define MOZC_WIN32_BASE_IMM_RECONVERT_STRING_H_
 
+// clang-format off
 #include <windows.h>
 #include <ime.h>
+// clang-format on
+
 #include <string>
 
 #include "base/port.h"
@@ -61,20 +64,20 @@ class ReconvertString {
   // Returns true if given substrings are copied into |reconvert_string|.
   // The caller is responsible for allocating enough memory for
   // |reconvert_string|.
-  static bool Compose(const wstring &preceding_text,
-                      const wstring &preceding_composition,
-                      const wstring &target,
-                      const wstring &following_composition,
-                      const wstring &following_text,
+  static bool Compose(const std::wstring &preceding_text,
+                      const std::wstring &preceding_composition,
+                      const std::wstring &target,
+                      const std::wstring &following_composition,
+                      const std::wstring &following_text,
                       RECONVERTSTRING *reconvert_string);
 
   // Returns true if substrings are copied from |reconvert_string|.
   static bool Decompose(const RECONVERTSTRING *reconvert_string,
-                        wstring *preceding_text,
-                        wstring *preceding_composition,
-                        wstring *target,
-                        wstring *following_composition,
-                        wstring *following_text);
+                        std::wstring *preceding_text,
+                        std::wstring *preceding_composition,
+                        std::wstring *target,
+                        std::wstring *following_composition,
+                        std::wstring *following_text);
 
   // Returns true if the given |reconvert_string| is valid.
   static bool Validate(const RECONVERTSTRING *reconvert_string);

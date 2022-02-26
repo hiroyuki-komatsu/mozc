@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -47,25 +47,20 @@ namespace win32 {
 namespace tsf {
 namespace {
 
-using ATL::CComPtr;
 using ATL::CComBSTR;
+using ATL::CComPtr;
 using testing::AssertionFailure;
 using testing::AssertionResult;
 using testing::AssertionSuccess;
 
 class TipCandidateListTest : public testing::Test {
  protected:
-  static void SetUpTestCase() {
-    TipDllModule::InitForUnitTest();
-  }
+  static void SetUpTestCase() { TipDllModule::InitForUnitTest(); }
 };
 
 class MockCallbackResult {
  public:
-  MockCallbackResult()
-      : on_finalize_called_(false),
-        index_(0) {
-  }
+  MockCallbackResult() : on_finalize_called_(false), index_(0) {}
 
   void Reset() {
     on_finalize_called_ = false;
@@ -73,41 +68,33 @@ class MockCallbackResult {
     candidate_.clear();
   }
 
-  void OnFinalize(size_t index, const wstring &candidate) {
+  void OnFinalize(size_t index, const std::wstring &candidate) {
     on_finalize_called_ = true;
     index_ = index;
     candidate_ = candidate;
   }
 
-  bool on_finalize_called() const {
-    return on_finalize_called_;
-  }
+  bool on_finalize_called() const { return on_finalize_called_; }
 
-  size_t index() const {
-    return index_;
-  }
+  size_t index() const { return index_; }
 
-  const wstring &candidate() const {
-    return candidate_;
-  }
+  const std::wstring &candidate() const { return candidate_; }
 
  private:
   bool on_finalize_called_;
   size_t index_;
-  wstring candidate_;
+  std::wstring candidate_;
   DISALLOW_COPY_AND_ASSIGN(MockCallbackResult);
 };
 
 class MockCallback : public TipCandidateListCallback {
  public:
   // Does not take ownership of |result|.
-  explicit MockCallback(MockCallbackResult *result)
-      : result_(result) {
-  }
+  explicit MockCallback(MockCallbackResult *result) : result_(result) {}
 
  private:
   // TipCandidateListCallback overrides:
-  virtual void OnFinalize(size_t index, const wstring &candidate) {
+  virtual void OnFinalize(size_t index, const std::wstring &candidate) {
     result_->OnFinalize(index, candidate);
   }
 
@@ -115,52 +102,52 @@ class MockCallback : public TipCandidateListCallback {
   DISALLOW_COPY_AND_ASSIGN(MockCallback);
 };
 
-wstring ToWStr(const CComBSTR &bstr) {
-  return wstring(static_cast<const wchar_t *>(bstr), bstr.Length());
+std::wstring ToWStr(const CComBSTR &bstr) {
+  return std::wstring(static_cast<const wchar_t *>(bstr), bstr.Length());
 }
 
 AssertionResult ExpectCandidateString(ULONG expected_index,
-                                      const wstring &expected_text,
-                                      CComPtr<ITfCandidateString> candiate) {
-  if (candiate == nullptr) {
+                                      const std::wstring &expected_text,
+                                      CComPtr<ITfCandidateString> candidate) {
+  if (candidate == nullptr) {
     return AssertionFailure() << "|actual| should be non-null";
   }
   HRESULT hr = S_OK;
   {
     ULONG index = 0;
-    hr = candiate->GetIndex(&index);
+    hr = candidate->GetIndex(&index);
     if (FAILED(hr)) {
       return AssertionFailure() << "ITfCandidateString::GetIndex failed."
                                 << " hr = " << hr;
     }
     if (expected_index != index) {
-      return AssertionFailure() << "expected: " << expected_index
-                                << ", actual: " << index;
+      return AssertionFailure()
+             << "expected: " << expected_index << ", actual: " << index;
     }
   }
   {
     CComBSTR str;
-    hr = candiate->GetString(&str);
+    hr = candidate->GetString(&str);
     if (FAILED(hr)) {
       return AssertionFailure() << "ITfCandidateString::GetString failed."
                                 << " hr = " << hr;
     }
-    const wstring wstr(ToWStr(str));
+    const std::wstring wstr(ToWStr(str));
     if (expected_text != wstr) {
-      return AssertionFailure() << "expected: " << expected_text
-                                << ", actual: " << wstr;
+      return AssertionFailure()
+             << "expected: " << expected_text << ", actual: " << wstr;
     }
   }
   return AssertionSuccess();
 }
 
-#define EXPECT_CANDIDATE_STR(expected_index, expected_str, actual)  \
+#define EXPECT_CANDIDATE_STR(expected_index, expected_str, actual) \
   EXPECT_PRED3(ExpectCandidateString, expected_index, expected_str, actual)
 
-TEST(TipCandidateListTest, EmptyCandiate) {
+TEST(TipCandidateListTest, EmptyCandidate) {
   MockCallbackResult result;
 
-  vector<wstring> empty;
+  std::vector<std::wstring> empty;
   CComPtr<ITfCandidateList> candidate_list(
       TipCandidateList::New(empty, new MockCallback(&result)));
   ASSERT_NE(nullptr, candidate_list);
@@ -179,9 +166,8 @@ TEST(TipCandidateListTest, EmptyCandiate) {
 
   ITfCandidateString *buffer[3] = {};
   ULONG num_fetched = 0;
-  EXPECT_EQ(S_FALSE, enum_candidates->Next(arraysize(buffer),
-                                           buffer,
-                                           &num_fetched));
+  EXPECT_EQ(S_FALSE,
+            enum_candidates->Next(std::size(buffer), buffer, &num_fetched));
   EXPECT_EQ(0, num_fetched);
 
   EXPECT_FALSE(result.on_finalize_called());
@@ -191,12 +177,12 @@ TEST(TipCandidateListTest, EmptyCandiate) {
   EXPECT_FALSE(result.on_finalize_called());
 }
 
-TEST(TipCandidateListTest, NonEmptyCandiates) {
+TEST(TipCandidateListTest, NonEmptyCandidates) {
   MockCallbackResult result;
 
-  vector<wstring> source;
+  std::vector<std::wstring> source;
   for (wchar_t c = L'A'; c < L'Z'; ++c) {
-    source.push_back(wstring(c, 1));
+    source.push_back(std::wstring(c, 1));
   }
   CComPtr<ITfCandidateList> candidate_list(
       TipCandidateList::New(source, new MockCallback(&result)));
@@ -218,7 +204,7 @@ TEST(TipCandidateListTest, NonEmptyCandiates) {
 
   size_t offset = 0;
   while (offset < source.size()) {
-    const size_t kBufferSize = 10;
+    constexpr size_t kBufferSize = 10;
     ITfCandidateString *buffer[kBufferSize] = {};
     CComPtr<ITfCandidateString> strings[kBufferSize];
     ULONG num_fetched = 0;

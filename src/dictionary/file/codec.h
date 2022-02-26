@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,13 +32,15 @@
 #ifndef MOZC_DICTIONARY_FILE_CODEC_H_
 #define MOZC_DICTIONARY_FILE_CODEC_H_
 
-#include <ostream>
+#include <cstdint>
+#include <iosfwd>
 #include <string>
 #include <vector>
 
 #include "base/port.h"
 #include "dictionary/file/codec_interface.h"
 #include "dictionary/file/section.h"
+#include "absl/status/status.h"
 
 namespace mozc {
 namespace dictionary {
@@ -46,25 +48,29 @@ namespace dictionary {
 class DictionaryFileCodec : public DictionaryFileCodecInterface {
  public:
   DictionaryFileCodec();
-  virtual ~DictionaryFileCodec();
 
-  virtual void WriteSections(const std::vector<DictionaryFileSection> &sections,
-                             std::ostream *ofs) const;
-  virtual bool ReadSections(const char *image, int length,
-                            std::vector<DictionaryFileSection> *sections) const;
-  virtual string GetSectionName(const string &name) const;
+  DictionaryFileCodec(const DictionaryFileCodec &) = delete;
+  DictionaryFileCodec &operator=(const DictionaryFileCodec &) = delete;
+
+  ~DictionaryFileCodec() override;
+
+  void WriteSections(const std::vector<DictionaryFileSection> &sections,
+                     std::ostream *ofs) const override;
+  absl::Status ReadSections(
+      const char *image, int length,
+      std::vector<DictionaryFileSection> *sections) const override;
+  std::string GetSectionName(const std::string &name) const override;
 
  private:
   void WriteHeader(std::ostream *ofs) const;
   void WriteSection(const DictionaryFileSection &section,
                     std::ostream *ofs) const;
 
-  static void Pad4(int length, std::ostream *ofs);
-
+  // Seed value for name string finger print
+  // Made it mutable for reading sections.
+  mutable int32_t seed_;
   // Magic value for simple file validation
-  const int filemagic_;
-
-  DISALLOW_COPY_AND_ASSIGN(DictionaryFileCodec);
+  const int32_t filemagic_;
 };
 
 }  // namespace dictionary

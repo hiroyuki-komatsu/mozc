@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -37,32 +37,31 @@
 #include "converter/segments.h"
 #include "request/conversion_request.h"
 #include "rewriter/rewriter_interface.h"
+#include "absl/strings/str_format.h"
 
 namespace mozc {
 namespace {
 
 // We use dice with 6 faces.
-const int kDiceFaces = 6;
+constexpr int kDiceFaces = 6;
 
 // Last candidate index of one page.
-const size_t kLastCandidateIndex = 8;
+constexpr size_t kLastCandidateIndex = 8;
 
 // Insert a dice number into the |segment|
 // The number indicated by |top_face_number| is inserted at
 // |insert_pos|. Return false if insersion is failed.
-bool InsertCandidate(int top_face_number,
-                     size_t insert_pos,
-                     Segment *segment) {
+bool InsertCandidate(int top_face_number, size_t insert_pos, Segment *segment) {
   if (segment->candidates_size() == 0) {
     LOG(WARNING) << "candidates_size is 0";
     return false;
   }
 
-  const Segment::Candidate& base_candidate = segment->candidate(0);
+  const Segment::Candidate &base_candidate = segment->candidate(0);
   size_t offset = std::min(insert_pos, segment->candidates_size());
 
   Segment::Candidate *c = segment->insert_candidate(offset);
-  if (c == NULL) {
+  if (c == nullptr) {
     LOG(ERROR) << "cannot insert candidate at " << offset;
     return false;
   }
@@ -72,7 +71,7 @@ bool InsertCandidate(int top_face_number,
   c->lid = trigger_c.lid;
   c->rid = trigger_c.rid;
   c->cost = trigger_c.cost;
-  c->value = Util::StringPrintf("%d", top_face_number);
+  c->value = absl::StrFormat("%d", top_face_number);
   c->content_value = c->value;
   c->key = base_candidate.key;
   c->content_key = base_candidate.content_key;
@@ -95,7 +94,7 @@ bool DiceRewriter::Rewrite(const ConversionRequest &request,
   }
 
   const Segment &segment = segments->conversion_segment(0);
-  const string &key = segment.key();
+  const std::string &key = segment.key();
   if (key.empty()) {
     LOG(ERROR) << "key is empty";
     return false;
@@ -111,8 +110,7 @@ bool DiceRewriter::Rewrite(const ConversionRequest &request,
 
   // Get a random number whose range is [1, kDiceFaces]
   // Insert the number at |insert_pos|
-  return InsertCandidate(Util::Random(kDiceFaces) + 1,
-                         insert_pos,
+  return InsertCandidate(Util::Random(kDiceFaces) + 1, insert_pos,
                          segments->mutable_conversion_segment(0));
 }
 

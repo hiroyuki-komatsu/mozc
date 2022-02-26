@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,65 +29,58 @@
 
 #include "gui/base/singleton_window_helper.h"
 
-#ifdef OS_WIN
-#include <windows.h>
-#else
-#include <unistd.h>  // for getpid()
-#endif
+#include <cstdint>
 
 #ifdef OS_WIN
-#include <memory>  // for std::unique_ptr
+#include <windows.h>
+#else  // OS_WIN
+#include <unistd.h>
 #endif  // OS_WIN
+
+#include <memory>
 
 #include "base/file_stream.h"
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "base/process_mutex.h"
 #include "base/scoped_handle.h"
 #include "base/util.h"
 #include "gui/base/win_util.h"
 #include "ipc/window_info.pb.h"
 
-#ifdef OS_WIN
-using std::unique_ptr;
-#endif  // OS_WIN
-
 namespace mozc {
 namespace gui {
 namespace {
-bool ReadWindowInfo(const string &lock_name,
+bool ReadWindowInfo(const std::string &lock_name,
                     ipc::WindowInfo *window_info) {
 #ifdef OS_WIN
-  wstring wfilename;
-  mozc::Util::UTF8ToWide(lock_name, &wfilename);
+  std::wstring wfilename;
+  mozc::Util::Utf8ToWide(lock_name, &wfilename);
   {
     mozc::ScopedHandle handle(
-      ::CreateFileW(wfilename.c_str(),
-                    GENERIC_READ,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    NULL, OPEN_EXISTING, 0, NULL));
-    if (NULL == handle.get()) {
+        ::CreateFileW(wfilename.c_str(), GENERIC_READ,
+                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                      nullptr, OPEN_EXISTING, 0, nullptr));
+    if (nullptr == handle.get()) {
       LOG(ERROR) << "cannot open: " << lock_name << " " << ::GetLastError();
       return false;
     }
 
-    const DWORD size = ::GetFileSize(handle.get(), NULL);
+    const DWORD size = ::GetFileSize(handle.get(), nullptr);
     if (-1 == static_cast<int>(size)) {
       LOG(ERROR) << "GetFileSize failed:" << ::GetLastError();
       return false;
     }
 
-    const DWORD kMaxFileSize = 2096;
+    constexpr DWORD kMaxFileSize = 2096;
     if (size == 0 || size >= kMaxFileSize) {
       LOG(ERROR) << "Invalid file size: " << kMaxFileSize;
       return false;
     }
 
-    unique_ptr<char[]> buf(new char[size]);
+    std::unique_ptr<char[]> buf(new char[size]);
 
     DWORD read_size = 0;
-    if (!::ReadFile(handle.get(), buf.get(),
-                    size, &read_size, NULL)) {
+    if (!::ReadFile(handle.get(), buf.get(), size, &read_size, nullptr)) {
       LOG(ERROR) << "ReadFile failed: " << ::GetLastError();
       return false;
     }
@@ -102,8 +95,8 @@ bool ReadWindowInfo(const string &lock_name,
       return false;
     }
   }
-#else
-  InputFileStream is(lock_name.c_str(), ios::binary|ios::in);
+#else   // OS_WIN
+  InputFileStream is(lock_name.c_str(), std::ios::binary | std::ios::in);
   if (!is) {
     LOG(ERROR) << "cannot open: " << lock_name;
     return false;
@@ -113,13 +106,13 @@ bool ReadWindowInfo(const string &lock_name,
     LOG(ERROR) << "ParseFromStream failed";
     return false;
   }
-#endif
+#endif  // OS_WIN
   return true;
 }
 }  // namespace
 
-SingletonWindowHelper::SingletonWindowHelper(const string &name) {
-  mutex_.reset(new mozc::ProcessMutex(name.c_str()));
+SingletonWindowHelper::SingletonWindowHelper(const std::string &name) {
+  mutex_ = std::make_unique<mozc::ProcessMutex>(name.c_str());
 }
 
 SingletonWindowHelper::~SingletonWindowHelper() {}
@@ -128,11 +121,11 @@ bool SingletonWindowHelper::FindPreviousWindow() {
   ipc::WindowInfo window_info;
 #ifdef OS_WIN
   window_info.set_process_id(static_cast<uint32>(::GetCurrentProcessId()));
-#else
-  window_info.set_process_id(static_cast<uint32>(getpid()));
-#endif
+#else   // OS_WIN
+  window_info.set_process_id(static_cast<uint32_t>(getpid()));
+#endif  // OS_WIN
 
-  string window_info_str;
+  std::string window_info_str;
   if (!window_info.SerializeToString(&window_info_str)) {
     LOG(ERROR) << "SerializeToString failed";
     return false;
@@ -158,10 +151,10 @@ bool SingletonWindowHelper::ActivatePreviousWindow() {
 #ifdef OS_WIN
   WinUtil::ActivateWindow(window_info.process_id());
   return true;
-#else
+#else   // OS_WIN
   // not implemented
   return false;
-#endif
+#endif  // OS_WIN
 }
 
 }  // namespace gui

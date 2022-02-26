@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@
 
 #include "dictionary/system/value_dictionary.h"
 
+#include <cstdint>
 #include <memory>
 
 #include "data_manager/testing/mock_data_manager.h"
@@ -49,9 +50,9 @@ namespace dictionary {
 class ValueDictionaryTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    pos_matcher_.Set(mock_data_manager_.GetPOSMatcherData());
-    louds_trie_builder_.reset(new LoudsTrieBuilder);
-    louds_trie_.reset(new LoudsTrie);
+    pos_matcher_.Set(mock_data_manager_.GetPosMatcherData());
+    louds_trie_builder_ = std::make_unique<LoudsTrieBuilder>();
+    louds_trie_ = std::make_unique<LoudsTrie>();
   }
 
   void TearDown() override {
@@ -59,8 +60,8 @@ class ValueDictionaryTest : public ::testing::Test {
     louds_trie_builder_.reset();
   }
 
-  void AddValue(const string &value) {
-    string encoded;
+  void AddValue(const std::string &value) {
+    std::string encoded;
     SystemDictionaryCodecFactory::GetCodec()->EncodeValue(value, &encoded);
     louds_trie_builder_->Add(encoded);
   }
@@ -68,11 +69,11 @@ class ValueDictionaryTest : public ::testing::Test {
   ValueDictionary *BuildValueDictionary() {
     louds_trie_builder_->Build();
     louds_trie_->Open(
-        reinterpret_cast<const uint8 *>(louds_trie_builder_->image().data()));
+        reinterpret_cast<const uint8_t *>(louds_trie_builder_->image().data()));
     return new ValueDictionary(pos_matcher_, louds_trie_.get());
   }
 
-  void InitToken(const string &value, Token *token) const {
+  void InitToken(const std::string &value, Token *token) const {
     token->key = token->value = value;
     token->cost = 10000;
     token->lid = token->rid = pos_matcher_.GetSuggestOnlyWordId();
@@ -80,7 +81,7 @@ class ValueDictionaryTest : public ::testing::Test {
   }
 
   const testing::MockDataManager mock_data_manager_;
-  POSMatcher pos_matcher_;
+  PosMatcher pos_matcher_;
   ConversionRequest convreq_;
   std::unique_ptr<LoudsTrieBuilder> louds_trie_builder_;
   std::unique_ptr<LoudsTrie> louds_trie_;
@@ -112,6 +113,11 @@ TEST_F(ValueDictionaryTest, LookupPredictive) {
   AddValue("war");
   AddValue("word");
   AddValue("world");
+
+  // These values are not fetched.
+  AddValue("あいう");
+  AddValue("東京");
+  AddValue("アイウ");
   std::unique_ptr<ValueDictionary> dictionary(BuildValueDictionary());
 
   // Reading fields are irrelevant to value dictionary.  Prepare actual tokens
@@ -148,6 +154,17 @@ TEST_F(ValueDictionaryTest, LookupPredictive) {
   {
     CollectTokenCallback callback;
     dictionary->LookupPredictive("ho", convreq_, &callback);
+    EXPECT_TRUE(callback.tokens().empty());
+  }
+  {
+    CollectTokenCallback callback;
+    dictionary->LookupPredictive("あ", convreq_, &callback);
+    EXPECT_TRUE(callback.tokens().empty());
+
+    dictionary->LookupPredictive("東", convreq_, &callback);
+    EXPECT_TRUE(callback.tokens().empty());
+
+    dictionary->LookupPredictive("ア", convreq_, &callback);
     EXPECT_TRUE(callback.tokens().empty());
   }
 }

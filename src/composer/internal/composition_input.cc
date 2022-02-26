@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,23 +30,53 @@
 #include "composer/internal/composition_input.h"
 
 #include "base/logging.h"
+#include "base/util.h"
 
 namespace mozc {
 namespace composer {
 
-CompositionInput::CompositionInput()
-    : has_conversion_(false),
-      is_new_input_(false),
-      transliterator_(NULL) {}
+bool CompositionInput::Init(const commands::KeyEvent &key_event,
+                            bool use_typing_correction, bool is_new_input) {
+  std::string raw;
+  if (key_event.has_key_code()) {
+    Util::Ucs4ToUtf8(key_event.key_code(), &raw);
+  } else if (key_event.has_key_string()) {
+    raw = key_event.key_string();
+  } else {
+    LOG(WARNING) << "input is empty";
+    return false;
+  }
+  set_raw(raw);
 
-CompositionInput::~CompositionInput() {}
+  if (key_event.has_key_string()) {
+    set_conversion(key_event.key_string());
+  }
+  if (use_typing_correction) {
+    set_probable_key_events(key_event.probable_key_event());
+  }
+  set_is_new_input(is_new_input);
+  return true;
+}
+
+void CompositionInput::InitFromRaw(const std::string &raw, bool is_new_input) {
+  set_raw(raw);
+  set_is_new_input(is_new_input);
+}
+
+void CompositionInput::InitFromRawAndConv(const std::string &raw,
+                                          const std::string &conversion,
+                                          bool is_new_input) {
+  set_raw(raw);
+  set_conversion(conversion);
+  set_is_new_input(is_new_input);
+}
 
 void CompositionInput::Clear() {
   raw_.clear();
   conversion_.clear();
   has_conversion_ = false;
+  probable_key_events_.Clear();
   is_new_input_ = false;
-  transliterator_ = NULL;
 }
 
 bool CompositionInput::Empty() const {
@@ -57,70 +87,25 @@ bool CompositionInput::Empty() const {
   }
 }
 
-void CompositionInput::CopyFrom(const CompositionInput &input) {
-  raw_ = input.raw();
-  if (input.has_conversion()) {
-    conversion_ = input.conversion();
-    has_conversion_ = true;
-  } else {
-    conversion_.clear();
-    has_conversion_ = false;
-  }
-  is_new_input_ = input.is_new_input();
-  transliterator_ = input.transliterator();
-}
-
-const string &CompositionInput::raw() const {
-  return raw_;
-}
-
-string *CompositionInput::mutable_raw() {
-  return &raw_;
-}
-
-void CompositionInput::set_raw(const string &raw) {
-  raw_ = raw;
-}
-
-const string &CompositionInput::conversion() const {
+const std::string &CompositionInput::conversion() const {
   if (has_conversion_) {
     return conversion_;
   } else {
     LOG(WARNING) << "conversion is not set.";
-    static const string kEmptyString = "";
-    return kEmptyString;
+    static const std::string *kEmptyString = new std::string();
+    return *kEmptyString;
   }
 }
 
-string *CompositionInput::mutable_conversion() {
+std::string *CompositionInput::mutable_conversion() {
   has_conversion_ = true;
   // If has_conversion_ was false, conversion_ should be empty.
   return &conversion_;
 }
 
-void CompositionInput::set_conversion(const string &conversion) {
+void CompositionInput::set_conversion(const std::string &conversion) {
   conversion_ = conversion;
   has_conversion_ = true;
-}
-
-bool CompositionInput::has_conversion() const {
-  return has_conversion_;
-}
-
-bool CompositionInput::is_new_input() const {
-  return is_new_input_;
-}
-
-void CompositionInput::set_is_new_input(bool is_new_input) {
-  is_new_input_ = is_new_input;
-}
-
-const TransliteratorInterface *CompositionInput::transliterator() const {
-  return transliterator_;
-}
-
-void CompositionInput::set_transliterator(const TransliteratorInterface *t12r) {
-  transliterator_ = t12r;
 }
 
 }  // namespace composer

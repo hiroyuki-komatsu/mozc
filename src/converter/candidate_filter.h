@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@
 #include "converter/segments.h"
 #include "dictionary/pos_matcher.h"
 #include "dictionary/suppression_dictionary.h"
+#include "request/conversion_request.h"
 
 namespace mozc {
 
@@ -50,7 +51,7 @@ class CandidateFilter {
  public:
   CandidateFilter(
       const dictionary::SuppressionDictionary *suppression_dictionary,
-      const dictionary::POSMatcher *pos_matcher,
+      const dictionary::PosMatcher *pos_matcher,
       const SuggestionFilter *suggestion_filter,
       bool apply_suggestion_filter_for_exact_match);
   ~CandidateFilter();
@@ -62,8 +63,13 @@ class CandidateFilter {
   };
 
   // Checks if the candidate should be filtered out.
-  ResultType FilterCandidate(const string &original_key,
+  //
+  // top_nodes: Node vector for the top candidate for the segment.
+  // nodes: Node vector for the target candidate
+  ResultType FilterCandidate(const ConversionRequest &request,
+                             const std::string &original_key,
                              const Segment::Candidate *candidate,
+                             const std::vector<const Node *> &top_nodes,
                              const std::vector<const Node *> &nodes,
                              Segments::RequestType request_type);
 
@@ -71,16 +77,18 @@ class CandidateFilter {
   void Reset();
 
  private:
-  ResultType FilterCandidateInternal(const string &original_key,
+  ResultType FilterCandidateInternal(const ConversionRequest &request,
+                                     const std::string &original_key,
                                      const Segment::Candidate *candidate,
+                                     const std::vector<const Node *> &top_nodes,
                                      const std::vector<const Node *> &nodes,
                                      Segments::RequestType request_type);
 
   const dictionary::SuppressionDictionary *suppression_dictionary_;
-  const dictionary::POSMatcher *pos_matcher_;
+  const dictionary::PosMatcher *pos_matcher_;
   const SuggestionFilter *suggestion_filter_;
 
-  std::set<string> seen_;
+  std::set<std::string> seen_;
   const Segment::Candidate *top_candidate_;
   bool apply_suggestion_filter_for_exact_match_;
 

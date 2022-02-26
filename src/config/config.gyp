@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,7 @@
         'config_handler.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_synchronization',
         '../base/base.gyp:base',
         '../base/base.gyp:config_file_stream',
         '../protocol/protocol.gyp:config_proto',
@@ -52,16 +53,8 @@
         'stats_config_util.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_synchronization',
         'config_handler',
-      ],
-      'conditions': [
-        ['(target_platform=="Android") or '
-         '(target_platform=="NaCl" and _toolset=="target")', {
-          'dependencies': [
-            'config_handler',
-            '../protocol/protocol.gyp:config_proto',
-          ],
-        }],
       ],
     },
     {

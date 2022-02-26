@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,18 +31,25 @@
 #define MOZC_BASE_UTIL_H_
 
 #include <climits>
+#include <cstdint>
 #include <ctime>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/double_array.h"
+// TODO(yukiokamoto): Removes dependency on "japanese_util.h".
+#include "base/japanese_util.h"
 #include "base/port.h"
-#include "base/string_piece.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 
-// SplitIterator - Iteratively splits a StringPiece to sub-StringPieces.
+// SplitIterator - Iteratively splits a absl::string_view to
+// sub-absl::string_views.
 //
 // This template class takes two template parameters, Delimiter and Option.
 //
@@ -63,28 +70,29 @@ namespace mozc {
 // // 1. SingleDelimiter and SkipEmpty
 // for (SplitIterator<SingleDelimiter> iter("this,is,,mozc", ",");
 //      !iter.Done(); iter.Next()) {
-//   StringPiece sp = iter.Get();  // "this", "is", and finally "mozc"
+//   absl::string_view sp = iter.Get();  // "this", "is", and finally "mozc"
 //   ...
 // }
 //
 // // 2. SingleDelimiter and AllowEmpty
 // for (SplitIterator<SingleDelimiter, AllowEmpty> iter("this,is,,mozc", ",");
 //      !iter.Done(); iter.Next()) {
-//   StringPiece sp = iter.Get();  // "this", "is", "", and finally "mozc"
+//   absl::string_view sp = iter.Get();  // "this", "is", "", and finally "mozc"
 //   ...
 // }
 //
 // // 3. MultiDelimiter and SkipEmpty
 // for (SplitIterator<MultiDelimiter> iter("this,is:\tmozc", ",:\t");
 //      !iter.Done(); iter.Next()) {
-//   StringPiece sp = iter.Get();  // "this", "is", and finally "mozc"
+//   absl::string_view sp = iter.Get();  // "this", "is", and finally "mozc"
 //   ...
 // }
 //
 // // 4. MultiDelimiter and AllowEmpty
 // for (SplitIterator<MultiDelimiter, AllowEmpty>
 //          iter("this,is::\tmozc", ",:\t"); !iter.Done(); iter.Next()) {
-//   StringPiece sp = iter.Get();  // "this", "is", "", "", and finally "mozc"
+//   absl::string_view sp = iter.Get();  // "this", "is", "", "", and finally
+//   "mozc"
 //   ...
 // }
 class SingleDelimiter;
@@ -95,192 +103,151 @@ struct AllowEmpty {};
 template <typename Delimiter, typename Option = SkipEmpty>
 class SplitIterator {
  public:
-  SplitIterator(StringPiece s, const char *delim);
-  StringPiece Get() const;
+  SplitIterator(absl::string_view s, const char *delim);
+  absl::string_view Get() const;
   void Next();
   bool Done() const;
 };
 
 class Util {
  public:
+  Util() = delete;
+  ~Util() = delete;
+
   // String utils
-  template <typename StringContainer>
-  static void PushBackStringPiece(StringPiece s, StringContainer *container) {
-    container->push_back(string(s));
-  }
+  static void SplitStringToUtf8Chars(absl::string_view str,
+                                     std::vector<std::string> *output);
 
-  static void SplitStringUsing(StringPiece str,
-                               const char *delm,
-                               std::vector<string> *output);
-  static void SplitStringUsing(StringPiece str,
-                               const char *delm,
-                               std::vector<StringPiece> *output);
+  static void SplitCSV(const std::string &input,
+                       std::vector<std::string> *output);
 
-  static void SplitStringAllowEmpty(StringPiece str,
-                                    const char *delm,
-                                    std::vector<string> *output);
+  static void AppendStringWithDelimiter(absl::string_view delimiter,
+                                        absl::string_view append_string,
+                                        std::string *output);
 
-  static void SplitStringToUtf8Chars(StringPiece str,
-                                     std::vector<string> *output);
+  static void StringReplace(absl::string_view s, absl::string_view oldsub,
+                            absl::string_view newsub, bool replace_all,
+                            std::string *res);
 
-  static void SplitCSV(const string &str, std::vector<string> *output);
-
-  static void JoinStrings(const std::vector<string> &str,
-                          const char *delm,
-                          string *output);
-  static void JoinStringPieces(const std::vector<StringPiece> &str,
-                               const char *delm,
-                               string *output);
-  static void ConcatStrings(StringPiece s1, StringPiece s2, string *output);
-
-  static void AppendStringWithDelimiter(StringPiece delimiter,
-                                        StringPiece append_string,
-                                        string *output);
-
-  static void StringReplace(StringPiece s, StringPiece oldsub,
-                            StringPiece newsub, bool replace_all,
-                            string *res);
-
-  static void LowerString(string *output);
-  static void UpperString(string *output);
+  static void LowerString(std::string *str);
+  static void UpperString(std::string *str);
 
   // Transforms the first character to the upper case and tailing characters to
   // the lower cases.  ex. "abCd" => "Abcd".
-  static void CapitalizeString(string *output);
+  static void CapitalizeString(std::string *str);
 
   // Returns true if the characters in [first, last) are all in lower case
   // ASCII.
-  static bool IsLowerAscii(StringPiece s);
+  static bool IsLowerAscii(absl::string_view s);
 
   // Returns true if the characters in [first, last) are all in upper case
   // ASCII.
-  static bool IsUpperAscii(StringPiece s);
+  static bool IsUpperAscii(absl::string_view s);
 
   // Returns true if the text in the rage [first, last) is capitalized ASCII.
-  static bool IsCapitalizedAscii(StringPiece s);
+  static bool IsCapitalizedAscii(absl::string_view s);
 
   // Returns true if the characters in [first, last) are all in lower case ASCII
   // or all in upper case ASCII. Namely, equivalent to
   //     IsLowerAscii(first, last) || IsUpperAscii(first last)
-  static bool IsLowerOrUpperAscii(StringPiece s);
+  static bool IsLowerOrUpperAscii(absl::string_view s);
 
   // Returns true if the text in the range [first, last) is 1) all in upper case
   // ASCII, or 2) capitalized.
-  static bool IsUpperOrCapitalizedAscii(StringPiece s);
+  static bool IsUpperOrCapitalizedAscii(absl::string_view s);
 
   // Strips the leading/trailing white spaces from the input and stores it to
   // the output.  If the input does not have such white spaces, this method just
   // copies the input into the output.  It clears the output always.
-  static void StripWhiteSpaces(const string &str, string *output);
+  static void StripWhiteSpaces(const std::string &input, std::string *output);
 
   static size_t OneCharLen(const char *src);
 
+  // Returns the lengths of [src, src+size] encoded in UTF8.
   static size_t CharsLen(const char *src, size_t size);
 
-  static size_t CharsLen(StringPiece str) {
+  static size_t CharsLen(absl::string_view str) {
     return CharsLen(str.data(), str.size());
   }
 
   // Converts the first character of UTF8 string starting at |begin| to UCS4.
   // The read byte length is stored to |mblen|.
-  static char32 UTF8ToUCS4(const char *begin,
-                           const char *end,
-                           size_t *mblen);
-  static char32 UTF8ToUCS4(StringPiece s) {
+  static char32 Utf8ToUcs4(const char *begin, const char *end, size_t *mblen);
+  static char32 Utf8ToUcs4(absl::string_view s) {
     size_t mblen = 0;
-    return UTF8ToUCS4(s.data(), s.data() + s.size(), &mblen);
+    return Utf8ToUcs4(s.data(), s.data() + s.size(), &mblen);
   }
 
   // Converts a UCS4 code point to UTF8 string.
-  static void UCS4ToUTF8(char32 c, string *output);
+  static void Ucs4ToUtf8(char32 c, std::string *output);
 
   // Converts a UCS4 code point to UTF8 string and appends it to |output|, i.e.,
   // |output| is not cleared.
-  static void UCS4ToUTF8Append(char32 c, string *output);
+  static void Ucs4ToUtf8Append(char32 c, std::string *output);
 
   // Converts a UCS4 code point to UTF8 and stores it to char array.  The result
   // is terminated by '\0'.  Returns the byte length of converted UTF8 string.
   // REQUIRES: The output buffer must be longer than 7 bytes.
-  static size_t UCS4ToUTF8(char32 c, char *output);
+  static size_t Ucs4ToUtf8(char32 c, char *output);
 
   // Returns true if |s| is split into |first_char32| + |rest|.
-  // You can pass NULL to |first_char32| and/or |rest| to ignore the matched
+  // You can pass nullptr to |first_char32| and/or |rest| to ignore the matched
   // value.
   // Returns false if an invalid UTF-8 sequence is prefixed. That is, |rest| may
   // contain any invalid sequence even when this method returns true.
-  static bool SplitFirstChar32(StringPiece s,
-                               char32 *first_char32,
-                               StringPiece *rest);
+  static bool SplitFirstChar32(absl::string_view s, char32 *first_char32,
+                               absl::string_view *rest);
 
   // Returns true if |s| is split into |rest| + |last_char32|.
-  // You can pass NULL to |rest| and/or |last_char32| to ignore the matched
+  // You can pass nullptr to |rest| and/or |last_char32| to ignore the matched
   // value.
   // Returns false if an invalid UTF-8 sequence is suffixed. That is, |rest| may
   // contain any invalid sequence even when this method returns true.
-  static bool SplitLastChar32(StringPiece s,
-                              StringPiece *rest,
+  static bool SplitLastChar32(absl::string_view s, absl::string_view *rest,
                               char32 *last_char32);
+
+  // Returns true if |s| is a valid UTF8.
+  static bool IsValidUtf8(absl::string_view s);
 
 #ifdef OS_WIN
   // Returns how many wide characters are necessary in UTF-16 to represent
   // given UTF-8 string. Note that the result of this method becomes greater
   // than that of Util::CharsLen if |src| contains any character which is
   // encoded by the surrogate-pair in UTF-16.
-  static size_t WideCharsLen(StringPiece src);
+  static size_t WideCharsLen(absl::string_view src);
   // Converts the encoding of the specified string from UTF-8 to UTF-16, and
   // vice versa.
-  static int UTF8ToWide(StringPiece input, wstring *output);
-  static int WideToUTF8(const wchar_t *input, string *output);
-  static int WideToUTF8(const wstring &input, string *output);
+  static int Utf8ToWide(absl::string_view input, std::wstring *output);
+  static int WideToUtf8(const wchar_t *input, std::string *output);
+  static int WideToUtf8(const std::wstring &input, std::string *output);
 #endif  // OS_WIN
 
   // Extracts a substring range, where both start and length are in terms of
-  // UTF8 size. Note that the returned string piece refers to the same memory
+  // UTF8 size. Note that the returned string view refers to the same memory
   // block as the input.
-  static StringPiece SubStringPiece(StringPiece src,
-                                    size_t start, size_t length);
+  static absl::string_view Utf8SubString(absl::string_view src, size_t start,
+                                         size_t length);
   // This version extracts the substring to the end.
-  static StringPiece SubStringPiece(StringPiece src, size_t start);
+  static absl::string_view Utf8SubString(absl::string_view src, size_t start);
 
   // Extracts a substring of length |length| starting at |start|.
   // Note: |start| is the start position in UTF8, not byte position.
-  static void SubString(StringPiece src, size_t start, size_t length,
-                        string *result);
-
-  static string SubString(StringPiece src, size_t start, size_t length) {
-    string result;
-    SubString(src, start, length, &result);
-    return result;
-  }
-
-  // Determines whether the beginning of |str| matches |prefix|.
-  static bool StartsWith(StringPiece str, StringPiece prefix) {
-    return str.starts_with(prefix);
-  }
-
-  // Determines whether the end of |str| matches |suffix|.
-  static bool EndsWith(StringPiece str, StringPiece suffix) {
-    return str.ends_with(suffix);
-  }
+  static void Utf8SubString(absl::string_view src, size_t start, size_t length,
+                            std::string *result);
 
   // Strip a heading UTF-8 BOM (binary order mark) sequence (= \xef\xbb\xbf).
-  static void StripUTF8BOM(string *line);
+  static void StripUtf8Bom(std::string *line);
 
   // return true the line starts with UTF16-LE/UTF16-BE BOM.
-  static bool IsUTF16BOM(const string &line);
+  static bool IsUtf16Bom(const std::string &line);
 
   // Returns true if the given |s| has only one ucs4 character, and it is
   // in the range of Android Emoji PUA.
-  static bool IsAndroidPuaEmoji(StringPiece s);
-
-  // C++ string version of sprintf.
-  static string StringPrintf(const char *format, ...)
-      // Tell the compiler to do printf format string checking.
-      ABSL_PRINTF_ATTRIBUTE(1, 2);
+  static bool IsAndroidPuaEmoji(absl::string_view s);
 
   // Chop the return characters (i.e. '\n' and '\r') at the end of the
   // given line.
-  static bool ChopReturns(string *line);
+  static bool ChopReturns(std::string *line);
 
   // Generate a random sequence. It uses secure method if possible, or Random()
   // as a fallback method.
@@ -297,83 +264,125 @@ class Util {
   static int Random(int size);
 
   // Set the seed of Util::Random().
-  static void SetRandomSeed(uint32 seed);
+  static void SetRandomSeed(uint32_t seed);
 
   // Suspends the execution of the current thread until
   // the time-out interval elapses.
-  static void Sleep(uint32 msec);
+  static void Sleep(uint32_t msec);
 
   // Japanese utilities for character form transliteration.
+  //
+  // TODO(yukiokamoto): Removes the dependencies on functions in japanese_util
+  // namespace. The following wrapper functions are currently necessary just for
+  // the existing callers to call the Japanese util functions with the same
+  // signatures as before (ie. Util::FuncName() rather than
+  // japanese_util::FuncName()). In the long term goal, all the callers should
+  // migrate to call japanese_util::FuncName() directly.
   static void ConvertUsingDoubleArray(const japanese_util_rule::DoubleArray *da,
-                                      const char *table,
-                                      StringPiece input,
-                                      string *output);
-  static void HiraganaToKatakana(StringPiece input, string *output);
-  static void HiraganaToHalfwidthKatakana(StringPiece input, string *output);
-  static void HiraganaToRomanji(StringPiece input, string *output);
-  static void HalfWidthAsciiToFullWidthAscii(StringPiece input, string *output);
-  static void FullWidthAsciiToHalfWidthAscii(StringPiece input, string *output);
-  static void HiraganaToFullwidthRomanji(StringPiece input, string *output);
-  static void RomanjiToHiragana(StringPiece input, string *output);
-  static void KatakanaToHiragana(StringPiece input, string *output);
-  static void HalfWidthKatakanaToFullWidthKatakana(StringPiece input,
-                                                   string *output);
-  static void FullWidthKatakanaToHalfWidthKatakana(StringPiece input,
-                                                   string *output);
-  static void FullWidthToHalfWidth(StringPiece input, string *output);
-  static void HalfWidthToFullWidth(StringPiece input, string *output);
+                                      const char *ctable,
+                                      absl::string_view input,
+                                      std::string *output) {
+    japanese_util::ConvertUsingDoubleArray(da, ctable, input, output);
+  }
+
+  static void HiraganaToKatakana(absl::string_view input, std::string *output) {
+    japanese_util::HiraganaToKatakana(input, output);
+  }
+
+  static void HiraganaToHalfwidthKatakana(absl::string_view input,
+                                          std::string *output) {
+    japanese_util::HiraganaToHalfwidthKatakana(input, output);
+  }
+
+  static void HiraganaToRomanji(absl::string_view input, std::string *output) {
+    japanese_util::HiraganaToRomanji(input, output);
+  }
+
+  static void HalfWidthAsciiToFullWidthAscii(absl::string_view input,
+                                             std::string *output) {
+    japanese_util::HalfWidthAsciiToFullWidthAscii(input, output);
+  }
+
+  static void FullWidthAsciiToHalfWidthAscii(absl::string_view input,
+                                             std::string *output) {
+    japanese_util::FullWidthAsciiToHalfWidthAscii(input, output);
+  }
+
+  static void HiraganaToFullwidthRomanji(absl::string_view input,
+                                         std::string *output) {
+    japanese_util::HiraganaToFullwidthRomanji(input, output);
+  }
+
+  static void RomanjiToHiragana(absl::string_view input, std::string *output) {
+    japanese_util::RomanjiToHiragana(input, output);
+  }
+
+  static void KatakanaToHiragana(absl::string_view input, std::string *output) {
+    japanese_util::KatakanaToHiragana(input, output);
+  }
+
+  static void HalfWidthKatakanaToFullWidthKatakana(absl::string_view input,
+                                                   std::string *output) {
+    japanese_util::HalfWidthKatakanaToFullWidthKatakana(input, output);
+  }
+
+  static void FullWidthKatakanaToHalfWidthKatakana(absl::string_view input,
+                                                   std::string *output) {
+    japanese_util::FullWidthKatakanaToHalfWidthKatakana(input, output);
+  }
+
+  static void FullWidthToHalfWidth(absl::string_view input,
+                                   std::string *output) {
+    japanese_util::FullWidthToHalfWidth(input, output);
+  }
+
+  static void HalfWidthToFullWidth(absl::string_view input,
+                                   std::string *output) {
+    japanese_util::HalfWidthToFullWidth(input, output);
+  }
+
+  static void NormalizeVoicedSoundMark(absl::string_view input,
+                                       std::string *output) {
+    japanese_util::NormalizeVoicedSoundMark(input, output);
+  }
 
   // Returns true if all chars in input are both defined
   // in full width and half-width-katakana area
-  static bool IsFullWidthSymbolInHalfWidthKatakana(const string &input);
+  static bool IsFullWidthSymbolInHalfWidthKatakana(const std::string &input);
 
   // Returns true if all chars are defiend in half-width-katakana area.
-  static bool IsHalfWidthKatakanaSymbol(const string &input);
+  static bool IsHalfWidthKatakanaSymbol(const std::string &input);
 
   // Returns true if one or more Kana-symbol characters are in the input.
-  static bool IsKanaSymbolContained(const string &input);
+  static bool IsKanaSymbolContained(const std::string &input);
 
   // Returns true if |input| looks like a pure English word.
-  static bool IsEnglishTransliteration(const string &input);
-
-  static void NormalizeVoicedSoundMark(StringPiece input, string *output);
+  static bool IsEnglishTransliteration(const std::string &value);
 
   // Returns true if key is an open bracket.  If key is an open bracket,
   // corresponding close bracket is assigned.
-  static bool IsOpenBracket(StringPiece key, string *close_bracket);
+  static bool IsOpenBracket(absl::string_view key, std::string *close_bracket);
 
   // Returns true if key is a close bracket.  If key is a close bracket,
   // corresponding open bracket is assigned.
-  static bool IsCloseBracket(StringPiece key, string *open_bracket);
+  static bool IsCloseBracket(absl::string_view key, std::string *open_bracket);
 
-  static void EncodeURI(const string &input, string *output);
-  static void DecodeURI(const string &input, string *output);
+  static void EncodeUri(const std::string &input, std::string *output);
+  static void DecodeUri(const std::string &input, std::string *output);
 
   // Make a string for CGI parameters from params and append it to
   // base.  The result looks like:
   //   <base><key1>=<encoded val1>&<key2>=<encoded val2>
   // The base is supposed to end "?" or "&".
-  static void AppendCGIParams(
-      const std::vector<std::pair<string, string> > &params, string *base);
+  static void AppendCgiParams(
+      const std::vector<std::pair<std::string, std::string> > &params,
+      std::string *base);
 
   // Escape any characters into \x prefixed hex digits.
   // ex.  "ABC" => "\x41\x42\x43".
-  static void Escape(StringPiece input, string *output);
-  static string Escape(StringPiece input);
-  static bool Unescape(StringPiece input, string *output);
-
-  // Escape any characters into % prefixed hex digits.
-  // ex. "ABC" => "%41%42%43"
-  static void EscapeUrl(const string &input, string *output);
-  static string EscapeUrl(const string &input);
-
-  // Escape/Unescape unsafe html characters such as <, > and &.
-  static void EscapeHtml(const string &text, string *res);
-  static void UnescapeHtml(const string &text, string *res);
-
-  // Escape unsafe CSS characters like <.  Note > and & are not
-  // escaped becaused they are operands of CSS.
-  static void EscapeCss(const string &text, string *result);
+  static void Escape(absl::string_view input, std::string *output);
+  static std::string Escape(absl::string_view input);
+  static bool Unescape(absl::string_view input, std::string *output);
 
   enum ScriptType {
     UNKNOWN_SCRIPT,
@@ -397,22 +406,22 @@ class Util {
                                   size_t *mblen);
 
   // return script type of first character in str
-  static ScriptType GetFirstScriptType(const string &str);
+  static ScriptType GetFirstScriptType(absl::string_view str);
 
   // return script type of string. all chars in str must be
   // KATAKANA/HIRAGANA/KANJI/NUMBER or ALPHABET.
   // If str has mixed scripts, this function returns UNKNOWN_SCRIPT
-  static ScriptType GetScriptType(StringPiece str);
+  static ScriptType GetScriptType(absl::string_view str);
 
   // The same as GetScryptType(), but it ignores symbols
   // in the |str|.
-  static ScriptType GetScriptTypeWithoutSymbols(const string &str);
+  static ScriptType GetScriptTypeWithoutSymbols(const std::string &str);
 
   // return true if all script_type in str is "type"
-  static bool IsScriptType(StringPiece str, ScriptType type);
+  static bool IsScriptType(absl::string_view str, ScriptType type);
 
   // return true if the string contains script_type char
-  static bool ContainsScriptType(StringPiece str, ScriptType type);
+  static bool ContainsScriptType(absl::string_view str, ScriptType type);
 
   // See 'Unicode Standard Annex #11: EAST ASIAN WIDTH'
   // http://www.unicode.org/reports/tr11/
@@ -430,40 +439,30 @@ class Util {
 
   // return FormType of string.
   // return UNKNOWN_FORM if |str| contains both HALF_WIDTH and FULL_WIDTH.
-  static FormType GetFormType(const string &str);
+  static FormType GetFormType(const std::string &str);
 
-  // Basically, if charset >= JIX0212, the char is platform dependent char.
-  enum CharacterSet {
-    ASCII,         // ASCII (simply ucs4 <= 0x007F)
-    JISX0201,      // defined at least in 0201 (can be in 0208/0212/0213/CP9232)
-    JISX0208,      // defined at least in 0208 (can be in 0212/0213/CP932)
-    JISX0212,      // defined at least in 0212 (can be in 0213/CP932)
-    JISX0213,      // defined at least in 0213 (can be in CP932)
-    CP932,         // defined only in CP932, not in JISX02*
-    UNICODE_ONLY,  // defined only in UNICODE, not in JISX* nor CP932
-    CHARACTER_SET_SIZE,
-  };
+  // Returns true if all characters of `str` are ASCII (U+00 - U+7F).
+  static bool IsAscii(absl::string_view str);
 
-  // Returns CharacterSet.
-  static CharacterSet GetCharacterSet(char32 ucs4);
-
-  // Returns CharacterSet of string.
-  // if the given string contains multiple charasets, return
-  // the maximum character set.
-  static CharacterSet GetCharacterSet(StringPiece str);
+  // Returns true if all characters of `str` are JIS X 0208.
+  static bool IsJisX0208(absl::string_view str);
 
   // Serializes uint64 into a string of eight byte.
-  static string SerializeUint64(uint64 x);
+  static std::string SerializeUint64(uint64_t x);
 
   // Deserializes a string serialized by SerializeUint64.  Returns false if the
   // length of s is not eight or s is in an invalid format.
-  static bool DeserializeUint64(StringPiece s, uint64 *x);
+  static bool DeserializeUint64(absl::string_view s, uint64_t *x);
 
   // Checks endian-ness at runtime.
   static bool IsLittleEndian();
 
- private:
-  DISALLOW_IMPLICIT_CONSTRUCTORS(Util);
+  // Converts `errno` to absl::StatusCode.
+  static absl::StatusCode ErrnoToCanonicalCode(int error_number);
+
+  // Converts `errno` to absl::Status.
+  static absl::Status ErrnoToCanonicalStatus(int error_number,
+                                             absl::string_view message);
 };
 
 // Const iterator implementation to traverse on a (utf8) string as a char32
@@ -477,13 +476,13 @@ class Util {
 //   }
 class ConstChar32Iterator {
  public:
-  explicit ConstChar32Iterator(StringPiece utf8_string);
+  explicit ConstChar32Iterator(absl::string_view utf8_string);
   char32 Get() const;
   void Next();
   bool Done() const;
 
  private:
-  StringPiece utf8_string_;
+  absl::string_view utf8_string_;
   char32 current_;
   bool done_;
 
@@ -501,13 +500,13 @@ class ConstChar32Iterator {
 //   }
 class ConstChar32ReverseIterator {
  public:
-  explicit ConstChar32ReverseIterator(StringPiece utf8_string);
+  explicit ConstChar32ReverseIterator(absl::string_view utf8_string);
   char32 Get() const;
   void Next();
   bool Done() const;
 
  private:
-  StringPiece utf8_string_;
+  absl::string_view utf8_string_;
   char32 current_;
   bool done_;
 
@@ -527,9 +526,9 @@ class SingleDelimiter {
 
 class MultiDelimiter {
  public:
-  static const size_t kTableSize = UCHAR_MAX / 8;
+  static constexpr size_t kTableSize = UCHAR_MAX / 8;
 
-  explicit MultiDelimiter(const char* delim);
+  explicit MultiDelimiter(const char *delim);
 
   bool Contains(char c) const {
     const unsigned char uc = static_cast<unsigned char>(c);
@@ -549,8 +548,10 @@ class MultiDelimiter {
 template <typename Delimiter>
 class SplitIterator<Delimiter, SkipEmpty> {
  public:
-  SplitIterator(StringPiece s, const char *delim);
-  StringPiece Get() const { return StringPiece(sp_begin_, sp_len_); }
+  SplitIterator(absl::string_view s, const char *delim);
+  absl::string_view Get() const {
+    return absl::string_view(sp_begin_, sp_len_);
+  }
   bool Done() const { return sp_begin_ == end_; }
   void Next();
 
@@ -558,7 +559,7 @@ class SplitIterator<Delimiter, SkipEmpty> {
   const char *const end_;
   const Delimiter delim_;
   const char *sp_begin_;
-  StringPiece::size_type sp_len_;
+  absl::string_view::size_type sp_len_;
 
   DISALLOW_COPY_AND_ASSIGN(SplitIterator);
 };
@@ -566,20 +567,23 @@ class SplitIterator<Delimiter, SkipEmpty> {
 template <typename Delimiter>
 class SplitIterator<Delimiter, AllowEmpty> {
  public:
-  SplitIterator(StringPiece s, const char *delim);
-  StringPiece Get() const { return StringPiece(sp_begin_, sp_len_); }
+  SplitIterator(absl::string_view s, const char *delim);
+  absl::string_view Get() const {
+    return absl::string_view(sp_begin_, sp_len_);
+  }
   bool Done() const { return done_; }
   void Next();
 
  private:
   const char *const end_;
-  const Delimiter delim_;
   const char *sp_begin_;
-  StringPiece::size_type sp_len_;
+  absl::string_view::size_type sp_len_;
+  const Delimiter delim_;
   bool done_;
 
   DISALLOW_COPY_AND_ASSIGN(SplitIterator);
 };
+
 
 }  // namespace mozc
 

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -38,31 +38,31 @@
 #include "base/logging.h"
 #include "base/number_util.h"
 #include "base/port.h"
-#include "base/util.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace internal {
 
 PosIdPrinter::PosIdPrinter(std::istream *id_def) {
-  if (id_def == NULL) {
+  if (id_def == nullptr) {
     return;
   }
 
-  string line;
-  std::vector<string> columns;
-  while (getline(*id_def, line)) {
-    columns.clear();
-    Util::SplitStringUsing(line, " ", &columns);
+  std::string line;
+  while (std::getline(*id_def, line)) {
+    const std::vector<absl::string_view> columns =
+        absl::StrSplit(line, ' ', absl::SkipEmpty());
     CHECK_EQ(2, columns.size());
     const int id = NumberUtil::SimpleAtoi(columns[0]);
-    id_to_pos_map_[id] = columns[1];
+    id_to_pos_map_[id] = std::string(columns[1]);
   }
 }
 
 PosIdPrinter::~PosIdPrinter() {}
 
-string PosIdPrinter::IdToString(int id) const {
-  std::map<int, string>::const_iterator iter = id_to_pos_map_.find(id);
+std::string PosIdPrinter::IdToString(int id) const {
+  std::map<int, std::string>::const_iterator iter = id_to_pos_map_.find(id);
   if (iter == id_to_pos_map_.end()) {
     return "";
   }

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -58,9 +58,8 @@ namespace win32 {
 namespace {
 
 using ATL::CStringA;
-using std::unique_ptr;
 
-bool SpawnBroker(const string &arg) {
+bool SpawnBroker(const std::string &arg) {
   // To workaround a bug around WoW version of LoadKeyboardLayout, 64-bit
   // version of mozc_broker should be launched on Windows x64.
   // See b/2958563 for details.
@@ -78,7 +77,7 @@ bool MigrationUtil::IsFullIMEAvailable() {
 
 bool MigrationUtil::IsFullTIPAvailable() {
   const LANGID kLANGJaJP = MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN);
-  vector<LayoutProfileInfo> profile_list;
+  std::vector<LayoutProfileInfo> profile_list;
   if (!UninstallHelper::GetInstalledProfilesByLanguage(kLANGJaJP,
                                                        &profile_list)) {
     return false;
@@ -115,7 +114,7 @@ bool MigrationUtil::LaunchBrokerForSetDefault(bool do_not_ask_me_again) {
     }
   }
 
-  string arg = "--mode=set_default";
+  std::string arg = "--mode=set_default";
   if (do_not_ask_me_again) {
     arg += " --set_default_do_not_ask_again=true";
   }
@@ -134,13 +133,14 @@ bool MigrationUtil::DisableLegacyMozcForCurrentUserOnWin8() {
     return true;
   }
 
-  const UINT num_element = ::EnumEnabledLayoutOrTip(
-      nullptr, nullptr, nullptr, nullptr, 0);
+  const UINT num_element =
+      ::EnumEnabledLayoutOrTip(nullptr, nullptr, nullptr, nullptr, 0);
 
-  unique_ptr<LAYOUTORTIPPROFILE[]> buffer(new LAYOUTORTIPPROFILE[num_element]);
+  std::unique_ptr<LAYOUTORTIPPROFILE[]> buffer(
+      new LAYOUTORTIPPROFILE[num_element]);
 
-  const UINT num_copied = ::EnumEnabledLayoutOrTip(
-      nullptr, nullptr, nullptr, buffer.get(), num_element);
+  const UINT num_copied = ::EnumEnabledLayoutOrTip(nullptr, nullptr, nullptr,
+                                                   buffer.get(), num_element);
 
   // Look up IMM32 Mozc from |buffer|.
   for (size_t i = 0; i < num_copied; ++i) {
@@ -162,7 +162,7 @@ bool MigrationUtil::DisableLegacyMozcForCurrentUserOnWin8() {
       continue;
     }
 
-    const wstring id(profile.szId);
+    const std::wstring id(profile.szId);
     // A valid |profile.szId| should consists of language ID (LANGID) and
     // keyboard layout ID (KILD) as follows.
     //  <LangID 1>:<KLID 1>
@@ -186,16 +186,17 @@ bool MigrationUtil::DisableLegacyMozcForCurrentUserOnWin8() {
     if ((profile.dwFlags & LOT_DEFAULT) == LOT_DEFAULT) {
       wchar_t clsid[64] = {};
       if (!::StringFromGUID2(TsfProfile::GetTextServiceGuid(), clsid,
-                              arraysize(clsid))) {
+                             std::size(clsid))) {
         return false;
       }
       wchar_t profile_id[64] = {};
       if (!::StringFromGUID2(TsfProfile::GetProfileGuid(), profile_id,
-                              arraysize(profile_id))) {
+                             std::size(profile_id))) {
         return false;
       }
 
-      const wstring &profile = wstring(L"0x0411:") + clsid + profile_id;
+      const std::wstring &profile =
+          std::wstring(L"0x0411:") + clsid + profile_id;
       if (!::SetDefaultLayoutOrTip(profile.c_str(), 0)) {
         DLOG(ERROR) << "SetDefaultLayoutOrTip failed";
         return false;
@@ -205,7 +206,7 @@ bool MigrationUtil::DisableLegacyMozcForCurrentUserOnWin8() {
     // Disable IMM32 Mozc.
     {
       wchar_t profile_str[32] = {};
-      if (FAILED(::StringCchPrintf(profile_str, arraysize(profile_str),
+      if (FAILED(::StringCchPrintf(profile_str, std::size(profile_str),
                                    L"%04x:%s", profile.langid,
                                    klid.ToString().c_str()))) {
         return false;

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@
 
 #include "composer/key_parser.h"
 
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -50,14 +51,14 @@ TEST(KeyParserTest, KeyCode) {
   EXPECT_EQ('A', key_event.key_code());
 
   // "あ" (not half width)
-  const char32 kHiraganaA = 0x3042;
+  constexpr char32 kHiraganaA = 0x3042;
   key_event.Clear();
   EXPECT_TRUE(KeyParser::ParseKey("あ", &key_event));
   EXPECT_EQ(kHiraganaA, key_event.key_code());
 }
 
 TEST(KeyParserTest, ModifierKeys) {
-  const std::pair<string, uint32> kTestData[] = {
+  const std::pair<std::string, uint32_t> kTestData[] = {
       std::make_pair("ctrl", commands::KeyEvent::CTRL),
       std::make_pair("leftctrl",
                      commands::KeyEvent::CTRL | commands::KeyEvent::LEFT_CTRL),
@@ -83,7 +84,7 @@ TEST(KeyParserTest, ModifierKeys) {
       std::make_pair("SHIFT", commands::KeyEvent::SHIFT),
   };
 
-  for (size_t i = 0; i < arraysize(kTestData); ++i) {
+  for (size_t i = 0; i < std::size(kTestData); ++i) {
     SCOPED_TRACE(kTestData[i].first);
     commands::KeyEvent key_event;
     EXPECT_TRUE(KeyParser::ParseKey(kTestData[i].first, &key_event));
@@ -101,7 +102,7 @@ TEST(KeyParserTest, MultipleModifierKeys) {
 }
 
 TEST(KeyParserTest, SpecialKeys) {
-  const std::pair<string, commands::KeyEvent::SpecialKey> kTestData[] = {
+  const std::pair<std::string, commands::KeyEvent::SpecialKey> kTestData[] = {
       std::make_pair("on", commands::KeyEvent::ON),
       std::make_pair("off", commands::KeyEvent::OFF),
       std::make_pair("left", commands::KeyEvent::LEFT),
@@ -125,7 +126,7 @@ TEST(KeyParserTest, SpecialKeys) {
       std::make_pair("home", commands::KeyEvent::HOME),
       std::make_pair("end", commands::KeyEvent::END),
       std::make_pair("space", commands::KeyEvent::SPACE),
-      std::make_pair("ascii", commands::KeyEvent::TEXT_INPUT),  // depricated
+      std::make_pair("ascii", commands::KeyEvent::TEXT_INPUT),  // deprecated
       std::make_pair("textinput", commands::KeyEvent::TEXT_INPUT),
       std::make_pair("tab", commands::KeyEvent::TAB),
       std::make_pair("pageup", commands::KeyEvent::PAGE_UP),
@@ -184,7 +185,7 @@ TEST(KeyParserTest, SpecialKeys) {
       std::make_pair("on", commands::KeyEvent::ON),
   };
 
-  for (size_t i = 0; i < arraysize(kTestData); ++i) {
+  for (size_t i = 0; i < std::size(kTestData); ++i) {
     SCOPED_TRACE(kTestData[i].first);
     commands::KeyEvent key_event;
     EXPECT_TRUE(KeyParser::ParseKey(kTestData[i].first, &key_event));
@@ -198,7 +199,7 @@ TEST(KeyParserTest, Combination) {
   EXPECT_TRUE(KeyParser::ParseKey("LeftShift CTRL a", &key_event));
   EXPECT_EQ('a', key_event.key_code());
   EXPECT_EQ(commands::KeyEvent::LEFT_SHIFT | commands::KeyEvent::SHIFT |
-            commands::KeyEvent::CTRL,
+                commands::KeyEvent::CTRL,
             KeyEventUtil::GetModifiers(key_event));
 
   EXPECT_TRUE(KeyParser::ParseKey("rightalt On", &key_event));

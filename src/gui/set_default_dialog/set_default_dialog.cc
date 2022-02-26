@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,39 +31,37 @@
 
 #ifdef OS_WIN
 #include <windows.h>
-#endif
+#endif  // OS_WIN
 
-#include <QtGui/QtGui>
-
+#include <QtGui>
 #include <memory>
 
 #include "base/logging.h"
 #include "base/util.h"
 #include "client/client.h"
 #include "config/config_handler.h"
+#include "gui/base/util.h"
 #include "protocol/config.pb.h"
 
 #ifdef OS_WIN
 #include "win32/base/migration_util.h"
-#endif
+#endif  // OS_WIN
 
 namespace mozc {
 namespace gui {
 
 SetDefaultDialog::SetDefaultDialog() {
   setupUi(this);
-  setWindowFlags(Qt::WindowSystemMenuHint |
-                 Qt::WindowCloseButtonHint |
-                 Qt::MSWindowsFixedSizeDialogHint |
-                 Qt::WindowStaysOnTopHint);
+  setWindowFlags(Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint |
+                 Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
   setWindowModality(Qt::NonModal);
+  GuiUtil::ReplaceWidgetLabels(this);
 }
 
-SetDefaultDialog::~SetDefaultDialog() {
-}
+SetDefaultDialog::~SetDefaultDialog() {}
 
 void SetDefaultDialog::accept() {
-// TODO(mazda): Implement SetDefault on Mac and Linux.
+  // TODO(mazda): Implement SetDefault on Mac and Linux.
   const bool dont_ask_again =
       (dontAskAgainCheckBox->checkState() == Qt::Checked);
 #ifdef OS_WIN
@@ -72,13 +70,13 @@ void SetDefaultDialog::accept() {
   if (!win32::MigrationUtil::LaunchBrokerForSetDefault(dont_ask_again)) {
     LOG(ERROR) << "Failed to set Mozc as the default IME";
   }
-#else
+#else  // OS_WIN
   if (dont_ask_again) {
     if (!SetCheckDefault(false)) {
       LOG(ERROR) << "Failed to set check_default";
     }
   }
-#endif
+#endif  // OS_WIN
   done(QDialog::Accepted);
 }
 

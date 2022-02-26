@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -114,6 +114,7 @@
             'ime_ui_window.cc',
           ],
           'dependencies': [
+            '../../base/absl.gyp:absl_base',
             '../../base/base.gyp:base',
             '../../client/client.gyp:client',
             '../../config/config.gyp:config_handler',

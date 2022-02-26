@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -52,9 +52,8 @@ class TipQueryProvider {
     kDefault,
     kReconversion,
   };
-  virtual bool Query(const wstring &query,
-                     QueryType type,
-                     vector<wstring> *result) = 0;
+  virtual bool Query(const std::wstring &query, QueryType type,
+                     std::vector<std::wstring> *result) = 0;
 };
 
 }  // namespace tsf

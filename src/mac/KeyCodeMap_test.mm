@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -39,31 +39,22 @@
 using mozc::commands::KeyEvent;
 
 struct TestCase {
-  string title;
+  std::string title;
   NSString *characters;
   NSString *unmodCharacters;
   int flags;
   uint16 keyCode;
-  string expected;
+  std::string expected;
 };
 
 class KeyCodeMapTest : public testing::Test {
  protected:
-  void SetUp() {
-    pool_  = [[NSAutoreleasePool alloc] init];
-    keyCodeMap_ = [[[KeyCodeMap alloc] init] autorelease];
-  }
+  void SetUp() { keyCodeMap_ = [[KeyCodeMap alloc] init]; }
 
-  void TearDown() {
-    [pool_ drain];
-  }
+  void KanaMode() { keyCodeMap_.inputMode = KANA; }
 
-  void KanaMode() {
-    keyCodeMap_.inputMode = KANA;
-  }
-
-  bool CreateKeyEvent(NSString *characters, NSString *unmodCharacters,
-                      int flags, uint16 keyCode, KeyEvent *mozcKeyEvent) {
+  bool CreateKeyEvent(NSString *characters, NSString *unmodCharacters, int flags, uint16 keyCode,
+                      KeyEvent *mozcKeyEvent) {
     if (mozcKeyEvent == nullptr) {
       return false;
     }
@@ -79,7 +70,7 @@ class KeyCodeMapTest : public testing::Test {
       characters = @"";
     }
     if (unmodCharacters == nil) {
-      unmodCharacters = [[characters copy] autorelease];
+      unmodCharacters = [characters copy];
     }
 
     NSEvent *event = [NSEvent keyEventWithType:type
@@ -92,79 +83,62 @@ class KeyCodeMapTest : public testing::Test {
                    charactersIgnoringModifiers:unmodCharacters
                                      isARepeat:NO
                                        keyCode:keyCode];
-    return [keyCodeMap_ getMozcKeyCodeFromKeyEvent:event
-                                    toMozcKeyEvent:mozcKeyEvent];
+    return [keyCodeMap_ getMozcKeyCodeFromKeyEvent:event toMozcKeyEvent:mozcKeyEvent];
   }
 
-  bool CreateKeyEventFromTestCase(const TestCase &testCase,
-                                  KeyEvent *mozcKeyEvent) {
-    return CreateKeyEvent(testCase.characters, testCase.unmodCharacters,
-                          testCase.flags, testCase.keyCode, mozcKeyEvent);
+  bool CreateKeyEventFromTestCase(const TestCase &testCase, KeyEvent *mozcKeyEvent) {
+    return CreateKeyEvent(testCase.characters, testCase.unmodCharacters, testCase.flags,
+                          testCase.keyCode, mozcKeyEvent);
   }
 
  private:
-  NSAutoreleasePool *pool_;
   KeyCodeMap *keyCodeMap_;
 };
 
 static const TestCase kKeyEventTestCases[] = {
-  { "normal a", @"a", nil, 0, kVK_ANSI_A, "key_code: 97\n" },
-  { "\\S-a", @"A", @"a", NSShiftKeyMask, kVK_ANSI_A, "key_code: 65\n" },
-  { "\\C-a", @"\x01", @"a", NSControlKeyMask, kVK_ANSI_A,
-    "key_code: 97\n"
-    "modifier_keys: CTRL\n"
-  },
-  { "\\S-C-a", @"a", nil, NSControlKeyMask | NSShiftKeyMask, kVK_ANSI_A,
-    "key_code: 97\n"
-    "modifier_keys: SHIFT\n"
-    "modifier_keys: CTRL\n"
-  },
-  { "Tab key", @"\x09", nil, 0, kVK_Tab, "special_key: TAB\n" },
-  { "\\S-Tab", @"\x09", nil, NSShiftKeyMask, kVK_Tab,
-    "special_key: TAB\n"
-    "modifier_keys: SHIFT\n"
-  },
-  { "function key", @"\x10", nil, 0, kVK_F1, "special_key: F1\n" },
-  { "tenkey", @"0", nil, 0, kVK_ANSI_Keypad0, "special_key: NUMPAD0\n" }
-};
+    {"normal a", @"a", nil, 0, kVK_ANSI_A, "key_code: 97\n"},
+    {"\\S-a", @"A", @"a", NSShiftKeyMask, kVK_ANSI_A, "key_code: 65\n"},
+    {"\\C-a", @"\x01", @"a", NSControlKeyMask, kVK_ANSI_A,
+     "key_code: 97\n"
+     "modifier_keys: CTRL\n"},
+    {"\\S-C-a", @"a", nil, NSControlKeyMask | NSShiftKeyMask, kVK_ANSI_A,
+     "key_code: 97\n"
+     "modifier_keys: SHIFT\n"
+     "modifier_keys: CTRL\n"},
+    {"Tab key", @"\x09", nil, 0, kVK_Tab, "special_key: TAB\n"},
+    {"\\S-Tab", @"\x09", nil, NSShiftKeyMask, kVK_Tab,
+     "special_key: TAB\n"
+     "modifier_keys: SHIFT\n"},
+    {"function key", @"\x10", nil, 0, kVK_F1, "special_key: F1\n"},
+    {"tenkey", @"0", nil, 0, kVK_ANSI_Keypad0, "special_key: NUMPAD0\n"}};
 
 static const TestCase kKanaTypingTestCases[] = {
-  { "a -> ち", @"a", nil, 0, kVK_ANSI_A,
-    "key_code: 97\n"
-    "key_string: \"\\343\\201\\241\"\n"
-  },
-  { "yen mark", @"¥", nil, 0, kVK_JIS_Yen,
-    "key_code: 92\n"
-    "key_string: \"\\343\\203\\274\"\n"
-  },
-  { "\\S-2 -> ふ", @"@", @"2", NSShiftKeyMask, kVK_ANSI_2,
-    "key_code: 64\n"
-    "key_string: \"\\343\\201\\265\"\n"
-  },
-  { "\\C-a -> \\C-a", @"\x01", @"a", NSControlKeyMask, kVK_ANSI_A,
-    "key_code: 97\n"
-    "modifier_keys: CTRL\n"
-    "key_string: \"\\343\\201\\241\"\n"
-  },
-  { "\\S-0 -> を", @"0", nil, NSShiftKeyMask, kVK_ANSI_0,
-    "key_code: 48\n"
-    "key_string: \"\\343\\202\\222\"\n"
-  },
-  { "yen mark -> ー", @"￥", nil, 0, kVK_JIS_Yen,
-    "key_string: \"\\343\\203\\274\"\n"
-  },
-  { "underscore -> ろ", @"_", nil, 0, kVK_JIS_Underscore,
-    "key_code: 95\n"
-    "key_string: \"\\343\\202\\215\"\n"
-  },
-  { "@ -> ゛ in JIS keyboard", @"@", nil, 0, kVK_ANSI_LeftBracket,
-    "key_code: 64\n"
-    "key_string: \"\\343\\202\\233\"\n"
-  },
-  { "[ -> ゛ in US keyboard", @"[", nil, 0, kVK_ANSI_LeftBracket,
-    "key_code: 91\n"
-    "key_string: \"\\343\\202\\233\"\n"
-  },
+    {"a -> ち", @"a", nil, 0, kVK_ANSI_A,
+     "key_code: 97\n"
+     "key_string: \"\\343\\201\\241\"\n"},
+    {"yen mark", @"¥", nil, 0, kVK_JIS_Yen,
+     "key_code: 92\n"
+     "key_string: \"\\343\\203\\274\"\n"},
+    {"\\S-2 -> ふ", @"@", @"2", NSShiftKeyMask, kVK_ANSI_2,
+     "key_code: 64\n"
+     "key_string: \"\\343\\201\\265\"\n"},
+    {"\\C-a -> \\C-a", @"\x01", @"a", NSControlKeyMask, kVK_ANSI_A,
+     "key_code: 97\n"
+     "modifier_keys: CTRL\n"
+     "key_string: \"\\343\\201\\241\"\n"},
+    {"\\S-0 -> を", @"0", nil, NSShiftKeyMask, kVK_ANSI_0,
+     "key_code: 48\n"
+     "key_string: \"\\343\\202\\222\"\n"},
+    {"yen mark -> ー", @"￥", nil, 0, kVK_JIS_Yen, "key_string: \"\\343\\203\\274\"\n"},
+    {"underscore -> ろ", @"_", nil, 0, kVK_JIS_Underscore,
+     "key_code: 95\n"
+     "key_string: \"\\343\\202\\215\"\n"},
+    {"@ -> ゛ in JIS keyboard", @"@", nil, 0, kVK_ANSI_LeftBracket,
+     "key_code: 64\n"
+     "key_string: \"\\343\\202\\233\"\n"},
+    {"[ -> ゛ in US keyboard", @"[", nil, 0, kVK_ANSI_LeftBracket,
+     "key_code: 91\n"
+     "key_string: \"\\343\\202\\233\"\n"},
 };
 
 // Test for romaji typing
@@ -208,8 +182,7 @@ TEST_F(KeyCodeMapTest, Modifiers) {
 
   // Press control key
   event.Clear();
-  EXPECT_FALSE(CreateKeyEvent(
-      nil, nil, NSShiftKeyMask | NSControlKeyMask, kVK_Control, &event));
+  EXPECT_FALSE(CreateKeyEvent(nil, nil, NSShiftKeyMask | NSControlKeyMask, kVK_Control, &event));
 
   // Release shift key
   event.Clear();

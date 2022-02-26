@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,36 +30,36 @@
 #include "config/stats_config_util.h"
 
 #ifdef OS_WIN
-#include <windows.h>
 #include <Lmcons.h>
+#include <atlbase.h>
+#include <sddl.h>
 #include <shlobj.h>
 #include <time.h>
-#include <sddl.h>
-#include <atlbase.h>
-#else
+#include <windows.h>
+#else  // OS_WIN
 #include <pwd.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
-#endif
+#endif  // OS_WIN
 
-#ifdef OS_MACOSX
+#ifdef __APPLE__
 #include <fstream>
 #include <string>
 
 #include "base/mac_util.h"
-#include "base/mutex.h"
-#endif
+#endif  // __APPLE__
 
-#if defined(OS_ANDROID) || defined(OS_NACL)
+#if defined(OS_ANDROID)
 #include "config/config_handler.h"
 #include "protocol/config.pb.h"
-#endif  // OS_ANDROID || OS_NACL
+#endif  // OS_ANDROID
 
 #include "base/file_util.h"
 #include "base/singleton.h"
 #include "base/system_util.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace config {
@@ -80,12 +80,11 @@ const wchar_t kSendStatsName[] = L"usagestats";
 
 class WinStatsConfigUtilImpl : public StatsConfigUtilInterface {
  public:
-  WinStatsConfigUtilImpl() {
-  }
-  virtual ~WinStatsConfigUtilImpl() {
-  }
+  WinStatsConfigUtilImpl() {}
+  virtual ~WinStatsConfigUtilImpl() {}
   virtual bool IsEnabled();
   virtual bool SetEnabled(bool val);
+
  private:
   DISALLOW_COPY_AND_ASSIGN(WinStatsConfigUtilImpl);
 };
@@ -93,9 +92,9 @@ class WinStatsConfigUtilImpl : public StatsConfigUtilInterface {
 bool WinStatsConfigUtilImpl::IsEnabled() {
 #ifdef CHANNEL_DEV
   return true;
-#else
-  const REGSAM sam_desired = KEY_QUERY_VALUE |
-      (SystemUtil::IsWindowsX64() ? KEY_WOW64_32KEY : 0);
+#else   // CHANNEL_DEV
+  const REGSAM sam_desired =
+      KEY_QUERY_VALUE | (SystemUtil::IsWindowsX64() ? KEY_WOW64_32KEY : 0);
   // Like the crash handler, check the "ClientStateMedium" key first.
   // Then we check "ClientState" key.
   {
@@ -130,17 +129,16 @@ bool WinStatsConfigUtilImpl::SetEnabled(bool val) {
   // On Dev channel, usage stats and crash report should be always sent.
   val = true;
   // We always returns true in DevChannel.
-  const bool kReturnCodeInError = true;
-#else
-  const bool kReturnCodeInError = false;
+  constexpr bool kReturnCodeInError = true;
+#else   // CHANNEL_DEV
+  constexpr bool kReturnCodeInError = false;
 #endif  // CHANNEL_DEV
 
   CRegKey key;
-  const REGSAM sam_desired = KEY_WRITE |
-      (SystemUtil::IsWindowsX64() ? KEY_WOW64_32KEY : 0);
-  LONG result = key.Create(HKEY_LOCAL_MACHINE, kOmahaUsageKey,
-                           REG_NONE, REG_OPTION_NON_VOLATILE,
-                           sam_desired);
+  const REGSAM sam_desired =
+      KEY_WRITE | (SystemUtil::IsWindowsX64() ? KEY_WOW64_32KEY : 0);
+  LONG result = key.Create(HKEY_LOCAL_MACHINE, kOmahaUsageKey, REG_NONE,
+                           REG_OPTION_NON_VOLATILE, sam_desired);
   if (ERROR_SUCCESS != result) {
     return kReturnCodeInError;
   }
@@ -155,20 +153,21 @@ bool WinStatsConfigUtilImpl::SetEnabled(bool val) {
 
 #endif  // OS_WIN
 
-#ifdef OS_MACOSX
+#ifdef __APPLE__
 class MacStatsConfigUtilImpl : public StatsConfigUtilInterface {
  public:
   MacStatsConfigUtilImpl();
-  virtual ~MacStatsConfigUtilImpl() {
-  }
-  virtual bool IsEnabled();
-  virtual bool SetEnabled(bool val);
+
+  MacStatsConfigUtilImpl(const MacStatsConfigUtilImpl &) = delete;
+  MacStatsConfigUtilImpl &operator=(const MacStatsConfigUtilImpl &) = delete;
+
+  ~MacStatsConfigUtilImpl() override = default;
+  bool IsEnabled() override;
+  bool SetEnabled(bool val) override;
 
  private:
-  string config_file_;
-  Mutex mutex_;
-
-  DISALLOW_COPY_AND_ASSIGN(MacStatsConfigUtilImpl);
+  std::string config_file_;
+  absl::Mutex mutex_;
 };
 
 MacStatsConfigUtilImpl::MacStatsConfigUtilImpl() {
@@ -179,11 +178,11 @@ MacStatsConfigUtilImpl::MacStatsConfigUtilImpl() {
 bool MacStatsConfigUtilImpl::IsEnabled() {
 #ifdef CHANNEL_DEV
   return true;
-#else
-  scoped_lock l(&mutex_);
-  const bool kDefaultValue = false;
+#else   // CHANNEL_DEV
+  absl::MutexLock l(&mutex_);
+  constexpr bool kDefaultValue = false;
 
-  ifstream ifs(config_file_.c_str(), ios::binary | ios::in);
+  std::ifstream ifs(config_file_.c_str(), std::ios::binary | std::ios::in);
 
   if (!ifs.is_open()) {
     return kDefaultValue;
@@ -206,14 +205,15 @@ bool MacStatsConfigUtilImpl::IsEnabled() {
 bool MacStatsConfigUtilImpl::SetEnabled(bool val) {
 #ifdef CHANNEL_DEV
   return true;
-#else
-  scoped_lock l(&mutex_);
+#else   // CHANNEL_DEV
+  absl::MutexLock l(&mutex_);
   const uint32 value = static_cast<uint32>(val);
 
-  if (FileUtil::FileExists(config_file_)) {
+  if (FileUtil::FileExists(config_file_).ok()) {
     ::chmod(config_file_.c_str(), S_IRUSR | S_IWUSR);  // read/write
   }
-  ofstream ofs(config_file_.c_str(), ios::binary | ios::out | ios::trunc);
+  std::ofstream ofs(config_file_.c_str(),
+                    std::ios::binary | std::ios::out | std::ios::trunc);
   if (!ofs) {
     return false;
   }
@@ -229,10 +229,8 @@ bool MacStatsConfigUtilImpl::SetEnabled(bool val) {
 #ifdef OS_ANDROID
 class AndroidStatsConfigUtilImpl : public StatsConfigUtilInterface {
  public:
-  AndroidStatsConfigUtilImpl() {
-  }
-  virtual ~AndroidStatsConfigUtilImpl() {
-  }
+  AndroidStatsConfigUtilImpl() {}
+  virtual ~AndroidStatsConfigUtilImpl() {}
   virtual bool IsEnabled() {
     Config config;
     ConfigHandler::GetConfig(&config);
@@ -248,44 +246,20 @@ class AndroidStatsConfigUtilImpl : public StatsConfigUtilInterface {
 };
 #endif  // OS_ANDROID
 
-#ifdef OS_NACL
-class NaclStatsConfigUtilImpl : public StatsConfigUtilInterface {
- public:
-  NaclStatsConfigUtilImpl() {
-  }
-  virtual ~NaclStatsConfigUtilImpl() {
-  }
-  virtual bool IsEnabled() {
-    Config config;
-    ConfigHandler::GetConfig(&config);
-    return config.general_config().upload_usage_stats();
-  }
-  virtual bool SetEnabled(bool val) {
-    return false;
-  }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(NaclStatsConfigUtilImpl);
-};
-#endif  // OS_NACL
-
 #endif  // GOOGLE_JAPANESE_INPUT_BUILD
 
 class NullStatsConfigUtilImpl : public StatsConfigUtilInterface {
  public:
   NullStatsConfigUtilImpl() {}
-  virtual ~NullStatsConfigUtilImpl() {}
-  virtual bool IsEnabled() {
-    return false;
-  }
-  virtual bool SetEnabled(bool val) {
-    return true;
-  }
+  ~NullStatsConfigUtilImpl() override {}
+  bool IsEnabled() override { return false; }
+  bool SetEnabled(bool val) override { return true; }
+
  private:
   DISALLOW_COPY_AND_ASSIGN(NullStatsConfigUtilImpl);
 };
 
-StatsConfigUtilInterface *g_stats_config_util_handler = NULL;
+StatsConfigUtilInterface *g_stats_config_util_handler = nullptr;
 
 // GetStatsConfigUtil and SetHandler are not thread safe.
 
@@ -294,19 +268,17 @@ StatsConfigUtilInterface *g_stats_config_util_handler = NULL;
 typedef NullStatsConfigUtilImpl DefaultConfigUtilImpl;
 #elif defined(OS_WIN)
 typedef WinStatsConfigUtilImpl DefaultConfigUtilImpl;
-#elif defined(OS_MACOSX)
+#elif defined(__APPLE__)
 typedef MacStatsConfigUtilImpl DefaultConfigUtilImpl;
 #elif defined(OS_ANDROID)
 typedef AndroidStatsConfigUtilImpl DefaultConfigUtilImpl;
-#elif defined(OS_NACL)
-typedef NaclStatsConfigUtilImpl DefaultConfigUtilImpl;
-#else
+#else   // Platforms
 // Fall back mode.  Use null implementation.
 typedef NullStatsConfigUtilImpl DefaultConfigUtilImpl;
-#endif
+#endif  // Platforms
 
 StatsConfigUtilInterface &GetStatsConfigUtil() {
-  if (g_stats_config_util_handler == NULL) {
+  if (g_stats_config_util_handler == nullptr) {
     return *(Singleton<DefaultConfigUtilImpl>::get());
   } else {
     return *g_stats_config_util_handler;
@@ -318,9 +290,7 @@ void StatsConfigUtil::SetHandler(StatsConfigUtilInterface *handler) {
   g_stats_config_util_handler = handler;
 }
 
-bool StatsConfigUtil::IsEnabled() {
-  return GetStatsConfigUtil().IsEnabled();
-}
+bool StatsConfigUtil::IsEnabled() { return GetStatsConfigUtil().IsEnabled(); }
 
 bool StatsConfigUtil::SetEnabled(bool val) {
   return GetStatsConfigUtil().SetEnabled(val);

@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -50,6 +50,7 @@
           'change_request.txt',
           'clear_user_prediction.txt',
           'commit.txt',
+          'composing_alphanumeric.txt',
           'composition_display_as.txt',
           'conversion.txt',
           'conversion_display_as.txt',
@@ -61,9 +62,13 @@
           'convert_from_half_katakana_to_t13n.txt',
           'convert_from_hiragana_to_t13n.txt',
           'delete_history.txt',
+          'description.txt',
           'desktop_t13n_candidates.txt',
+          'domain_suggestion.txt',
           'input_mode.txt',
           'insert_characters.txt',
+          'kana_modifier_insensitive_conversion.txt',
+          'mobile_partial_variant_candidates.txt',
           'mobile_qwerty_transliteration_scenario.txt',
           'mobile_t13n_candidates.txt',
           'on_off_cancel.txt',
@@ -78,6 +83,7 @@
           'twelvekeys_toggle_flick_alphabet_scenario.txt',
           'twelvekeys_toggle_hiragana_preedit_scenario.txt',
           'undo.txt',
+          'zero_query_suggestion.txt',
         ],
         'test_data_subdir': 'data/test/session/scenario',
       },

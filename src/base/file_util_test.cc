@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,10 +36,14 @@
 #include <fstream>
 #include <string>
 
-#include "base/file_stream.h"
 #include "base/logging.h"
 #include "base/util.h"
+#include "testing/base/public/gmock.h"
+#include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
+#include "absl/flags/flag.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 
 // Ad-hoc workadound against macro problem on Windows.
 // On Windows, following macros, defined when you include <Windows.h>,
@@ -56,125 +60,111 @@
 #undef CopyFile
 #endif  // CopyFile
 
-DECLARE_string(test_srcdir);
-DECLARE_string(test_tmpdir);
-
 namespace mozc {
-
-class FileUtilTest : public testing::Test {
-};
-
 namespace {
-void CreateTestFile(const string &filename, const string &data) {
-  OutputFileStream ofs(filename.c_str(), std::ios::binary | std::ios::trunc);
-  ofs << data;
-  EXPECT_TRUE(ofs.good());
-}
-}  // namespace
 
-TEST_F(FileUtilTest, CreateDirectory) {
-  EXPECT_TRUE(FileUtil::DirectoryExists(FLAGS_test_tmpdir));
+#define CreateTestFile(filename, data) \
+  ASSERT_OK(::mozc::FileUtil::SetContents(filename, data))
+
+TEST(FileUtilTest, CreateDirectory) {
+  EXPECT_OK(FileUtil::DirectoryExists(absl::GetFlag(FLAGS_test_tmpdir)));
   // dirpath = FLAGS_test_tmpdir/testdir
-  const string dirpath = FileUtil::JoinPath(FLAGS_test_tmpdir, "testdir");
+  const std::string dirpath =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "testdir");
 
   // Delete dirpath, if it exists.
-  if (FileUtil::FileExists(dirpath)) {
-    FileUtil::RemoveDirectory(dirpath);
-  }
-  ASSERT_FALSE(FileUtil::FileExists(dirpath));
+  ASSERT_OK(FileUtil::RemoveDirectoryIfExists(dirpath));
+  ASSERT_FALSE(FileUtil::FileExists(dirpath).ok());
 
   // Create the directory.
-  EXPECT_TRUE(FileUtil::CreateDirectory(dirpath));
-  EXPECT_TRUE(FileUtil::DirectoryExists(dirpath));
+  EXPECT_OK(FileUtil::CreateDirectory(dirpath));
+  EXPECT_OK(FileUtil::DirectoryExists(dirpath));
 
   // Delete the directory.
-  ASSERT_TRUE(FileUtil::RemoveDirectory(dirpath));
-  ASSERT_FALSE(FileUtil::FileExists(dirpath));
+  ASSERT_OK(FileUtil::RemoveDirectory(dirpath));
+  ASSERT_FALSE(FileUtil::FileExists(dirpath).ok());
 }
 
-TEST_F(FileUtilTest, DirectoryExists) {
-  EXPECT_TRUE(FileUtil::DirectoryExists(FLAGS_test_tmpdir));
-  const string filepath = FileUtil::JoinPath(FLAGS_test_tmpdir, "testfile");
+TEST(FileUtilTest, DirectoryExists) {
+  EXPECT_OK(FileUtil::DirectoryExists(absl::GetFlag(FLAGS_test_tmpdir)));
+  const std::string filepath =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "testfile");
 
   // Delete filepath, if it exists.
-  if (FileUtil::FileExists(filepath)) {
-    FileUtil::Unlink(filepath);
-  }
-  ASSERT_FALSE(FileUtil::FileExists(filepath));
+  ASSERT_OK(FileUtil::UnlinkIfExists(filepath));
+  ASSERT_FALSE(FileUtil::FileExists(filepath).ok());
 
   // Create a file.
   CreateTestFile(filepath, "test data");
-  EXPECT_TRUE(FileUtil::FileExists(filepath));
-  EXPECT_FALSE(FileUtil::DirectoryExists(filepath));
+  EXPECT_OK(FileUtil::FileExists(filepath));
+  EXPECT_FALSE(FileUtil::DirectoryExists(filepath).ok());
 
   // Delete the file.
-  FileUtil::Unlink(filepath);
-  ASSERT_FALSE(FileUtil::FileExists(filepath));
+  ASSERT_OK(FileUtil::Unlink(filepath));
+  ASSERT_FALSE(FileUtil::FileExists(filepath).ok());
 }
 
-TEST_F(FileUtilTest, Unlink) {
-  const string filepath = FileUtil::JoinPath(FLAGS_test_tmpdir, "testfile");
-  FileUtil::Unlink(filepath);
-  EXPECT_FALSE(FileUtil::FileExists(filepath));
+TEST(FileUtilTest, Unlink) {
+  const std::string filepath =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "testfile");
+  ASSERT_OK(FileUtil::UnlinkIfExists(filepath));
+  EXPECT_FALSE(FileUtil::FileExists(filepath).ok());
 
   CreateTestFile(filepath, "simple test");
-  EXPECT_TRUE(FileUtil::FileExists(filepath));
-  EXPECT_TRUE(FileUtil::Unlink(filepath));
-  EXPECT_FALSE(FileUtil::FileExists(filepath));
+  EXPECT_OK(FileUtil::FileExists(filepath));
+  EXPECT_OK(FileUtil::Unlink(filepath));
+  EXPECT_FALSE(FileUtil::FileExists(filepath).ok());
 
 #ifdef OS_WIN
-  const DWORD kTestAttributeList[] = {
-    FILE_ATTRIBUTE_ARCHIVE,
-    FILE_ATTRIBUTE_HIDDEN,
-    FILE_ATTRIBUTE_NORMAL,
-    FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
-    FILE_ATTRIBUTE_OFFLINE,
-    FILE_ATTRIBUTE_READONLY,
-    FILE_ATTRIBUTE_SYSTEM,
-    FILE_ATTRIBUTE_TEMPORARY,
+  constexpr DWORD kTestAttributeList[] = {
+      FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_HIDDEN,
+      FILE_ATTRIBUTE_NORMAL,  FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
+      FILE_ATTRIBUTE_OFFLINE, FILE_ATTRIBUTE_READONLY,
+      FILE_ATTRIBUTE_SYSTEM,  FILE_ATTRIBUTE_TEMPORARY,
   };
 
-  wstring wfilepath;
-  Util::UTF8ToWide(filepath, &wfilepath);
-  for (size_t i = 0; i < arraysize(kTestAttributeList); ++i) {
-    SCOPED_TRACE(Util::StringPrintf("AttributeTest %zd", i));
+  std::wstring wfilepath;
+  Util::Utf8ToWide(filepath, &wfilepath);
+  for (size_t i = 0; i < std::size(kTestAttributeList); ++i) {
+    SCOPED_TRACE(absl::StrFormat("AttributeTest %zd", i));
     CreateTestFile(filepath, "attribute_test");
     EXPECT_NE(FALSE,
               ::SetFileAttributesW(wfilepath.c_str(), kTestAttributeList[i]));
-    EXPECT_TRUE(FileUtil::FileExists(filepath));
-    EXPECT_TRUE(FileUtil::Unlink(filepath));
-    EXPECT_FALSE(FileUtil::FileExists(filepath));
+    EXPECT_OK(FileUtil::FileExists(filepath));
+    EXPECT_OK(FileUtil::Unlink(filepath));
+    EXPECT_FALSE(FileUtil::FileExists(filepath).ok());
   }
 #endif  // OS_WIN
 
-  FileUtil::Unlink(filepath);
+  EXPECT_OK(FileUtil::UnlinkIfExists(filepath));
 }
 
 #ifdef OS_WIN
-TEST_F(FileUtilTest, HideFile) {
-  const string filename = FileUtil::JoinPath(FLAGS_test_tmpdir, "testfile");
-  FileUtil::Unlink(filename);
+TEST(FileUtilTest, HideFile) {
+  const std::string filename =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "testfile");
+  ASSERT_OK(FileUtil::UnlinkIfExists(filename));
 
   EXPECT_FALSE(FileUtil::HideFile(filename));
 
-  wstring wfilename;
-  Util::UTF8ToWide(filename.c_str(), &wfilename);
+  std::wstring wfilename;
+  Util::Utf8ToWide(filename.c_str(), &wfilename);
 
   CreateTestFile(filename, "test data");
-  EXPECT_TRUE(FileUtil::FileExists(filename));
+  EXPECT_OK(FileUtil::FileExists(filename));
 
   EXPECT_NE(FALSE,
             ::SetFileAttributesW(wfilename.c_str(), FILE_ATTRIBUTE_NORMAL));
   EXPECT_TRUE(FileUtil::HideFile(filename));
   EXPECT_EQ(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM |
-            FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
+                FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
             ::GetFileAttributesW(wfilename.c_str()));
 
   EXPECT_NE(FALSE,
             ::SetFileAttributesW(wfilename.c_str(), FILE_ATTRIBUTE_ARCHIVE));
   EXPECT_TRUE(FileUtil::HideFile(filename));
   EXPECT_EQ(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM |
-            FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_ARCHIVE,
+                FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_ARCHIVE,
             ::GetFileAttributesW(wfilename.c_str()));
 
   EXPECT_NE(FALSE,
@@ -182,7 +172,7 @@ TEST_F(FileUtilTest, HideFile) {
   EXPECT_TRUE(FileUtil::HideFileWithExtraAttributes(filename,
                                                     FILE_ATTRIBUTE_TEMPORARY));
   EXPECT_EQ(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM |
-            FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_TEMPORARY,
+                FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_TEMPORARY,
             ::GetFileAttributesW(wfilename.c_str()));
 
   EXPECT_NE(FALSE,
@@ -190,92 +180,135 @@ TEST_F(FileUtilTest, HideFile) {
   EXPECT_TRUE(FileUtil::HideFileWithExtraAttributes(filename,
                                                     FILE_ATTRIBUTE_TEMPORARY));
   EXPECT_EQ(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM |
-            FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_ARCHIVE |
-            FILE_ATTRIBUTE_TEMPORARY,
+                FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_ARCHIVE |
+                FILE_ATTRIBUTE_TEMPORARY,
             ::GetFileAttributesW(wfilename.c_str()));
 
-  FileUtil::Unlink(filename);
+  ASSERT_OK(FileUtil::Unlink(filename));
 }
 #endif  // OS_WIN
 
-TEST_F(FileUtilTest, IsEqualFile) {
-  const string filename1 = FileUtil::JoinPath(FLAGS_test_tmpdir, "test1");
-  const string filename2 = FileUtil::JoinPath(FLAGS_test_tmpdir, "test2");
-  FileUtil::Unlink(filename1);
-  FileUtil::Unlink(filename2);
-  EXPECT_FALSE(FileUtil::IsEqualFile(filename1, filename2));
+TEST(FileUtilTest, IsEqualFile) {
+  const std::string filename1 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test1");
+  const std::string filename2 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test2");
+  ASSERT_OK(FileUtil::UnlinkIfExists(filename1));
+  ASSERT_OK(FileUtil::UnlinkIfExists(filename2));
+  EXPECT_FALSE(FileUtil::IsEqualFile(filename1, filename2).ok());
 
   CreateTestFile(filename1, "test data1");
-  EXPECT_FALSE(FileUtil::IsEqualFile(filename1, filename2));
+  EXPECT_FALSE(FileUtil::IsEqualFile(filename1, filename2).ok());
 
   CreateTestFile(filename2, "test data1");
-  EXPECT_TRUE(FileUtil::IsEqualFile(filename1, filename2));
+  absl::StatusOr<bool> s = FileUtil::IsEqualFile(filename1, filename2);
+  EXPECT_OK(s);
+  EXPECT_TRUE(*s);
 
   CreateTestFile(filename2, "test data1 test data1");
-  EXPECT_FALSE(FileUtil::IsEqualFile(filename1, filename2));
+  s = FileUtil::IsEqualFile(filename1, filename2);
+  EXPECT_OK(s);
+  EXPECT_FALSE(*s);
 
   CreateTestFile(filename2, "test data2");
-  EXPECT_FALSE(FileUtil::IsEqualFile(filename1, filename2));
+  s = FileUtil::IsEqualFile(filename1, filename2);
+  EXPECT_OK(s);
+  EXPECT_FALSE(*s);
 
-  FileUtil::Unlink(filename1);
-  FileUtil::Unlink(filename2);
+  ASSERT_OK(FileUtil::Unlink(filename1));
+  ASSERT_OK(FileUtil::Unlink(filename2));
 }
 
-TEST_F(FileUtilTest, CopyFile) {
+TEST(FileUtilTest, IsEquivalent) {
+  const std::string filename1 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test1");
+  const std::string filename2 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test2");
+  ASSERT_OK(FileUtil::UnlinkIfExists(filename1));
+  ASSERT_OK(FileUtil::UnlinkIfExists(filename2));
+  EXPECT_FALSE(FileUtil::IsEquivalent(filename1, filename1).ok());
+  EXPECT_FALSE(FileUtil::IsEquivalent(filename1, filename2).ok());
+
+  CreateTestFile(filename1, "test data");
+  absl::StatusOr<bool> s = FileUtil::IsEquivalent(filename1, filename1);
+  if (absl::IsUnimplemented(s.status())) {
+    return;
+  }
+  EXPECT_OK(s);
+  EXPECT_TRUE(*s);
+
+  // filename2 doesn't exist, so the status is not OK.
+  EXPECT_FALSE(FileUtil::IsEquivalent(filename1, filename2).ok());
+
+  // filename2 exists but it's a different file.
+  CreateTestFile(filename2, "test data");
+  s = FileUtil::IsEquivalent(filename1, filename2);
+  EXPECT_OK(s);
+  EXPECT_FALSE(*s);
+}
+
+TEST(FileUtilTest, CopyFile) {
   // just test rename operation works as intended
-  const string from = FileUtil::JoinPath(FLAGS_test_tmpdir, "copy_from");
-  const string to = FileUtil::JoinPath(FLAGS_test_tmpdir, "copy_to");
-  FileUtil::Unlink(from);
-  FileUtil::Unlink(to);
+  const std::string from =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "copy_from");
+  const std::string to =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "copy_to");
+  ASSERT_OK(FileUtil::UnlinkIfExists(from));
+  ASSERT_OK(FileUtil::UnlinkIfExists(to));
 
   CreateTestFile(from, "simple test");
-  EXPECT_TRUE(FileUtil::CopyFile(from, to));
-  EXPECT_TRUE(FileUtil::IsEqualFile(from, to));
+  EXPECT_OK(FileUtil::CopyFile(from, to));
+  absl::StatusOr<bool> s = FileUtil::IsEqualFile(from, to);
+  EXPECT_OK(s);
+  EXPECT_TRUE(*s);
 
   CreateTestFile(from, "overwrite test");
-  EXPECT_TRUE(FileUtil::CopyFile(from, to));
-  EXPECT_TRUE(FileUtil::IsEqualFile(from, to));
+  EXPECT_OK(FileUtil::CopyFile(from, to));
+  s = FileUtil::IsEqualFile(from, to);
+  EXPECT_OK(s);
+  EXPECT_TRUE(*s);
 
 #ifdef OS_WIN
   struct TestData {
-    TestData(DWORD from, DWORD to)
-        : from_attributes(from), to_attributes(to) {}
+    TestData(DWORD from, DWORD to) : from_attributes(from), to_attributes(to) {}
     const DWORD from_attributes;
     const DWORD to_attributes;
   };
   const TestData kTestDataList[] = {
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_ARCHIVE),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_HIDDEN),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NORMAL),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_OFFLINE),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_READONLY),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_SYSTEM),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_TEMPORARY),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_ARCHIVE),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_HIDDEN),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NORMAL),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_OFFLINE),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_READONLY),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_SYSTEM),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_TEMPORARY),
 
-    TestData(FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_NORMAL),
-    TestData(FILE_ATTRIBUTE_NORMAL,
-             FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_READONLY),
-    TestData(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM,
-             FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM),
+      TestData(FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_NORMAL),
+      TestData(FILE_ATTRIBUTE_NORMAL,
+               FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_READONLY),
+      TestData(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM,
+               FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM),
   };
 
-  for (size_t i = 0; i < arraysize(kTestDataList); ++i) {
-    const string test_label =
+  for (size_t i = 0; i < std::size(kTestDataList); ++i) {
+    const std::string test_label =
         "overwrite test with attributes " + std::to_string(i);
     SCOPED_TRACE(test_label);
     CreateTestFile(from, test_label);
 
     const TestData &kData = kTestDataList[i];
-    wstring wfrom, wto;
-    Util::UTF8ToWide(from.c_str(), &wfrom);
-    Util::UTF8ToWide(to.c_str(), &wto);
+    std::wstring wfrom, wto;
+    Util::Utf8ToWide(from.c_str(), &wfrom);
+    Util::Utf8ToWide(to.c_str(), &wto);
     EXPECT_NE(FALSE,
               ::SetFileAttributesW(wfrom.c_str(), kData.from_attributes));
     EXPECT_NE(FALSE, ::SetFileAttributesW(wto.c_str(), kData.to_attributes));
 
-    EXPECT_TRUE(FileUtil::CopyFile(from, to));
-    EXPECT_TRUE(FileUtil::IsEqualFile(from, to));
+    EXPECT_OK(FileUtil::CopyFile(from, to));
+    absl::StatusOr<bool> s = FileUtil::IsEqualFile(from, to);
+    EXPECT_OK(s);
+    EXPECT_TRUE(*s);
     EXPECT_EQ(kData.from_attributes, ::GetFileAttributesW(wfrom.c_str()));
     EXPECT_EQ(kData.from_attributes, ::GetFileAttributesW(wto.c_str()));
 
@@ -285,105 +318,123 @@ TEST_F(FileUtilTest, CopyFile) {
   }
 #endif  // OS_WIN
 
-  FileUtil::Unlink(from);
-  FileUtil::Unlink(to);
+  ASSERT_OK(FileUtil::Unlink(from));
+  ASSERT_OK(FileUtil::Unlink(to));
 }
 
-TEST_F(FileUtilTest, AtomicRename) {
+TEST(FileUtilTest, AtomicRename) {
   // just test rename operation works as intended
-  const string from = FileUtil::JoinPath(FLAGS_test_tmpdir,
-                                         "atomic_rename_test_from");
-  const string to = FileUtil::JoinPath(FLAGS_test_tmpdir,
-                                       "atomic_rename_test_to");
-  FileUtil::Unlink(from);
-  FileUtil::Unlink(to);
+  const std::string from = FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir),
+                                              "atomic_rename_test_from");
+  const std::string to = FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir),
+                                            "atomic_rename_test_to");
+  ASSERT_OK(FileUtil::UnlinkIfExists(from));
+  ASSERT_OK(FileUtil::UnlinkIfExists(to));
 
   // |from| is not found
-  EXPECT_FALSE(FileUtil::AtomicRename(from, to));
+  EXPECT_FALSE(FileUtil::AtomicRename(from, to).ok());
   CreateTestFile(from, "test");
-  EXPECT_TRUE(FileUtil::AtomicRename(from, to));
+  EXPECT_OK(FileUtil::AtomicRename(from, to));
 
   // from is deleted
-  EXPECT_FALSE(FileUtil::FileExists(from));
-  EXPECT_TRUE(FileUtil::FileExists(to));
+  EXPECT_FALSE(FileUtil::FileExists(from).ok());
+  EXPECT_OK(FileUtil::FileExists(to));
 
   {
-    InputFileStream ifs(to.c_str());
-    EXPECT_TRUE(ifs.good());
-    string line;
-    getline(ifs, line);
-    EXPECT_EQ("test", line);
+    absl::StatusOr<std::string> content = FileUtil::GetContents(to);
+    ASSERT_OK(content);
+    EXPECT_EQ("test", *content);
   }
 
-  EXPECT_FALSE(FileUtil::AtomicRename(from, to));
+  EXPECT_FALSE(FileUtil::AtomicRename(from, to).ok());
 
-  FileUtil::Unlink(from);
-  FileUtil::Unlink(to);
+  ASSERT_OK(FileUtil::UnlinkIfExists(from));
+  ASSERT_OK(FileUtil::UnlinkIfExists(to));
 
   // overwrite the file
   CreateTestFile(from, "test");
   CreateTestFile(to, "test");
-  EXPECT_TRUE(FileUtil::AtomicRename(from, to));
+  EXPECT_OK(FileUtil::AtomicRename(from, to));
 
 #ifdef OS_WIN
   struct TestData {
-    TestData(DWORD from, DWORD to)
-        : from_attributes(from), to_attributes(to) {}
+    TestData(DWORD from, DWORD to) : from_attributes(from), to_attributes(to) {}
     const DWORD from_attributes;
     const DWORD to_attributes;
   };
   const TestData kTestDataList[] = {
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_ARCHIVE),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_HIDDEN),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NORMAL),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_OFFLINE),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_READONLY),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_SYSTEM),
-    TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_TEMPORARY),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_ARCHIVE),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_HIDDEN),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NORMAL),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_OFFLINE),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_READONLY),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_SYSTEM),
+      TestData(FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_TEMPORARY),
 
-    TestData(FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_NORMAL),
-    TestData(FILE_ATTRIBUTE_NORMAL,
-             FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_READONLY),
-    TestData(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM,
-             FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM),
+      TestData(FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_NORMAL),
+      TestData(FILE_ATTRIBUTE_NORMAL,
+               FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_READONLY),
+      TestData(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM,
+               FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM),
   };
 
-  for (size_t i = 0; i < arraysize(kTestDataList); ++i) {
-    const string test_label =
+  for (size_t i = 0; i < std::size(kTestDataList); ++i) {
+    const std::string test_label =
         "overwrite file with attributes " + std::to_string(i);
     SCOPED_TRACE(test_label);
     CreateTestFile(from, test_label);
 
     const TestData &kData = kTestDataList[i];
-    wstring wfrom, wto;
-    Util::UTF8ToWide(from.c_str(), &wfrom);
-    Util::UTF8ToWide(to.c_str(), &wto);
+    std::wstring wfrom, wto;
+    Util::Utf8ToWide(from.c_str(), &wfrom);
+    Util::Utf8ToWide(to.c_str(), &wto);
     EXPECT_NE(FALSE,
               ::SetFileAttributesW(wfrom.c_str(), kData.from_attributes));
     EXPECT_NE(FALSE, ::SetFileAttributesW(wto.c_str(), kData.to_attributes));
 
-    EXPECT_TRUE(FileUtil::AtomicRename(from, to));
+    EXPECT_OK(FileUtil::AtomicRename(from, to));
     EXPECT_EQ(kData.from_attributes, ::GetFileAttributesW(wto.c_str()));
-    EXPECT_FALSE(FileUtil::FileExists(from));
-    EXPECT_TRUE(FileUtil::FileExists(to));
+    EXPECT_FALSE(FileUtil::FileExists(from).ok());
+    EXPECT_OK(FileUtil::FileExists(to));
 
     ::SetFileAttributesW(wfrom.c_str(), FILE_ATTRIBUTE_NORMAL);
     ::SetFileAttributesW(wto.c_str(), FILE_ATTRIBUTE_NORMAL);
   }
 #endif  // OS_WIN
 
-  FileUtil::Unlink(from);
-  FileUtil::Unlink(to);
+  ASSERT_OK(FileUtil::UnlinkIfExists(from));
+  ASSERT_OK(FileUtil::UnlinkIfExists(to));
+}
+
+TEST(FileUtilTest, CreateHardLink) {
+  const std::string filename1 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test1");
+  const std::string filename2 =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test2");
+  ASSERT_OK(FileUtil::UnlinkIfExists(filename1));
+  ASSERT_OK(FileUtil::UnlinkIfExists(filename2));
+
+  CreateTestFile(filename1, "test data");
+  absl::Status s = FileUtil::CreateHardLink(filename1, filename2);
+  if (absl::IsUnimplemented(s)) {
+    return;
+  }
+  EXPECT_OK(s);
+  absl::StatusOr<bool> equiv = FileUtil::IsEquivalent(filename1, filename2);
+  ASSERT_OK(equiv);
+  EXPECT_TRUE(*equiv);
+
+  EXPECT_FALSE(FileUtil::CreateHardLink(filename1, filename2).ok());
 }
 
 #ifdef OS_WIN
 #define SP "\\"
-#else
+#else  // OS_WIN
 #define SP "/"
 #endif  // OS_WIN
 
-TEST_F(FileUtilTest, JoinPath) {
+TEST(FileUtilTest, JoinPath) {
   EXPECT_TRUE(FileUtil::JoinPath({}).empty());
   EXPECT_EQ("foo", FileUtil::JoinPath({"foo"}));
   EXPECT_EQ("foo" SP "bar", FileUtil::JoinPath({"foo", "bar"}));
@@ -404,7 +455,7 @@ TEST_F(FileUtilTest, JoinPath) {
   EXPECT_EQ("foo" SP "bar", FileUtil::JoinPath({"foo", "bar", ""}));
 }
 
-TEST_F(FileUtilTest, Dirname) {
+TEST(FileUtilTest, Dirname) {
   EXPECT_EQ(SP "foo", FileUtil::Dirname(SP "foo" SP "bar"));
   EXPECT_EQ(SP "foo" SP "bar",
             FileUtil::Dirname(SP "foo" SP "bar" SP "foo.txt"));
@@ -412,7 +463,7 @@ TEST_F(FileUtilTest, Dirname) {
   EXPECT_EQ("", FileUtil::Dirname(SP));
 }
 
-TEST_F(FileUtilTest, Basename) {
+TEST(FileUtilTest, Basename) {
   EXPECT_EQ("bar", FileUtil::Basename(SP "foo" SP "bar"));
   EXPECT_EQ("foo.txt", FileUtil::Basename(SP "foo" SP "bar" SP "foo.txt"));
   EXPECT_EQ("foo.txt", FileUtil::Basename("foo.txt"));
@@ -424,7 +475,7 @@ TEST_F(FileUtilTest, Basename) {
 
 #undef SP
 
-TEST_F(FileUtilTest, NormalizeDirectorySeparator) {
+TEST(FileUtilTest, NormalizeDirectorySeparator) {
 #ifdef OS_WIN
   EXPECT_EQ("\\foo\\bar", FileUtil::NormalizeDirectorySeparator("\\foo\\bar"));
   EXPECT_EQ("\\foo\\bar", FileUtil::NormalizeDirectorySeparator("/foo\\bar"));
@@ -436,7 +487,7 @@ TEST_F(FileUtilTest, NormalizeDirectorySeparator) {
   EXPECT_EQ("", FileUtil::NormalizeDirectorySeparator(""));
   EXPECT_EQ("\\", FileUtil::NormalizeDirectorySeparator("/"));
   EXPECT_EQ("\\", FileUtil::NormalizeDirectorySeparator("\\"));
-#else
+#else   // OS_WIN
   EXPECT_EQ("\\foo\\bar", FileUtil::NormalizeDirectorySeparator("\\foo\\bar"));
   EXPECT_EQ("/foo\\bar", FileUtil::NormalizeDirectorySeparator("/foo\\bar"));
   EXPECT_EQ("\\foo/bar", FileUtil::NormalizeDirectorySeparator("\\foo/bar"));
@@ -450,21 +501,74 @@ TEST_F(FileUtilTest, NormalizeDirectorySeparator) {
 #endif  // OS_WIN
 }
 
-TEST_F(FileUtilTest, GetModificationTime) {
-  FileTimeStamp time_stamp = 0;
-  EXPECT_FALSE(FileUtil::GetModificationTime("not_existent_file", &time_stamp));
+TEST(FileUtilTest, GetModificationTime) {
+  EXPECT_FALSE(FileUtil::GetModificationTime("not_existent_file").ok());
 
-  const string &path = FileUtil::JoinPath(FLAGS_test_tmpdir, "testfile");
+  const std::string &path =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "testfile");
   CreateTestFile(path, "content");
-  EXPECT_TRUE(FileUtil::GetModificationTime(path, &time_stamp));
-  EXPECT_NE(0, time_stamp);
+  absl::StatusOr<FileTimeStamp> time_stamp1 =
+      FileUtil::GetModificationTime(path);
+  ASSERT_OK(time_stamp1);
+  EXPECT_NE(0, *time_stamp1);
 
-  FileTimeStamp time_stamp2 = 0;
-  EXPECT_TRUE(FileUtil::GetModificationTime(path, &time_stamp2));
-  EXPECT_EQ(time_stamp, time_stamp2);
+  absl::StatusOr<FileTimeStamp> time_stamp2 =
+      FileUtil::GetModificationTime(path);
+  ASSERT_OK(time_stamp2);
+  EXPECT_EQ(*time_stamp1, *time_stamp2);
 
   // Cleanup
-  FileUtil::Unlink(path);
+  ASSERT_OK(FileUtil::Unlink(path));
 }
 
+TEST(FileUtilTest, GetAndSetContents) {
+  const std::string filename =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test.txt");
+
+  // File doesn't exist yet.
+  std::string content;
+  EXPECT_TRUE(absl::IsNotFound(FileUtil::GetContents(filename, &content)));
+
+  // Basic write and read test.
+  ASSERT_OK(FileUtil::SetContents(filename, "test"));
+  FileUnlinker unlinker(filename);
+  EXPECT_OK(FileUtil::GetContents(filename, &content));
+  EXPECT_EQ("test", content);
+
+  // Overwrite test.
+  ASSERT_OK(FileUtil::SetContents(filename, "more tests!"));
+  EXPECT_OK(FileUtil::GetContents(filename, &content));
+  EXPECT_EQ("more tests!", content);
+
+  // Text mode write.
+  ASSERT_OK(FileUtil::SetContents(filename, "test\ntest\n", std::ios::out));
+  EXPECT_OK(FileUtil::GetContents(filename, &content));
+#ifdef OS_WIN
+  EXPECT_EQ("test\r\ntest\r\n", content);
+#else   // OS_WIN
+  EXPECT_EQ("test\ntest\n", content);
+#endif  // OS_WIN
+
+  // Text mode read.
+  ASSERT_OK(FileUtil::SetContents(filename, "test\r\ntest\r\n"));
+  EXPECT_OK(FileUtil::GetContents(filename, &content, std::ios::in));
+#ifdef OS_WIN
+  EXPECT_EQ("test\ntest\n", content);
+#else   // OS_WIN
+  EXPECT_EQ("test\r\ntest\r\n", content);
+#endif  // OS_WIN
+}
+
+TEST(FileUtilTest, FileUnlinker) {
+  const std::string filename =
+      FileUtil::JoinPath(absl::GetFlag(FLAGS_test_tmpdir), "test.txt");
+  ASSERT_OK(FileUtil::SetContents(filename, "test"));
+  {
+    FileUnlinker unlinker(filename);
+    EXPECT_OK(FileUtil::FileExists(filename));
+  }
+  EXPECT_FALSE(FileUtil::FileExists(filename).ok());
+}
+
+}  // namespace
 }  // namespace mozc

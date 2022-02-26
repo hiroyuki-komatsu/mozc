@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -34,21 +34,24 @@
 #endif  // OS_WIN, ENABLE_GTK_RENDERER
 
 #include "base/crash_report_handler.h"
-#include "base/flags.h"
 #include "base/init_mozc.h"
 #include "base/run_level.h"
 #include "base/system_util.h"
 #include "base/util.h"
 #include "config/stats_config_util.h"
+#include "absl/flags/declare.h"
+#include "absl/flags/flag.h"
 
 #ifdef OS_WIN
 #include "base/win_util.h"
 #include "base/winmain.h"
 #include "renderer/win32/win32_server.h"
-#elif defined(OS_MACOSX)
+#elif defined(__APPLE__)
 #include "renderer/mac/CandidateController.h"
 #include "renderer/mac/mac_server.h"
 #include "renderer/mac/mac_server_send_command.h"
+#elif defined(ENABLE_QT_RENDERER)
+#include "renderer/qt/qt_server.h"
 #elif defined(ENABLE_GTK_RENDERER)
 #include "renderer/renderer_client.h"
 #include "renderer/table_layout.h"
@@ -62,9 +65,9 @@
 #include "renderer/unix/unix_renderer.h"
 #include "renderer/unix/unix_server.h"
 #include "renderer/unix/window_manager.h"
-#endif  // OS_WIN, OS_MACOSX, ENABLE_GTK_RENDERER
+#endif  // OS_WIN, __APPLE__, ENABLE_QT_RENDERER, ENABLE_GTK_RENDERER
 
-DECLARE_bool(restricted);
+ABSL_DECLARE_FLAG(bool, restricted);
 
 int main(int argc, char *argv[]) {
   const mozc::RunLevel::RunLevelType run_level =
@@ -80,8 +83,8 @@ int main(int argc, char *argv[]) {
   gtk_set_locale();
 #if !GLIB_CHECK_VERSION(2, 31, 0)
   // There are not g_thread_init function in glib>=2.31.0.
-  //http://developer.gnome.org/glib/2.31/glib-Deprecated-Thread-APIs.html#g-thread-init
-  g_thread_init(NULL);
+  // http://developer.gnome.org/glib/2.31/glib-Deprecated-Thread-APIs.html#g-thread-init
+  g_thread_init(nullptr);
 #endif  // GLIB>=2.31.0
   gdk_threads_init();
   gtk_init(&argc, &argv);
@@ -91,13 +94,13 @@ int main(int argc, char *argv[]) {
 
   // restricted mode
   if (run_level == mozc::RunLevel::RESTRICTED) {
-    FLAGS_restricted = true;
+    absl::SetFlag(&FLAGS_restricted, true);
   }
 
   if (mozc::config::StatsConfigUtil::IsEnabled()) {
     mozc::CrashReportHandler::Initialize(false);
   }
-  mozc::InitMozc(argv[0], &argc, &argv, false);
+  mozc::InitMozc(argv[0], &argc, &argv);
 
   int result_code = 0;
 
@@ -106,7 +109,7 @@ int main(int argc, char *argv[]) {
     mozc::renderer::win32::Win32Server server;
     server.SetRendererInterface(&server);
     result_code = server.StartServer();
-#elif defined(OS_MACOSX)
+#elif defined(__APPLE__)
     mozc::renderer::mac::MacServer::Init();
     mozc::renderer::mac::MacServer server(argc, (const char **)argv);
     mozc::renderer::mac::CandidateController renderer;
@@ -114,6 +117,9 @@ int main(int argc, char *argv[]) {
     server.SetRendererInterface(&renderer);
     renderer.SetSendCommandInterface(&send_command);
     result_code = server.StartServer();
+#elif defined(ENABLE_QT_RENDERER)
+    mozc::renderer::QtServer server;
+    result_code = server.StartServer(argc, argv);
 #elif defined(ENABLE_GTK_RENDERER)
     mozc::renderer::gtk::UnixRenderer renderer(
         new mozc::renderer::gtk::WindowManager(
@@ -139,7 +145,7 @@ int main(int argc, char *argv[]) {
     renderer.Initialize();
     server.SetRendererInterface(&renderer);
     result_code = server.StartServer();
-#endif  // OS_WIN, OS_MACOSX, ENABLE_GTK_RENDERER
+#endif  // OS_WIN, __APPLE__, ENABLE_QT_RENDERER, ENABLE_GTK_RENDERER
   }
 
   return result_code;

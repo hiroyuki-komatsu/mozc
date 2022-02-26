@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -67,6 +67,7 @@
         'renderer_client.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_synchronization',
         '../base/base.gyp:base',
         '../ipc/ipc.gyp:ipc',
         '../protocol/protocol.gyp:commands_proto',
@@ -96,6 +97,7 @@
         'renderer_client_test.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../testing/testing.gyp:gtest_main',
         'renderer_client',
       ],
@@ -198,11 +200,6 @@
             'gtk_renderer_test',
           ],
         }],
-        # Android runs nothing.
-        ['target_platform=="Android"', {
-          'dependencies=': [],
-        },
-      ],
       ],
     },
   ],
@@ -406,6 +403,7 @@
             '<(gen_out_dir)/mozc_renderer_autogen.rc',
           ],
           'dependencies': [
+            '../base/absl.gyp:absl_synchronization',
             '../base/base.gyp:base',
             '../base/base.gyp:crash_report_handler',
             '../client/client.gyp:client',
@@ -436,6 +434,7 @@
             'win32/win32_renderer_client.cc',
           ],
           'dependencies': [
+            '../base/absl.gyp:absl_synchronization',
             '../base/base.gyp:base',
             '../protocol/protocol.gyp:renderer_proto',
             'renderer_client',
@@ -467,6 +466,8 @@
             '../data/images/mac/product_icon.icns',
           ],
           'dependencies': [
+            '../base/absl.gyp:absl_base',
+            '../base/absl.gyp:absl_synchronization',
             '../base/base.gyp:base',
             '../base/base.gyp:crash_report_handler',
             '../client/client.gyp:client',
@@ -512,7 +513,7 @@
                 '<(gen_out_dir)/Info.plist',
               ],
               'action': [
-                'python', '../build_tools/tweak_info_plist.py',
+                '<(python)', '../build_tools/tweak_info_plist.py',
                 '--output', '<(gen_out_dir)/Info.plist',
                 '--input', 'mac/Info.plist',
                 '--version_file', '../mozc_version.txt',
@@ -574,6 +575,8 @@
             'unix/window_manager.cc',
           ],
           'dependencies': [
+            '../base/absl.gyp:absl_strings',
+            '../base/absl.gyp:absl_synchronization',
             '../base/base.gyp:base',
             '../client/client.gyp:client',
             '../config/config.gyp:stats_config_util',

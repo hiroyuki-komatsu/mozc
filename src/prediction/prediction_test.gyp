@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -40,8 +40,11 @@
         'dictionary_predictor_test.cc',
         'user_history_predictor_test.cc',
         'predictor_test.cc',
+        'zero_query_dict_test.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
+        '../base/base_test.gyp:clock_mock',
         '../composer/composer.gyp:composer',
         '../config/config.gyp:config_handler',
         '../converter/converter_base.gyp:connector',
@@ -59,6 +62,7 @@
         '../protocol/protocol.gyp:commands_proto',
         '../protocol/protocol.gyp:config_proto',
         '../session/session_base.gyp:request_test_util',
+        '../storage/storage.gyp:storage',
         '../testing/testing.gyp:gtest_main',
         '../usage_stats/usage_stats_test.gyp:usage_stats_testing_util',
         'prediction.gyp:prediction',
@@ -66,6 +70,10 @@
       'variables': {
         'test_size': 'small',
       },
+      'cflags': [
+        '-Wno-unknown-warning-option',
+        '-Wno-inconsistent-missing-override',
+      ],
     },
     # Test cases meta target: this target is referred from gyp/tests.gyp
     {

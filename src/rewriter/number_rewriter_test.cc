@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -38,12 +38,14 @@
 #include "base/util.h"
 #include "config/config_handler.h"
 #include "converter/segments.h"
-#include "request/conversion_request.h"
 #include "data_manager/testing/mock_data_manager.h"
 #include "dictionary/pos_matcher.h"
 #include "protocol/commands.pb.h"
+#include "request/conversion_request.h"
 #include "testing/base/public/gunit.h"
 #include "testing/base/public/mozctest.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_format.h"
 
 // To show the value of size_t, 'z' speficier should be used.
 // But MSVC doesn't support it yet so use 'l' instead.
@@ -56,16 +58,16 @@
 namespace mozc {
 namespace {
 
-using dictionary::POSMatcher;
+using dictionary::PosMatcher;
 
-const char kKanjiDescription[] = "漢数字";
-const char kArabicDescription[] = "数字";
-const char kOldKanjiDescription[] = "大字";
-const char kMaruNumberDescription[] = "丸数字";
-const char kRomanCapitalDescription[] = "ローマ数字(大文字)";
-const char kRomanNoCapitalDescription[] = "ローマ数字(小文字)";
+constexpr char kKanjiDescription[] = "漢数字";
+constexpr char kArabicDescription[] = "数字";
+constexpr char kOldKanjiDescription[] = "大字";
+constexpr char kMaruNumberDescription[] = "丸数字";
+constexpr char kRomanCapitalDescription[] = "ローマ数字(大文字)";
+constexpr char kRomanNoCapitalDescription[] = "ローマ数字(小文字)";
 
-bool FindValue(const Segment &segment, const string &value) {
+bool FindValue(const Segment &segment, const std::string &value) {
   for (size_t i = 0; i < segment.candidates_size(); ++i) {
     if (segment.candidate(i).value == value) {
       return true;
@@ -74,8 +76,8 @@ bool FindValue(const Segment &segment, const string &value) {
   return false;
 }
 
-Segment *SetupSegments(const POSMatcher& pos_matcher,
-                       const string &candidate_value, Segments *segments) {
+Segment *SetupSegments(const PosMatcher &pos_matcher,
+                       const std::string &candidate_value, Segments *segments) {
   segments->Clear();
   Segment *segment = segments->push_back_segment();
   Segment::Candidate *candidate = segment->add_candidate();
@@ -87,7 +89,7 @@ Segment *SetupSegments(const POSMatcher& pos_matcher,
   return segment;
 }
 
-bool HasDescription(const Segment &segment, const string &description) {
+bool HasDescription(const Segment &segment, const std::string &description) {
   for (size_t i = 0; i < segment.candidates_size(); ++i) {
     if (segment.candidate(i).description == description) {
       return true;
@@ -96,8 +98,9 @@ bool HasDescription(const Segment &segment, const string &description) {
   return false;
 }
 
-// Find candiadte id
-bool FindCandidateId(const Segment &segment, const string &value, int *id) {
+// Find candidate id
+bool FindCandidateId(const Segment &segment, const std::string &value,
+                     int *id) {
   for (size_t i = 0; i < segment.candidates_size(); ++i) {
     if (segment.candidate(i).value == value) {
       *id = i;
@@ -115,7 +118,7 @@ class NumberRewriterTest : public ::testing::Test {
   NumberRewriterTest() {}
 
   void SetUp() override {
-    pos_matcher_.Set(mock_data_manager_.GetPOSMatcherData());
+    pos_matcher_.Set(mock_data_manager_.GetPosMatcherData());
   }
 
   NumberRewriter *CreateNumberRewriter() {
@@ -123,7 +126,7 @@ class NumberRewriterTest : public ::testing::Test {
   }
 
   const testing::MockDataManager mock_data_manager_;
-  POSMatcher pos_matcher_;
+  PosMatcher pos_matcher_;
   const ConversionRequest default_request_;
 
  private:
@@ -149,6 +152,8 @@ TEST_F(NumberRewriterTest, BasicTest) {
   candidate->rid = pos_matcher_.GetNumberId();
   candidate->value = "012";
   candidate->content_value = "012";
+  candidate->key = "012";
+  candidate->content_key = "012";
 
   EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
 
@@ -166,16 +171,14 @@ TEST_F(NumberRewriterTest, BasicTest) {
       {"0b1100", "0b1100", "2進数"},
   };
 
-  const size_t kExpectResultSize = arraysize(kExpectResults);
+  constexpr size_t kExpectResultSize = std::size(kExpectResults);
   EXPECT_EQ(kExpectResultSize, seg->candidates_size());
 
   for (size_t i = 0; i < kExpectResultSize; ++i) {
-    SCOPED_TRACE(Util::StringPrintf("i = " SIZE_T_PRINTF_FORMAT, i));
+    SCOPED_TRACE(absl::StrFormat("i = " SIZE_T_PRINTF_FORMAT, i));
     EXPECT_EQ(kExpectResults[i].value, seg->candidate(i).value);
-    EXPECT_EQ(kExpectResults[i].content_value,
-              seg->candidate(i).content_value);
-    EXPECT_EQ(kExpectResults[i].description,
-              seg->candidate(i).description);
+    EXPECT_EQ(kExpectResults[i].content_value, seg->candidate(i).content_value);
+    EXPECT_EQ(kExpectResults[i].description, seg->candidate(i).description);
   }
   seg->clear_candidates();
 }
@@ -185,10 +188,9 @@ TEST_F(NumberRewriterTest, RequestType) {
    public:
     Segments::RequestType request_type_;
     int expected_candidate_number_;
-    TestData(Segments::RequestType request_type, int expected_number) :
-        request_type_(request_type),
-        expected_candidate_number_(expected_number) {
-    }
+    TestData(Segments::RequestType request_type, int expected_number)
+        : request_type_(request_type),
+          expected_candidate_number_(expected_number) {}
   };
   TestData test_data_list[] = {
       TestData(Segments::CONVERSION, 11),  // 11 comes from BasicTest
@@ -199,8 +201,8 @@ TEST_F(NumberRewriterTest, RequestType) {
 
   std::unique_ptr<NumberRewriter> number_rewriter(CreateNumberRewriter());
 
-  for (size_t i = 0; i < arraysize(test_data_list); ++i) {
-    TestData& test_data = test_data_list[i];
+  for (size_t i = 0; i < std::size(test_data_list); ++i) {
+    TestData &test_data = test_data_list[i];
     Segments segments;
     segments.set_request_type(test_data.request_type_);
     Segment *seg = segments.push_back_segment();
@@ -226,6 +228,8 @@ TEST_F(NumberRewriterTest, BasicTestWithSuffix) {
   candidate->rid = pos_matcher_.GetNumberId();
   candidate->value = "012が";
   candidate->content_value = "012";
+  candidate->key = "012が";
+  candidate->content_key = "012";
 
   EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
 
@@ -243,16 +247,14 @@ TEST_F(NumberRewriterTest, BasicTestWithSuffix) {
       {"0b1100が", "0b1100", "2進数"},
   };
 
-  const size_t kExpectResultSize = arraysize(kExpectResults);
+  constexpr size_t kExpectResultSize = std::size(kExpectResults);
   EXPECT_EQ(kExpectResultSize, seg->candidates_size());
 
   for (size_t i = 0; i < kExpectResultSize; ++i) {
-    SCOPED_TRACE(Util::StringPrintf("i = " SIZE_T_PRINTF_FORMAT, i));
+    SCOPED_TRACE(absl::StrFormat("i = " SIZE_T_PRINTF_FORMAT, i));
     EXPECT_EQ(kExpectResults[i].value, seg->candidate(i).value);
-    EXPECT_EQ(kExpectResults[i].content_value,
-              seg->candidate(i).content_value);
-    EXPECT_EQ(kExpectResults[i].description,
-              seg->candidate(i).description);
+    EXPECT_EQ(kExpectResults[i].content_value, seg->candidate(i).content_value);
+    EXPECT_EQ(kExpectResults[i].description, seg->candidate(i).description);
   }
 
   seg->clear_candidates();
@@ -315,8 +317,7 @@ TEST_F(NumberRewriterTest, TestWithMultipleNumberSuffix) {
   EXPECT_EQ("", seg->candidate(1).description);
 
   EXPECT_EQ("十五階", seg->candidate(2).value);
-  EXPECT_EQ("十五階",
-            seg->candidate(2).content_value);
+  EXPECT_EQ("十五階", seg->candidate(2).content_value);
   EXPECT_EQ("", seg->candidate(2).description);
 
   EXPECT_EQ("15階", seg->candidate(3).value);
@@ -392,6 +393,8 @@ TEST_F(NumberRewriterTest, OneOfCandidatesIsEmpty) {
   second_candidate->lid = pos_matcher_.GetNumberId();
   second_candidate->rid = pos_matcher_.GetNumberId();
   second_candidate->content_value = second_candidate->value;
+  second_candidate->key = "0";
+  second_candidate->content_key = "0";
 
   EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
 
@@ -449,6 +452,8 @@ TEST_F(NumberRewriterTest, NumberIsZero) {
   candidate->rid = pos_matcher_.GetNumberId();
   candidate->value = "0";
   candidate->content_value = "0";
+  candidate->key = "0";
+  candidate->content_key = "0";
 
   EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
 
@@ -484,6 +489,8 @@ TEST_F(NumberRewriterTest, NumberIsZeroZero) {
   candidate->rid = pos_matcher_.GetNumberId();
   candidate->value = "00";
   candidate->content_value = "00";
+  candidate->key = "00";
+  candidate->content_key = "00";
 
   EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
 
@@ -519,6 +526,8 @@ TEST_F(NumberRewriterTest, NumberIs19Digit) {
   candidate->rid = pos_matcher_.GetNumberId();
   candidate->value = "1000000000000000000";
   candidate->content_value = "1000000000000000000";
+  candidate->key = "1000000000000000000";
+  candidate->content_key = "1000000000000000000";
 
   EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
 
@@ -544,16 +553,14 @@ TEST_F(NumberRewriterTest, NumberIs19Digit) {
        "2進数"},
   };
 
-  const size_t kExpectResultSize = arraysize(kExpectResults);
+  constexpr size_t kExpectResultSize = std::size(kExpectResults);
   EXPECT_EQ(kExpectResultSize, seg->candidates_size());
 
   for (size_t i = 0; i < kExpectResultSize; ++i) {
-    SCOPED_TRACE(Util::StringPrintf("i = " SIZE_T_PRINTF_FORMAT, i));
+    SCOPED_TRACE(absl::StrFormat("i = " SIZE_T_PRINTF_FORMAT, i));
     EXPECT_EQ(kExpectResults[i].value, seg->candidate(i).value);
-    EXPECT_EQ(kExpectResults[i].content_value,
-              seg->candidate(i).content_value);
-    EXPECT_EQ(kExpectResults[i].description,
-              seg->candidate(i).description);
+    EXPECT_EQ(kExpectResults[i].content_value, seg->candidate(i).content_value);
+    EXPECT_EQ(kExpectResults[i].description, seg->candidate(i).description);
   }
 
   seg->clear_candidates();
@@ -570,31 +577,26 @@ TEST_F(NumberRewriterTest, NumberIsGreaterThanUInt64Max) {
   candidate->rid = pos_matcher_.GetNumberId();
   candidate->value = "18446744073709551616";  // 2^64
   candidate->content_value = "18446744073709551616";
+  candidate->key = "18446744073709551616";
+  candidate->content_key = "18446744073709551616";
 
   EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
 
   const ExpectResult kExpectResults[] = {
-      {"18446744073709551616",
-       "18446744073709551616",
-       ""},
+      {"18446744073709551616", "18446744073709551616", ""},
       {"一八四四六七四四〇七三七〇九五五一六一六",
-       "一八四四六七四四〇七三七〇九五五一六一六",
-       kKanjiDescription},
+       "一八四四六七四四〇七三七〇九五五一六一六", kKanjiDescription},
       {"１８４４６７４４０７３７０９５５１６１６",
-       "１８４４６７４４０７３７０９５５１６１６",
-       kArabicDescription},
-      {"18,446,744,073,709,551,616",
-       "18,446,744,073,709,551,616",
+       "１８４４６７４４０７３７０９５５１６１６", kArabicDescription},
+      {"18,446,744,073,709,551,616", "18,446,744,073,709,551,616",
        kArabicDescription},
       {"１８，４４６，７４４，０７３，７０９，５５１，６１６",
        "１８，４４６，７４４，０７３，７０９，５５１，６１６",
        kArabicDescription},
-      {"1844京6744兆737億955万1616",
-       "1844京6744兆737億955万1616",
+      {"1844京6744兆737億955万1616", "1844京6744兆737億955万1616",
        kArabicDescription},
       {"１８４４京６７４４兆７３７億９５５万１６１６",
-       "１８４４京６７４４兆７３７億９５５万１６１６",
-       kArabicDescription},
+       "１８４４京６７４４兆７３７億９５５万１６１６", kArabicDescription},
       {"千八百四十四京六千七百四十四兆七百三十七億九百五十五万千六百十六",
        "千八百四十四京六千七百四十四兆七百三十七億九百五十五万千六百十六",
        kKanjiDescription},
@@ -603,16 +605,14 @@ TEST_F(NumberRewriterTest, NumberIsGreaterThanUInt64Max) {
        kOldKanjiDescription},
   };
 
-  const size_t kExpectResultSize = arraysize(kExpectResults);
+  constexpr size_t kExpectResultSize = std::size(kExpectResults);
   EXPECT_EQ(kExpectResultSize, seg->candidates_size());
 
   for (size_t i = 0; i < kExpectResultSize; ++i) {
-    SCOPED_TRACE(Util::StringPrintf("i = " SIZE_T_PRINTF_FORMAT, i));
+    SCOPED_TRACE(absl::StrFormat("i = " SIZE_T_PRINTF_FORMAT, i));
     EXPECT_EQ(kExpectResults[i].value, seg->candidate(i).value);
-    EXPECT_EQ(kExpectResults[i].content_value,
-              seg->candidate(i).content_value);
-    EXPECT_EQ(kExpectResults[i].description,
-              seg->candidate(i).description);
+    EXPECT_EQ(kExpectResults[i].content_value, seg->candidate(i).content_value);
+    EXPECT_EQ(kExpectResults[i].description, seg->candidate(i).description);
   }
 
   seg->clear_candidates();
@@ -629,7 +629,7 @@ TEST_F(NumberRewriterTest, NumberIsGoogol) {
   candidate->rid = pos_matcher_.GetNumberId();
 
   // 10^100 as "100000 ... 0"
-  string input = "1";
+  std::string input = "1";
   for (size_t i = 0; i < 100; ++i) {
     input += "0";
   }
@@ -646,7 +646,7 @@ TEST_F(NumberRewriterTest, NumberIsGoogol) {
   EXPECT_EQ("", seg->candidate(0).description);
 
   // 10^100 as "一〇〇〇〇〇 ... 〇"
-  string expected2 = "一";
+  std::string expected2 = "一";
   for (size_t i = 0; i < 100; ++i) {
     expected2 += "〇";
   }
@@ -655,7 +655,7 @@ TEST_F(NumberRewriterTest, NumberIsGoogol) {
   EXPECT_EQ(kKanjiDescription, seg->candidate(1).description);
 
   // 10^100 as "１０００００ ... ０"
-  string expected3 = "１";
+  std::string expected3 = "１";
   for (size_t i = 0; i < 100; ++i) {
     expected3 += "０";
   }
@@ -664,7 +664,7 @@ TEST_F(NumberRewriterTest, NumberIsGoogol) {
   EXPECT_EQ(kArabicDescription, seg->candidate(2).description);
 
   // 10,000, ... ,000
-  string expected1 = "10";
+  std::string expected1 = "10";
   for (size_t i = 0; i < 100 / 3; ++i) {
     expected1 += ",000";
   }
@@ -673,7 +673,7 @@ TEST_F(NumberRewriterTest, NumberIsGoogol) {
   EXPECT_EQ(kArabicDescription, seg->candidate(3).description);
 
   // "１０，０００， ... ，０００"
-  string expected4 = "１０";  // "１０"
+  std::string expected4 = "１０";  // "１０"
   for (size_t i = 0; i < 100 / 3; ++i) {
     expected4 += "，０００";
   }
@@ -805,7 +805,7 @@ TEST_F(NumberRewriterTest, SeparatedArabicsTest) {
       {"1234.5", "1,234.5", "１，２３４．５"},
   };
 
-  for (size_t i = 0; i < arraysize(kSuccess); ++i) {
+  for (size_t i = 0; i < std::size(kSuccess); ++i) {
     Segments segments;
     Segment *seg = segments.push_back_segment();
     Segment::Candidate *candidate = seg->add_candidate();
@@ -828,7 +828,7 @@ TEST_F(NumberRewriterTest, SeparatedArabicsTest) {
       {"0000", "0,000", "０，０００"},
   };
 
-  for (size_t i = 0; i < arraysize(kFail); ++i) {
+  for (size_t i = 0; i < std::size(kFail); ++i) {
     Segments segments;
     Segment *seg = segments.push_back_segment();
     Segment::Candidate *candidate = seg->add_candidate();
@@ -851,7 +851,7 @@ TEST_F(NumberRewriterTest, SeparatedArabicsTest) {
 // - POS: GeneralNoun (not *Number*)
 // In this case, NumberRewriter should not clear
 // Segment::Candidate::USER_DICTIONARY bit in the base candidate.
-TEST_F(NumberRewriterTest, PreserveUserDictionaryAttibute) {
+TEST_F(NumberRewriterTest, PreserveUserDictionaryAttribute) {
   std::unique_ptr<NumberRewriter> number_rewriter(CreateNumberRewriter());
   {
     Segments segments;
@@ -867,9 +867,8 @@ TEST_F(NumberRewriterTest, PreserveUserDictionaryAttibute) {
       candidate->content_value = candidate->value;
       candidate->cost = 5925;
       candidate->wcost = 5000;
-      candidate->attributes =
-          Segment::Candidate::USER_DICTIONARY |
-          Segment::Candidate::NO_VARIANTS_EXPANSION;
+      candidate->attributes = Segment::Candidate::USER_DICTIONARY |
+                              Segment::Candidate::NO_VARIANTS_EXPANSION;
     }
 
     EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
@@ -913,7 +912,7 @@ TEST_F(NumberRewriterTest, NonNumberNounTest) {
   std::unique_ptr<NumberRewriter> number_rewriter(CreateNumberRewriter());
   Segments segments;
   Segment *segment = segments.push_back_segment();
-  segment->set_key("もず");
+  segment->set_key("");
   Segment::Candidate *cand = segment->add_candidate();
   cand->Init();
   cand->key = "もず";
@@ -925,10 +924,43 @@ TEST_F(NumberRewriterTest, NonNumberNounTest) {
   EXPECT_FALSE(number_rewriter->Rewrite(default_request_, &segments));
 }
 
+TEST_F(NumberRewriterTest, RewriteArabicNumberTest) {
+  std::unique_ptr<NumberRewriter> number_rewriter(CreateNumberRewriter());
+  Segments segments;
+  Segment *segment = segments.push_back_segment();
+  segment->set_key("いち");
+  struct CandData {
+    const char *value;
+    int pos_id;
+  };
+  const CandData kCandList[] = {
+      {"1", pos_matcher_.GetNumberId()},
+      {"一", pos_matcher_.GetNumberId()},
+      {"位置", pos_matcher_.GetGeneralNounId()},
+      {"イチ", pos_matcher_.GetGeneralNounId()},
+      {"壱", pos_matcher_.GetGeneralNounId()},
+  };
+
+  for (const auto &cand_data : kCandList) {
+    Segment::Candidate *cand = segment->add_candidate();
+    cand->Init();
+    cand->key = "いち";
+    cand->content_key = cand->key;
+    cand->value = cand_data.value;
+    cand->content_value = cand->value;
+    cand->lid = cand_data.pos_id;
+    cand->rid = cand_data.pos_id;
+  }
+  EXPECT_TRUE(number_rewriter->Rewrite(default_request_, &segments));
+  EXPECT_GT(segment->candidates_size(), 1);
+  EXPECT_EQ("一", segment->candidate(0).value);
+  EXPECT_EQ("位置", segment->candidate(1).value);
+}
+
 TEST_F(NumberRewriterTest, RewriteForPartialSuggestion_b16765535) {
   std::unique_ptr<NumberRewriter> number_rewriter(CreateNumberRewriter());
 
-  const char kBubun[] = "部分";
+  constexpr char kBubun[] = "部分";
   Segments segments;
   {
     Segment *seg = segments.push_back_segment();
@@ -960,16 +992,16 @@ TEST_F(NumberRewriterTest, RewriteForPartialSuggestion_b16765535) {
   ASSERT_LE(2, seg.candidates_size());
   for (size_t i = 0; i < seg.candidates_size(); ++i) {
     const Segment::Candidate &candidate = seg.candidate(i);
-    EXPECT_TRUE(Util::StartsWith(candidate.description, kBubun));
-    EXPECT_TRUE(
-        candidate.attributes & Segment::Candidate::PARTIALLY_KEY_CONSUMED);
+    EXPECT_TRUE(absl::StartsWith(candidate.description, kBubun));
+    EXPECT_TRUE(candidate.attributes &
+                Segment::Candidate::PARTIALLY_KEY_CONSUMED);
   }
 }
 
 TEST_F(NumberRewriterTest, RewriteForPartialSuggestion_b19470020) {
   std::unique_ptr<NumberRewriter> number_rewriter(CreateNumberRewriter());
 
-  const char kBubun[] = "部分";
+  constexpr char kBubun[] = "部分";
   Segments segments;
   {
     Segment *seg = segments.push_back_segment();
@@ -999,9 +1031,9 @@ TEST_F(NumberRewriterTest, RewriteForPartialSuggestion_b19470020) {
     }
     found_halfwidth = true;
     EXPECT_EQ(3, candidate.consumed_key_size);
-    EXPECT_TRUE(Util::StartsWith(candidate.description, kBubun));
-    EXPECT_TRUE(
-        candidate.attributes & Segment::Candidate::PARTIALLY_KEY_CONSUMED);
+    EXPECT_TRUE(absl::StartsWith(candidate.description, kBubun));
+    EXPECT_TRUE(candidate.attributes &
+                Segment::Candidate::PARTIALLY_KEY_CONSUMED);
   }
   EXPECT_TRUE(found_halfwidth);
 }

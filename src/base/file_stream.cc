@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,89 +36,21 @@
 
 #include <string>
 
-#ifdef MOZC_USE_PEPPER_FILE_IO
-#include "base/logging.h"
-#include "base/pepper_file_util.h"
-#endif  // MOZC_USE_PEPPER_FILE_IO
-
 namespace mozc {
-
-#ifdef MOZC_USE_PEPPER_FILE_IO
-
-InputFileStream::InputFileStream()
-    : std::istream(nullptr) {
-  init(&string_buffer_);
-}
-
-InputFileStream::InputFileStream(const char* filename,
-                                 ios_base::openmode mode)
-    : std::istream(nullptr) {
-  init(&string_buffer_);
-  InputFileStream::open(filename, mode);
-}
-
-void InputFileStream::open(const char* filename, ios_base::openmode mode) {
-  string buffer;
-  const bool ret = PepperFileUtil::ReadBinaryFile(filename, &buffer);
-  if (ret) {
-    string_buffer_.sputn(buffer.c_str(), buffer.length());
-  } else {
-    setstate(ios_base::failbit);
-  }
-}
-
-void InputFileStream::close() {}
-
-OutputFileStream::OutputFileStream()
-    : ostream(),
-      write_done_(false) {
-  init(&string_buffer_);
-}
-
-OutputFileStream::OutputFileStream(const char* filename,
-                                   ios_base::openmode mode)
-    : ostream(),
-      write_done_(false) {
-  init(&string_buffer_);
-  OutputFileStream::open(filename, mode);
-}
-
-OutputFileStream::~OutputFileStream() {
-  close();
-}
-
-void OutputFileStream::open(const char* filename, ios_base::openmode mode) {
-  filename_ = filename;
-}
-
-void OutputFileStream::close() {
-  if (write_done_) {
-    return;
-  }
-  if (!PepperFileUtil::WriteBinaryFile(filename_, string_buffer_.str())) {
-    LOG(ERROR) << "write error filename: \"" << filename_ << "\""
-               << "size:" << string_buffer_.str().length();
-  } else {
-    write_done_ = true;
-  }
-}
-
-# else  // MOZC_USE_PEPPER_FILE_IO
-
 namespace {
 
 #ifdef OS_WIN
-wstring ToPlatformString(const char* filename) {
+std::wstring ToPlatformString(const char* filename) {
   // Since Windows uses UTF-16 for internationalized file names, we should
   // convert the encoding of the given |filename| from UTF-8 to UTF-16.
-  // NOTE: To avoid circular dependency, |Util::UTF8ToWide| shouldn't be used
+  // NOTE: To avoid circular dependency, |Util::Utf8ToWide| shouldn't be used
   // here.
   std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf8_to_wide;
   return utf8_to_wide.from_bytes(filename);
 }
-#else  // OS_WIN
-string ToPlatformString(const char* filename) {
-  return string(filename);
+#else   // OS_WIN
+std::string ToPlatformString(const char* filename) {
+  return std::string(filename);
 }
 #endif  // OS_WIN or not
 
@@ -127,41 +59,27 @@ string ToPlatformString(const char* filename) {
 InputFileStream::InputFileStream() {}
 
 InputFileStream::InputFileStream(const char* filename,
-                                 ios_base::openmode mode) {
+                                 std::ios_base::openmode mode) {
   InputFileStream::open(filename, mode);
 }
 
-void InputFileStream::open(const char* filename, ios_base::openmode mode) {
+void InputFileStream::open(const char* filename, std::ios_base::openmode mode) {
   std::ifstream::open(ToPlatformString(filename), mode);
 }
 
 OutputFileStream::OutputFileStream() {}
 
 OutputFileStream::OutputFileStream(const char* filename,
-                                   ios_base::openmode mode) {
+                                   std::ios_base::openmode mode) {
   OutputFileStream::open(filename, mode);
 }
 
-void OutputFileStream::open(const char* filename, ios_base::openmode mode) {
+void OutputFileStream::open(const char* filename,
+                            std::ios_base::openmode mode) {
   std::ofstream::open(ToPlatformString(filename), mode);
 }
-#endif  // MOZC_USE_PEPPER_FILE_IO
 
 // Common implementations.
-
-void InputFileStream::ReadToString(string *s) {
-  seekg(0, end);
-  const size_t size = tellg();
-  seekg(0, beg);
-  s->resize(size);
-  read(&(*s)[0], size);
-}
-
-string InputFileStream::Read() {
-  string s;
-  ReadToString(&s);
-  return s;
-}
 
 void InputFileStream::UnusedKeyMethod() {}   // go/definekeymethod
 void OutputFileStream::UnusedKeyMethod() {}  // go/definekeymethod

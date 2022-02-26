@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,9 +30,9 @@
 // Tool to pack multiple files into one file.
 //
 // Usage
-// $ ./path/to/artifacts/dataset_writer_main \
-//   --magic=\xNN\xNN\xNN \
-//   --output=/path/to/output \
+// $ ./path/to/artifacts/dataset_writer_main
+//   --magic=\xNN\xNN\xNN
+//   --output=/path/to/output
 //   [arg1, [arg2, ...]]
 //
 // Here, each argument has the following form:
@@ -47,51 +47,55 @@
 
 #include "base/file_stream.h"
 #include "base/file_util.h"
-#include "base/flags.h"
 #include "base/init_mozc.h"
 #include "base/logging.h"
 #include "base/number_util.h"
+#include "base/status.h"
 #include "base/util.h"
 #include "data_manager/dataset_writer.h"
+#include "absl/flags/flag.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_split.h"
 
-DEFINE_string(magic, "", "Hex-encoded magic number to be embedded");
-DEFINE_string(output, "", "Output file");
+ABSL_FLAG(std::string, magic, "", "Hex-encoded magic number to be embedded");
+ABSL_FLAG(std::string, output, "", "Output file");
 
 int main(int argc, char **argv) {
-  mozc::InitMozc(argv[0], &argc, &argv, true);
+  mozc::InitMozc(argv[0], &argc, &argv);
 
-  string magic;
-  CHECK(mozc::Util::Unescape(FLAGS_magic, &magic))
-      << "magic number is not a proper hex-escaped string: " << FLAGS_magic;
+  std::string magic;
+  CHECK(mozc::Util::Unescape(absl::GetFlag(FLAGS_magic), &magic))
+      << "magic number is not a proper hex-escaped string: "
+      << absl::GetFlag(FLAGS_magic);
 
   struct Input {
-    Input(const string &n, int a, const string &f)
+    Input(const std::string &n, int a, const std::string &f)
         : name(n), alignment(a), filename(f) {}
 
-    string name;
+    std::string name;
     int alignment;
-    string filename;
+    std::string filename;
   };
 
   std::vector<Input> inputs;
   for (int i = 1; i < argc; ++i) {
     // InitMozc doesn't remove flags from argv, so ignore flags here.
-    if (mozc::Util::StartsWith(argv[i], "--")) {
+    if (absl::StartsWith(argv[i], "--")) {
       continue;
     }
-    std::vector<string> params;
-    mozc::Util::SplitStringUsing(argv[i], ":", &params);
+    std::vector<std::string> params =
+        absl::StrSplit(argv[i], ':', absl::SkipEmpty());
     CHECK_EQ(3, params.size()) << "Unexpected arg[" << i << "] = " << argv[i];
     inputs.emplace_back(params[0], mozc::NumberUtil::SimpleAtoi(params[1]),
                         params[2]);
   }
 
-  CHECK(!FLAGS_output.empty()) << "--output is required";
+  CHECK(!absl::GetFlag(FLAGS_output).empty()) << "--output is required";
 
   // DataSetWriter directly writes to the specified stream, so if it fails for
   // an input, the output contains a partial result.  To avoid such partial file
   // creation, write to a temporary file then rename it.
-  const string tmpfile = FLAGS_output + ".tmp";
+  const std::string tmpfile = absl::GetFlag(FLAGS_output) + ".tmp";
   {
     mozc::DataSetWriter writer(magic);
     for (const auto &input : inputs) {
@@ -104,8 +108,10 @@ int main(int argc, char **argv) {
     writer.Finish(&output);
     output.close();
   }
-  CHECK(mozc::FileUtil::AtomicRename(tmpfile, FLAGS_output))
-      << "Failed to rename " << tmpfile << " to " << FLAGS_output;
+  absl::Status s =
+      mozc::FileUtil::AtomicRename(tmpfile, absl::GetFlag(FLAGS_output));
+  CHECK_OK(s) << ": Atomic rename failed. from: " << tmpfile
+              << " to: " << absl::GetFlag(FLAGS_output);
 
   return 0;
 }

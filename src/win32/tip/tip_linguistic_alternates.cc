@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,9 +32,9 @@
 #include <Windows.h>
 #define _ATL_NO_AUTOMATIC_NAMESPACE
 #define _WTL_NO_AUTOMATIC_NAMESPACE
+#include <Ctffunc.h>
 #include <atlbase.h>
 #include <atlcom.h>
-#include <Ctffunc.h>
 
 #include <memory>
 #include <vector>
@@ -47,7 +47,6 @@
 #include "win32/tip/tip_text_service.h"
 
 using ::ATL::CComPtr;
-using ::std::unique_ptr;
 
 namespace mozc {
 namespace win32 {
@@ -56,8 +55,7 @@ namespace tsf {
 namespace {
 
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
-const wchar_t kSearchCandidateProviderName[] =
-    L"Google Japanese Input";
+const wchar_t kSearchCandidateProviderName[] = L"Google Japanese Input";
 #else
 const wchar_t kSearchCandidateProviderName[] = L"Mozc";
 #endif
@@ -66,9 +64,7 @@ class GetLinguisticAlternatesImpl : public ITfFnGetLinguisticAlternates {
  public:
   GetLinguisticAlternatesImpl(TipTextService *text_service,
                               TipQueryProvider *provider)
-      : text_service_(text_service),
-        provider_(provider) {
-  }
+      : text_service_(text_service), provider_(provider) {}
 
  private:
   // The IUnknown interface methods.
@@ -95,9 +91,7 @@ class GetLinguisticAlternatesImpl : public ITfFnGetLinguisticAlternates {
     return S_OK;
   }
 
-  virtual ULONG STDMETHODCALLTYPE AddRef() {
-    return ref_count_.AddRefImpl();
-  }
+  virtual ULONG STDMETHODCALLTYPE AddRef() { return ref_count_.AddRefImpl(); }
 
   virtual ULONG STDMETHODCALLTYPE Release() {
     const ULONG count = ref_count_.ReleaseImpl();
@@ -117,9 +111,8 @@ class GetLinguisticAlternatesImpl : public ITfFnGetLinguisticAlternates {
   }
 
   // The ITfFnGetLinguisticAlternates interface method.
-  virtual HRESULT STDMETHODCALLTYPE GetAlternates(
-      ITfRange *range,
-      ITfCandidateList **candidate_list) {
+  virtual HRESULT STDMETHODCALLTYPE
+  GetAlternates(ITfRange *range, ITfCandidateList **candidate_list) {
     if (range == nullptr) {
       return E_INVALIDARG;
     }
@@ -127,11 +120,11 @@ class GetLinguisticAlternatesImpl : public ITfFnGetLinguisticAlternates {
       return E_INVALIDARG;
     }
     *candidate_list = nullptr;
-    wstring query;
+    std::wstring query;
     if (!TipEditSession::GetTextSync(text_service_, range, &query)) {
       return E_FAIL;
     }
-    std::vector<wstring> candidates;
+    std::vector<std::wstring> candidates;
     if (!provider_->Query(query, TipQueryProvider::kDefault, &candidates)) {
       return E_FAIL;
     }
@@ -142,7 +135,7 @@ class GetLinguisticAlternatesImpl : public ITfFnGetLinguisticAlternates {
 
   TipRefCount ref_count_;
   CComPtr<TipTextService> text_service_;
-  unique_ptr<TipQueryProvider> provider_;
+  std::unique_ptr<TipQueryProvider> provider_;
 
   DISALLOW_COPY_AND_ASSIGN(GetLinguisticAlternatesImpl);
 };

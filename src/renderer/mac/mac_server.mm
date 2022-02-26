@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,47 +35,41 @@
 #include "renderer/mac/mac_server.h"
 
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "base/util.h"
 #include "protocol/commands.pb.h"
-#include "renderer/mac/mac_server_send_command.h"
 #include "renderer/mac/CandidateController.h"
+#include "renderer/mac/mac_server_send_command.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace renderer {
 namespace mac {
 
 namespace {
-OSStatus EventHandler(EventHandlerCallRef handlerCallRef,
-                      EventRef carbonEvent,
-                      void *userData) {
+OSStatus EventHandler(EventHandlerCallRef handlerCallRef, EventRef carbonEvent, void *userData) {
   MacServer *server = reinterpret_cast<MacServer *>(userData);
   server->RunExecCommand();
   return noErr;
 }
 }
 
-MacServer::MacServer(int argc, const char **argv)
-    : argc_(argc),
-      argv_(argv) {
+MacServer::MacServer(int argc, const char **argv) : argc_(argc), argv_(argv) {
   pthread_cond_init(&event_, nullptr);
   EventHandlerUPP handler = ::NewEventHandlerUPP(EventHandler);
-  EventTypeSpec spec[] = { { kEventClassApplication, 0 } };
-  ::InstallEventHandler(GetApplicationEventTarget(), handler,
-                        arraysize(spec), spec, this, nullptr);
+  EventTypeSpec spec[] = {{kEventClassApplication, 0}};
+  ::InstallEventHandler(GetApplicationEventTarget(), handler, arraysize(spec), spec, this, nullptr);
 }
 
-bool MacServer::AsyncExecCommand(string *proto_message) {
+bool MacServer::AsyncExecCommand(std::string *proto_message) {
   {
-    scoped_lock l(&mutex_);
+    absl::MutexLock l(&mutex_);
     message_.swap(*proto_message);
     ::pthread_cond_signal(&event_);
   }
   delete proto_message;
 
   EventRef event_ref = nullptr;
-  ::CreateEvent(nullptr, kEventClassApplication, 0, 0,
-              kEventAttributeNone, &event_ref);
+  ::CreateEvent(nullptr, kEventClassApplication, 0, 0, kEventAttributeNone, &event_ref);
   ::PostEventToQueue(::GetMainEventQueue(), event_ref, kEventPriorityHigh);
   ::ReleaseEvent(event_ref);
 
@@ -83,10 +77,10 @@ bool MacServer::AsyncExecCommand(string *proto_message) {
 }
 
 void MacServer::RunExecCommand() {
-  string message;
+  std::string message;
   {
-    scoped_lock l(&mutex_);
-      message.swap(message_);
+    absl::MutexLock l(&mutex_);
+    message.swap(message_);
   }
   commands::RendererCommand command;
   if (!command.ParseFromString(message)) {
@@ -102,9 +96,7 @@ int MacServer::StartMessageLoop() {
   return 0;
 }
 
-void MacServer::Init() {
-  NSApplicationLoad();
-}
+void MacServer::Init() { NSApplicationLoad(); }
 }  // namespace mozc::renderer::mac
 }  // namespace mozc::renderer
 }  // namespace mozc

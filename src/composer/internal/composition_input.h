@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,45 +32,59 @@
 
 #include <string>
 
-#include "base/port.h"
+#include "base/protobuf/repeated_field.h"
+#include "protocol/commands.pb.h"
 
 namespace mozc {
 namespace composer {
 
-class TransliteratorInterface;
-
-class CompositionInput {
+class CompositionInput final {
  public:
-  CompositionInput();
-  virtual ~CompositionInput();
+  using ProbableKeyEvent = commands::KeyEvent::ProbableKeyEvent;
+  using ProbableKeyEvents = protobuf::RepeatedPtrField<ProbableKeyEvent>;
+
+  CompositionInput() = default;
+
+  CompositionInput(const CompositionInput &x) = default;
+  CompositionInput &operator=(const CompositionInput &x) = default;
+
+  ~CompositionInput() = default;
+
+  bool Init(const commands::KeyEvent &key_event, bool use_typing_correction,
+            bool is_new_input);
+  void InitFromRaw(const std::string &raw, bool is_new_input);
+  void InitFromRawAndConv(const std::string &raw, const std::string &conversion,
+                          bool is_new_input);
 
   void Clear();
   bool Empty() const;
-  void CopyFrom(const CompositionInput &input);
 
-  const string &raw() const;
-  string *mutable_raw();
-  void set_raw(const string &raw);
+  const std::string &raw() const { return raw_; }
+  std::string *mutable_raw() { return &raw_; }
+  void set_raw(const std::string &raw) { raw_ = raw; }
 
-  const string &conversion() const;
-  string *mutable_conversion();
-  void set_conversion(const string &conversion);
-  bool has_conversion() const;
+  const std::string &conversion() const;
+  std::string *mutable_conversion();
+  void set_conversion(const std::string &conversion);
 
-  bool is_new_input() const;
-  void set_is_new_input(bool is_new_input);
+  bool has_conversion() const { return has_conversion_; }
 
-  const TransliteratorInterface *transliterator() const;
-  void set_transliterator(const TransliteratorInterface *transliterator);
+  const ProbableKeyEvents &probable_key_events() const {
+    return probable_key_events_;
+  }
+  void set_probable_key_events(const ProbableKeyEvents &probable_key_events) {
+    probable_key_events_ = probable_key_events;
+  }
+
+  bool is_new_input() const { return is_new_input_; }
+  void set_is_new_input(bool is_new_input) { is_new_input_ = is_new_input; }
 
  private:
-  string raw_;
-  string conversion_;
-  bool has_conversion_;
-  bool is_new_input_;
-  const TransliteratorInterface *transliterator_;
-
-  DISALLOW_COPY_AND_ASSIGN(CompositionInput);
+  std::string raw_;
+  std::string conversion_;
+  ProbableKeyEvents probable_key_events_;
+  bool has_conversion_ = false;
+  bool is_new_input_ = false;
 };
 
 }  // namespace composer

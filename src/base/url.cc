@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -39,55 +39,54 @@
 
 namespace mozc {
 namespace {
-const char kSurveyBaseURL[] =
+constexpr char kSurveyBaseUrl[] =
     "http://www.google.com/support/ime/japanese/bin/request.py";
-const char kSurveyVersionEntry[] = "version";
-const char kSurveyContactTypeEntry[] = "contact_type";
-const char kSurveyContactType[] = "surveyime";
-const char kSurveyHtmlLanguageEntry[] = "hl";
-const char kSurveyHtmlLanguage[] = "jp";
-const char kSurveyFormatEntry[] = "format";
-const char kSurveyFormat[] = "inproduct";
+constexpr char kSurveyVersionEntry[] = "version";
+constexpr char kSurveyContactTypeEntry[] = "contact_type";
+constexpr char kSurveyContactType[] = "surveyime";
+constexpr char kSurveyHtmlLanguageEntry[] = "hl";
+constexpr char kSurveyHtmlLanguage[] = "jp";
+constexpr char kSurveyFormatEntry[] = "format";
+constexpr char kSurveyFormat[] = "inproduct";
 
-
-class URLImpl {
+class UrlImpl {
  public:
-  URLImpl() {
-    InitUninstallationSurveyURL();
-  }
+  UrlImpl() { InitUninstallationSurveyUrl(); }
 
-  bool GetUninstallationSurveyURL(const string &version, string *url) const {
+  bool GetUninstallationSurveyUrl(const std::string &version,
+                                  std::string *url) const {
     DCHECK(url);
     *url = uninstallation_survey_url_;
     if (!version.empty()) {
       *url += "&";
-      std::vector<std::pair<string, string> > params;
+      std::vector<std::pair<std::string, std::string> > params;
       params.push_back(std::make_pair(kSurveyVersionEntry, version));
-      Util::AppendCGIParams(params, url);
+      Util::AppendCgiParams(params, url);
     }
     return true;
   }
 
  private:
-  void InitUninstallationSurveyURL() {
+  void InitUninstallationSurveyUrl() {
     uninstallation_survey_url_.clear();
-    uninstallation_survey_url_ = kSurveyBaseURL;
+    uninstallation_survey_url_ = kSurveyBaseUrl;
     uninstallation_survey_url_ += "?";
-    std::vector<std::pair<string, string> > params;
+    std::vector<std::pair<std::string, std::string> > params;
     params.push_back(
         std::make_pair(kSurveyContactTypeEntry, kSurveyContactType));
     params.push_back(
         std::make_pair(kSurveyHtmlLanguageEntry, kSurveyHtmlLanguage));
     params.push_back(std::make_pair(kSurveyFormatEntry, kSurveyFormat));
-    Util::AppendCGIParams(params, &uninstallation_survey_url_);
+    Util::AppendCgiParams(params, &uninstallation_survey_url_);
   }
 
-  string uninstallation_survey_url_;
+  std::string uninstallation_survey_url_;
 };
 }  // namespace
 
-bool URL::GetUninstallationSurveyURL(const string &version, string *url) {
-  return Singleton<URLImpl>::get()->GetUninstallationSurveyURL(version, url);
+bool Url::GetUninstallationSurveyUrl(const std::string &version,
+                                     std::string *url) {
+  return Singleton<UrlImpl>::get()->GetUninstallationSurveyUrl(version, url);
 }
 
 }  // namespace mozc

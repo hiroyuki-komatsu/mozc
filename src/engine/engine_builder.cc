@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@
 
 #include "engine/engine_builder.h"
 
+#include <filesystem>
 #include <memory>
 #include <utility>
 
@@ -38,6 +39,7 @@
 #include "data_manager/data_manager.h"
 #include "engine/engine.h"
 #include "protocol/engine_builder.pb.h"
+#include "absl/status/status.h"
 
 namespace mozc {
 namespace {
@@ -60,6 +62,42 @@ EngineReloadResponse::Status ConvertStatus(DataManager::Status status) {
   return EngineReloadResponse::UNKNOWN_ERROR;
 }
 
+absl::Status LinkOrCopyFile(const std::string &src_path,
+                            const std::string &dst_path) {
+  absl::StatusOr<bool> is_equiv = FileUtil::IsEquivalent(src_path, dst_path);
+  if (!is_equiv.ok()) {
+    LOG(WARNING) << "Cannot test file equivalence: " << is_equiv.status();
+    // Try hard link or copy.
+  } else if (*is_equiv) {
+    // IsEquivalent() checks if src and dst are the same path or sym/hard link.
+    // This does not check the contents of the files.
+    return absl::OkStatus();
+  }
+
+  const std::string tmp_dst_path = dst_path + ".tmp";
+  FileUtil::UnlinkOrLogError(tmp_dst_path);
+  if (absl::Status s = FileUtil::CreateHardLink(src_path, tmp_dst_path);
+      !s.ok()) {
+    LOG(WARNING) << "Cannot create hardlink from " << src_path << " to "
+                 << tmp_dst_path << ": " << s;
+    // If an error happens, fallback to file copy.
+    if (absl::Status s = FileUtil::CopyFile(src_path, tmp_dst_path); !s.ok()) {
+      return absl::Status(
+          s.code(), absl::StrCat("Cannot copy file. from: ", src_path,
+                                 " to: ", tmp_dst_path, ": ", s.message()));
+    }
+  }
+
+  if (absl::Status s = FileUtil::AtomicRename(tmp_dst_path, dst_path);
+      !s.ok()) {
+    return absl::Status(
+        s.code(), absl::StrCat("AtomicRename failed: ", s.message(),
+                               "; from: ", tmp_dst_path, ", to: ", dst_path));
+  }
+
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 class EngineBuilder::Preparator : public Thread {
@@ -73,9 +111,9 @@ class EngineBuilder::Preparator : public Thread {
   void Run() override {
     const EngineReloadRequest &request = response_.request();
 
-    std::unique_ptr<DataManager> tmp_data_manager(new DataManager());
-    const DataManager::Status status = InitDataManager(request,
-                                                       tmp_data_manager.get());
+    auto tmp_data_manager = std::make_unique<DataManager>();
+    const DataManager::Status status =
+        InitDataManager(request, tmp_data_manager.get());
     if (status != DataManager::Status::OK) {
       LOG(ERROR) << "Failed to load data [" << status << "] "
                  << request.Utf8DebugString();
@@ -83,12 +121,14 @@ class EngineBuilder::Preparator : public Thread {
       return;
     }
 
-    if (request.has_install_location() &&
-        !FileUtil::AtomicRename(request.file_path(),
-                                request.install_location())) {
-      LOG(ERROR) << "Atomic rename faild: " << request.Utf8DebugString();
-      response_.set_status(EngineReloadResponse::INSTALL_FAILURE);
-      return;
+    if (request.has_install_location()) {
+      if (absl::Status s =
+              LinkOrCopyFile(request.file_path(), request.install_location());
+          !s.ok()) {
+        LOG(ERROR) << "Copy faild: " << request.Utf8DebugString() << ": " << s;
+        response_.set_status(EngineReloadResponse::INSTALL_FAILURE);
+        return;
+      }
     }
 
     response_.set_status(EngineReloadResponse::RELOAD_READY);
@@ -124,7 +164,7 @@ void EngineBuilder::PrepareAsync(const EngineReloadRequest &request,
     preparator_->Join();
     VLOG(1) << "Previously loaded data is discarded";
   }
-  preparator_.reset(new Preparator(request));
+  preparator_ = std::make_unique<Preparator>(request);
   preparator_->SetJoinable(true);
   preparator_->Start("EngineBuilder::Preparator");
   response->set_status(EngineReloadResponse::ACCEPTED);
@@ -148,15 +188,12 @@ void EngineBuilder::GetResponse(EngineReloadResponse *response) const {
 }
 
 std::unique_ptr<EngineInterface> EngineBuilder::BuildFromPreparedData() {
-  std::unique_ptr<EngineInterface> engine;
-
-  if (!HasResponse() ||
-      !preparator_->data_manager_ ||
+  if (!HasResponse() || !preparator_->data_manager_ ||
       preparator_->response_.status() != EngineReloadResponse::RELOAD_READY) {
     LOG(ERROR) << "Build() is called in invalid state";
-    return engine;
+    return nullptr;
   }
-
+  absl::StatusOr<std::unique_ptr<Engine>> engine;
   switch (preparator_->response_.request().engine_type()) {
     case EngineReloadRequest::DESKTOP:
       engine =
@@ -171,7 +208,11 @@ std::unique_ptr<EngineInterface> EngineBuilder::BuildFromPreparedData() {
       break;
   }
 
-  return engine;
+  if (!engine.ok()) {
+    LOG(ERROR) << engine.status();
+    return nullptr;
+  }
+  return *std::move(engine);
 }
 
 void EngineBuilder::Clear() {

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,9 @@
 #define MOZC_RENDERER_MAC_MAC_VIEW_UTIL_H_
 
 #import <Cocoa/Cocoa.h>
+
+#include <string>
+
 #include "base/coordinates.h"
 #include "protocol/renderer_style.pb.h"
 
@@ -44,7 +47,8 @@ class MacViewUtil {
   static NSColor *ToNSColor(
       const mozc::renderer::RendererStyle::RGBAColor &color);
 
-  static NSAttributedString *ToNSAttributedString(const string &str,
+  static NSAttributedString *ToNSAttributedString(
+      const std::string &str,
       const mozc::renderer::RendererStyle::TextStyle &style);
 
   static NSPoint ToNSPoint(const mozc::Point &point);

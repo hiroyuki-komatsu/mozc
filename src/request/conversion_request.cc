@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,30 +36,21 @@
 namespace mozc {
 
 ConversionRequest::ConversionRequest()
-    : composer_(NULL),
-      request_(&commands::Request::default_instance()),
-      config_(&config::ConfigHandler::DefaultConfig()),
-      use_actual_converter_for_realtime_conversion_(false),
-      composer_key_selection_(CONVERSION_KEY),
-      skip_slow_rewriters_(false),
-      create_partial_candidates_(false) {}
+    : ConversionRequest(nullptr, &commands::Request::default_instance(),
+                        &config::ConfigHandler::DefaultConfig()) {}
 
 ConversionRequest::ConversionRequest(const composer::Composer *c,
                                      const commands::Request *request,
                                      const config::Config *config)
-    : composer_(c),
-      request_(request),
-      config_(config),
-      use_actual_converter_for_realtime_conversion_(false),
-      composer_key_selection_(CONVERSION_KEY),
-      skip_slow_rewriters_(false),
-      create_partial_candidates_(false) {}
+    : composer_(c), request_(request), config_(config) {}
 
-ConversionRequest::~ConversionRequest() {}
+ConversionRequest::ConversionRequest(const ConversionRequest &x) = default;
+ConversionRequest &ConversionRequest::operator=(const ConversionRequest &x) =
+    default;
 
-bool ConversionRequest::has_composer() const {
-  return composer_ != NULL;
-}
+ConversionRequest::~ConversionRequest() = default;
+
+bool ConversionRequest::has_composer() const { return composer_ != nullptr; }
 
 const composer::Composer &ConversionRequest::composer() const {
   DCHECK(composer_);
@@ -128,15 +119,42 @@ bool ConversionRequest::IsKanaModifierInsensitiveConversion() const {
          config_->use_kana_modifier_insensitive_conversion();
 }
 
-void ConversionRequest::CopyFrom(const ConversionRequest &request) {
-  composer_ = request.composer_;
-  request_ = request.request_;
-  config_ = request.config_;
-  use_actual_converter_for_realtime_conversion_ =
-      request.use_actual_converter_for_realtime_conversion_;
-  composer_key_selection_ = request.composer_key_selection_;
-  skip_slow_rewriters_ = request.skip_slow_rewriters_;
-  create_partial_candidates_ = request.create_partial_candidates_;
+size_t ConversionRequest::max_conversion_candidates_size() const {
+  return max_conversion_candidates_size_;
+}
+
+void ConversionRequest::set_max_conversion_candidates_size(size_t value) {
+  max_conversion_candidates_size_ = value;
+}
+
+size_t ConversionRequest::max_user_history_prediction_candidates_size() const {
+  return max_user_history_prediction_candidates_size_;
+}
+
+void ConversionRequest::set_max_user_history_prediction_candidates_size(
+    size_t value) {
+  max_user_history_prediction_candidates_size_ = value;
+}
+
+size_t
+ConversionRequest::max_user_history_prediction_candidates_size_for_zero_query()
+    const {
+  return max_user_history_prediction_candidates_size_for_zero_query_;
+}
+
+void ConversionRequest::
+    set_max_user_history_prediction_candidates_size_for_zero_query(
+        size_t value) {
+  max_user_history_prediction_candidates_size_for_zero_query_ = value;
+}
+
+size_t ConversionRequest::max_dictionary_prediction_candidates_size() const {
+  return max_dictionary_prediction_candidates_size_;
+}
+
+void ConversionRequest::set_max_dictionary_prediction_candidates_size(
+    size_t value) {
+  max_dictionary_prediction_candidates_size_ = value;
 }
 
 }  // namespace mozc

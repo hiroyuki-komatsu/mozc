@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@
 #include <memory>
 
 #include "engine/engine.h"
+#include "absl/status/statusor.h"
 
 namespace mozc {
 
@@ -42,7 +43,7 @@ class MockDataEngineFactory {
  public:
   // Creates an instance of Engine class. The caller is responsible for deleting
   // the returned object.
-  static Engine *Create();
+  static absl::StatusOr<std::unique_ptr<Engine>> Create();
 };
 
 }  // namespace mozc

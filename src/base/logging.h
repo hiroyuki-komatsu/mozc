@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -34,9 +34,11 @@
 #include <iostream>
 #include <string>
 
-#include "base/flags.h"
-#include "base/namespace.h"
 #include "base/port.h"
+#include "absl/flags/declare.h"
+#include "absl/flags/flag.h"
+
+ABSL_DECLARE_FLAG(bool, logtostderr);
 
 namespace mozc {
 
@@ -46,30 +48,30 @@ enum LogSeverity {
   LOG_UNKNOWN = 0,  // ANDROID_LOG_UNKNOWN
   LOG_DEFAULT = 1,  // ANDROID_LOG_DEFAULT
   LOG_VERBOSE = 2,  // ANDROID_LOG_VERBOSE
-  LOG_DEBUG   = 3,  // ANDROID_LOG_DEBUG
-  LOG_INFO    = 4,  // ANDROID_LOG_INFO
+  LOG_DEBUG = 3,    // ANDROID_LOG_DEBUG
+  LOG_INFO = 4,     // ANDROID_LOG_INFO
   LOG_WARNING = 5,  // ANDROID_LOG_WARN
-  LOG_ERROR   = 6,  // ANDROID_LOG_ERROR
-  LOG_FATAL   = 7,  // ANDROID_LOG_FATAL
-  LOG_SILENT  = 8,  // ANDROID_LOG_SILENT
+  LOG_ERROR = 6,    // ANDROID_LOG_ERROR
+  LOG_FATAL = 7,    // ANDROID_LOG_FATAL
+  LOG_SILENT = 8,   // ANDROID_LOG_SILENT
   LOG_SEVERITY_SIZE = 9,
-#else
-  LOG_INFO    = 0,
+#else   // OS_ANDROID
+  LOG_INFO = 0,
   LOG_WARNING = 1,
-  LOG_ERROR   = 2,
-  // Special hack for Windows build, where ERROR is defined as 0 in wingdi.h.
+  LOG_ERROR = 2,
+// Special hack for Windows build, where ERROR is defined as 0 in wingdi.h.
 #ifdef OS_WIN
-  LOG_0       = LOG_ERROR,
+  LOG_0 = LOG_ERROR,
 #endif  // OS_WIN
-  LOG_FATAL   = 3,
+  LOG_FATAL = 3,
   LOG_SEVERITY_SIZE = 4,
-#endif
+#endif  // OS_ANDROID
 };
 
 // DFATAL is FATAL in debug mode, ERROR in normal mode
 #ifdef DEBUG
 #define LOG_DFATAL LOG_FATAL
-#else
+#else   // DEBUG
 #define LOG_DFATAL LOG_ERROR
 #endif  // DEBUG
 
@@ -78,7 +80,7 @@ class NullLogStream;
 class Logging {
  public:
   // Initializes log stream with the output file path and --logtostderr.
-  static void InitLogStream(const string &log_file_path);
+  static void InitLogStream(const std::string &log_file_path);
 
   // Closes the logging stream
   static void CloseLogStream();
@@ -92,16 +94,16 @@ class Logging {
   // - Writes the content to real backing logging stream, which is initialized
   //     by InitLogStream().
   // - Deletes the working stream object.
-  static void FinalizeWorkingLogStream(LogSeverity, std::ostream*);
+  static void FinalizeWorkingLogStream(LogSeverity, std::ostream *);
 
-  // Gets NullLogStream for NO_LOGGING mode
+  // Gets NullLogStream for MOZC_NO_LOGGING mode
   static NullLogStream &GetNullLogStream();
 
   // Converts LogSeverity to the string name
   static const char *GetLogSeverityName(LogSeverity severity);
 
   // Returns "YYYY-MM-DD HH:MM:SS PID TID", e.g. "2008 11-16 19:40:21 100 20"
-  static string GetLogMessageHeader();
+  static std::string GetLogMessageHeader();
 
   // Returns FLAGS_v
   static int GetVerboseLevel();
@@ -119,6 +121,8 @@ class Logging {
   static const char *GetBeginColorEscapeSequence(LogSeverity severity);
   static const char *GetEndColorEscapeSequence();
 
+  static void SetLogToStderr(bool log_to_stderr);
+
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(Logging);
 };
@@ -133,7 +137,7 @@ class LogFinalizer {
 
   // Google's C++ style guide requires reference argument to be const.
   // Here we need non-const reference in order to delete working stream object.
-  void operator&(std::ostream&);
+  void operator&(std::ostream &);
 
  private:
   const LogSeverity severity_;
@@ -144,18 +148,17 @@ class LogFinalizer {
 class NullLogStream {
  public:
   template <typename T>
-  NullLogStream& operator<<(const T &value) {
+  NullLogStream &operator<<(const T &value) {
     return *this;
   }
-  NullLogStream& operator<<(std::ostream& (*pfunc)(std::ostream&) ) {
+  NullLogStream &operator<<(std::ostream &(*pfunc)(std::ostream &)) {
     return *this;
   }
 };
 
 class NullLogFinalizer {
  public:
-  explicit NullLogFinalizer(LogSeverity severity)
-      : severity_(severity) {}
+  explicit NullLogFinalizer(LogSeverity severity) : severity_(severity) {}
 
   ~NullLogFinalizer() {
     if (severity_ >= LOG_FATAL) {
@@ -163,7 +166,7 @@ class NullLogFinalizer {
     }
   }
 
-  void operator&(NullLogStream&) {}
+  void operator&(NullLogStream &) {}
 
  private:
   static void OnFatal();
@@ -174,63 +177,69 @@ class NullLogFinalizer {
 }  // namespace mozc
 
 // ad-hoc porting of google-glog
-#ifdef NO_LOGGING   // don't use logging feature.
+#ifdef MOZC_NO_LOGGING  // don't use logging feature.
 
 // in release binary, we don't want to evaluate the outputs for logging.
 // LOG(FATAL) is an exception.
-#define LOG(severity) \
-  (mozc::LOG_##severity < mozc::LOG_FATAL) ? (void) 0 : \
-  mozc::NullLogFinalizer(mozc::LOG_##severity) & \
-  mozc::Logging::GetNullLogStream()
+#define LOG(severity)                                  \
+  (mozc::LOG_##severity < mozc::LOG_FATAL)             \
+      ? (void)0                                        \
+      : mozc::NullLogFinalizer(mozc::LOG_##severity) & \
+            mozc::Logging::GetNullLogStream()
 
 // To suppress the "statement has no effect" waring, (void) is
 // inserted.  This technique is suggested by the gcc manual
 // -Wunused-variable section.
-#define LOG_IF(severity, condition) \
-  (mozc::LOG_##severity < mozc::LOG_FATAL || !(condition)) ? (void) 0 : \
-  mozc::NullLogFinalizer(mozc::LOG_##severity) & \
-  mozc::Logging::GetNullLogStream()
+#define LOG_IF(severity, condition)                        \
+  (mozc::LOG_##severity < mozc::LOG_FATAL || !(condition)) \
+      ? (void)0                                            \
+      : mozc::NullLogFinalizer(mozc::LOG_##severity) &     \
+            mozc::Logging::GetNullLogStream()
 
-#define CHECK(condition) \
-  (condition) ? (void) 0 : \
-  mozc::NullLogFinalizer(mozc::LOG_FATAL) & mozc::Logging::GetNullLogStream()
+#define CHECK(condition)                                  \
+  (condition) ? (void)0                                   \
+              : mozc::NullLogFinalizer(mozc::LOG_FATAL) & \
+                    mozc::Logging::GetNullLogStream()
 
-#else   // NO_LOGGING
+#else  // MOZC_NO_LOGGING
 
-#define LOG(severity) \
-  mozc::LogFinalizer(mozc::LOG_##severity) & \
-  mozc::Logging::GetWorkingLogStream() \
-  << mozc::Logging::GetLogMessageHeader() << " " \
-  << __FILE__ << "(" << __LINE__ << ") " \
-  << mozc::Logging::GetBeginColorEscapeSequence(mozc::LOG_##severity) \
-  << "LOG(" << mozc::Logging::GetLogSeverityName(mozc::LOG_##severity) << ")" \
-  << mozc::Logging::GetEndColorEscapeSequence() << " " \
+#define LOG(severity)                                                          \
+  mozc::LogFinalizer(mozc::LOG_##severity) &                                   \
+      mozc::Logging::GetWorkingLogStream()                                     \
+          << mozc::Logging::GetLogMessageHeader() << " " << __FILE__ << "("    \
+          << __LINE__ << ") "                                                  \
+          << mozc::Logging::GetBeginColorEscapeSequence(mozc::LOG_##severity)  \
+          << "LOG(" << mozc::Logging::GetLogSeverityName(mozc::LOG_##severity) \
+          << ")" << mozc::Logging::GetEndColorEscapeSequence() << " "
 
-#define LOG_IF(severity, condition) \
-  (!(condition)) ? (void) 0 : \
-  mozc::LogFinalizer(mozc::LOG_##severity) & \
-  mozc::Logging::GetWorkingLogStream() \
-  << mozc::Logging::GetLogMessageHeader() << " " \
-  << __FILE__ << "(" << __LINE__ << ") " \
-  << mozc::Logging::GetBeginColorEscapeSequence(mozc::LOG_##severity) \
-  << "LOG(" << mozc::Logging::GetLogSeverityName(mozc::LOG_##severity) << ")" \
-  << mozc::Logging::GetEndColorEscapeSequence() \
-  << " [" << #condition << "] "
+#define LOG_IF(severity, condition)                                          \
+  (!(condition))                                                             \
+      ? (void)0                                                              \
+      : mozc::LogFinalizer(mozc::LOG_##severity) &                           \
+            mozc::Logging::GetWorkingLogStream()                             \
+                << mozc::Logging::GetLogMessageHeader() << " " << __FILE__   \
+                << "(" << __LINE__ << ") "                                   \
+                << mozc::Logging::GetBeginColorEscapeSequence(               \
+                       mozc::LOG_##severity)                                 \
+                << "LOG("                                                    \
+                << mozc::Logging::GetLogSeverityName(mozc::LOG_##severity)   \
+                << ")" << mozc::Logging::GetEndColorEscapeSequence() << " [" \
+                << #condition << "] "
 
-#define CHECK(condition) \
-  (condition) ? (void) 0 : \
-  mozc::LogFinalizer(mozc::LOG_FATAL) & \
-  mozc::Logging::GetWorkingLogStream() \
-  << mozc::Logging::GetLogMessageHeader() << " " \
-  << __FILE__ << "(" << __LINE__ << ") " \
-  << mozc::Logging::GetBeginColorEscapeSequence(mozc::LOG_FATAL) \
-  << "CHECK" \
-  << mozc::Logging::GetEndColorEscapeSequence() \
-  << " [" << #condition << "] "
-#endif  // end NO_LOGGING
+#define CHECK(condition)                                                       \
+  (condition)                                                                  \
+      ? (void)0                                                                \
+      : mozc::LogFinalizer(mozc::LOG_FATAL) &                                  \
+            mozc::Logging::GetWorkingLogStream()                               \
+                << mozc::Logging::GetLogMessageHeader() << " " << __FILE__     \
+                << "(" << __LINE__ << ") "                                     \
+                << mozc::Logging::GetBeginColorEscapeSequence(mozc::LOG_FATAL) \
+                << "CHECK" << mozc::Logging::GetEndColorEscapeSequence()       \
+                << " [" << #condition << "] "
+#endif  // end MOZC_NO_LOGGING
 
 #define VLOG_IS_ON(verboselevel) \
-(mozc::Logging::GetVerboseLevel() >= verboselevel)
+  (mozc::Logging::GetVerboseLevel() >= verboselevel)
 
 #define VLOG(verboselevel) LOG_IF(INFO, VLOG_IS_ON(verboselevel))
 
@@ -257,35 +266,40 @@ class NullLogFinalizer {
 #define DCHECK_GT(a, b) CHECK_GT(a, b)
 #define DCHECK_LT(a, b) CHECK_LT(a, b)
 
-#else   // opt build
+#else  // opt build
 
-#define DLOG(severity) \
+#define DLOG(severity)                           \
   mozc::NullLogFinalizer(mozc::LOG_##severity) & \
-  mozc::Logging::GetNullLogStream()
+      mozc::Logging::GetNullLogStream()
 
-#define DLOG_IF(severity, condition) \
-  (true || !(condition)) ? (void) 0 : \
-  mozc::NullLogFinalizer(mozc::LOG_##severity)  \
-  & mozc::Logging::GetNullLogStream()
+#define DLOG_IF(severity, condition)                                      \
+  (true || !(condition)) ? (void)0                                        \
+                         : mozc::NullLogFinalizer(mozc::LOG_##severity) & \
+                               mozc::Logging::GetNullLogStream()
 
-#define DCHECK(condition) while (false) CHECK(condition)
-#define DCHECK_EQ(a, b) while (false) CHECK_EQ(a, b)
-#define DCHECK_NE(a, b) while (false) CHECK_NE(a, b)
-#define DCHECK_GE(a, b) while (false) CHECK_GE(a, b)
-#define DCHECK_LE(a, b) while (false) CHECK_LE(a, b)
-#define DCHECK_GT(a, b) while (false) CHECK_GT(a, b)
-#define DCHECK_LT(a, b) while (false) CHECK_LT(a, b)
+#define DCHECK(condition) \
+  while (false) CHECK(condition)
+#define DCHECK_EQ(a, b) \
+  while (false) CHECK_EQ(a, b)
+#define DCHECK_NE(a, b) \
+  while (false) CHECK_NE(a, b)
+#define DCHECK_GE(a, b) \
+  while (false) CHECK_GE(a, b)
+#define DCHECK_LE(a, b) \
+  while (false) CHECK_LE(a, b)
+#define DCHECK_GT(a, b) \
+  while (false) CHECK_GT(a, b)
+#define DCHECK_LT(a, b) \
+  while (false) CHECK_LT(a, b)
 
 #endif  // DEBUG
 
 #define DVLOG(verboselevel) DLOG_IF(INFO, VLOG_IS_ON(verboselevel))
 
-DECLARE_bool(logtostderr);
-
 
 #ifndef DVLOG_IF
 #define DVLOG_IF(verboselevel, condition) \
   DLOG_IF(INFO, (condition) && VLOG_IS_ON(verboselevel))
-#endif
+#endif  // DVLOG_IF
 
 #endif  // MOZC_BASE_LOGGING_H_

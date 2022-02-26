@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,8 +29,10 @@
 
 #include "win32/ime/ime_core.h"
 
-#include <ime.h>
+// clang-format off
 #include <windows.h>
+#include <ime.h>
+// clang-format on
 
 #include <memory>
 
@@ -42,9 +44,9 @@
 #include "session/output_util.h"
 #include "win32/base/conversion_mode_util.h"
 #include "win32/base/deleter.h"
+#include "win32/base/imm_reconvert_string.h"
 #include "win32/base/input_state.h"
 #include "win32/base/keyboard.h"
-#include "win32/base/imm_reconvert_string.h"
 #include "win32/ime/ime_candidate_info.h"
 #include "win32/ime/ime_composition_string.h"
 #include "win32/ime/ime_private_context.h"
@@ -58,11 +60,10 @@ namespace win32 {
 using commands::KeyEvent;
 using commands::Output;
 using commands::SessionCommand;
-using std::unique_ptr;
 
 namespace {
 
-const size_t kReconvertStringSizeLimit = 1024*64;
+constexpr size_t kReconvertStringSizeLimit = 1024 * 64;
 // An embedded object in the RichEdit will be replaced with this character.
 // See b/3406434 for details.
 const wchar_t kObjectReplacementCharacter = L'\uFFFC';
@@ -83,8 +84,8 @@ bool GetNextState(HIMC himc, const commands::Output &output,
     }
     next_visible_mode = next_logical_mode;
   } else if (!mozc::win32::ConversionModeUtil::ConvertStatusFromMozcToNative(
-      output.status(), context.IsKanaInputPreferred(),
-      &next_open_status, &next_logical_mode, &next_visible_mode)) {
+                 output.status(), context.IsKanaInputPreferred(),
+                 &next_open_status, &next_logical_mode, &next_visible_mode)) {
     return false;
   }
 
@@ -94,8 +95,8 @@ bool GetNextState(HIMC himc, const commands::Output &output,
   return true;
 }
 
-bool UpdateInputContext(
-    HIMC himc, const commands::Output &output, bool generate_message) {
+bool UpdateInputContext(HIMC himc, const commands::Output &output,
+                        bool generate_message) {
   InputState next_state;
   if (!GetNextState(himc, output, &next_state)) {
     return false;
@@ -124,17 +125,16 @@ HIMCC EnsureHIMCCSize(HIMCC himcc, DWORD size) {
   return ::ImmReSizeIMCC(himcc, size);
 }
 
-bool UpdateCompositionString(HIMC himc,
-                             const commands::Output &output,
-                             vector<UIMessage> *messages) {
+bool UpdateCompositionString(HIMC himc, const commands::Output &output,
+                             std::vector<UIMessage> *messages) {
   ScopedHIMC<InputContext> context(himc);
 
   // When the string is inserted from Tablet Input Panel, MSCTF shrinks the
   // CompositionString buffer that we allocated in ImeSelect(). Thus we need
   // to resize the buffer when necessary. b/6841008
   // TODO(yukawa): Move this logic into more appropriate place.
-  const HIMCC composition_string_handle = EnsureHIMCCSize(
-      context->hCompStr, sizeof(CompositionString));
+  const HIMCC composition_string_handle =
+      EnsureHIMCCSize(context->hCompStr, sizeof(CompositionString));
   if (composition_string_handle == nullptr) {
     return false;
   }
@@ -145,13 +145,12 @@ bool UpdateCompositionString(HIMC himc,
   return true;
 }
 
-bool UpdateCompositionStringAndPushMessages(
-    HIMC himc,
-    const commands::Output &output,
-    MessageQueue *message_queue) {
+bool UpdateCompositionStringAndPushMessages(HIMC himc,
+                                            const commands::Output &output,
+                                            MessageQueue *message_queue) {
   ScopedHIMC<InputContext> context(himc);
   ScopedHIMCC<PrivateContext> private_context(context->hPrivate);
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
 
   if (!UpdateCompositionString(himc, output, &messages)) {
     return false;
@@ -162,12 +161,12 @@ bool UpdateCompositionStringAndPushMessages(
     return true;
   }
 
-  for (vector<UIMessage>::const_iterator it = messages.begin();
+  for (std::vector<UIMessage>::const_iterator it = messages.begin();
        it != messages.end(); ++it) {
     if (UIVisibilityTracker::IsVisibilityTestMessageForComposiwionWindow(
-           it->message(), it->wparam(), it->lparam())) {
-      private_context->ui_visibility_tracker->
-        BeginVisibilityTestForCompositionWindow();
+            it->message(), it->wparam(), it->lparam())) {
+      private_context->ui_visibility_tracker
+          ->BeginVisibilityTestForCompositionWindow();
     }
     message_queue->AddMessage(it->message(), it->wparam(), it->lparam());
   }
@@ -175,7 +174,7 @@ bool UpdateCompositionStringAndPushMessages(
 }
 
 bool GetReconvertString(const RECONVERTSTRING *reconvert_string,
-                        string *total_composition_in_utf8) {
+                        std::string *total_composition_in_utf8) {
   DCHECK(total_composition_in_utf8);
   total_composition_in_utf8->clear();
 
@@ -184,28 +183,29 @@ bool GetReconvertString(const RECONVERTSTRING *reconvert_string,
     return false;
   }
 
-  wstring preceding_composition;
-  wstring target_text;
-  wstring following_composition;
-  if (!ReconvertString::Decompose(
-          reconvert_string, nullptr, &preceding_composition,
-          &target_text, &following_composition, nullptr)) {
+  std::wstring preceding_composition;
+  std::wstring target_text;
+  std::wstring following_composition;
+  if (!ReconvertString::Decompose(reconvert_string, nullptr,
+                                  &preceding_composition, &target_text,
+                                  &following_composition, nullptr)) {
     DLOG(INFO) << "ReconvertString::Decompose failed.";
     return false;
   }
 
-  const wstring total_composition =
+  const std::wstring total_composition =
       preceding_composition + target_text + following_composition;
 
   // Like other Japanese IMEs (MS-IME, ATOK), Mozc does not support
   // reconversion when the composition string contains any embedded object
   // because it is too complicated to restore the original state when the
   // reconversion is canceled. See b/3406434 for details.
-  if (total_composition.find(kObjectReplacementCharacter) != wstring::npos) {
+  if (total_composition.find(kObjectReplacementCharacter) !=
+      std::wstring::npos) {
     return false;
   }
 
-  if ((Util::WideToUTF8(total_composition, total_composition_in_utf8) == 0) ||
+  if ((Util::WideToUtf8(total_composition, total_composition_in_utf8) == 0) ||
       total_composition_in_utf8->empty()) {
     DLOG(INFO) << "Composition string is empty.";
     return false;
@@ -214,9 +214,8 @@ bool GetReconvertString(const RECONVERTSTRING *reconvert_string,
   return true;
 }
 
-bool QueryDocumentFeed(HIMC himc,
-                       wstring *preceding_text,
-                       wstring *following_text) {
+bool QueryDocumentFeed(HIMC himc, std::wstring *preceding_text,
+                       std::wstring *following_text) {
   LRESULT result = ::ImmRequestMessageW(himc, IMR_DOCUMENTFEED, 0);
   if (result == 0) {
     // IMR_DOCUMENTFEED is not supported.
@@ -228,7 +227,7 @@ bool QueryDocumentFeed(HIMC himc,
     return false;
   }
 
-  unique_ptr<BYTE[]> buffer(new BYTE[buffer_size]);
+  std::unique_ptr<BYTE[]> buffer(new BYTE[buffer_size]);
 
   RECONVERTSTRING *reconvert_string =
       reinterpret_cast<RECONVERTSTRING *>(buffer.get());
@@ -242,9 +241,8 @@ bool QueryDocumentFeed(HIMC himc,
     return false;
   }
 
-  return ReconvertString::Decompose(
-      reconvert_string, preceding_text, nullptr, nullptr, nullptr,
-      following_text);
+  return ReconvertString::Decompose(reconvert_string, preceding_text, nullptr,
+                                    nullptr, nullptr, following_text);
 }
 
 }  // namespace
@@ -256,27 +254,23 @@ void ImeCore::UpdateContextWithSurroundingText(HIMC himc,
   }
   context->clear_preceding_text();
   context->clear_following_text();
-  wstring preceding_text;
-  wstring following_text;
+  std::wstring preceding_text;
+  std::wstring following_text;
   if (!QueryDocumentFeed(himc, &preceding_text, &following_text)) {
     return;
   }
-  Util::WideToUTF8(preceding_text, context->mutable_preceding_text());
-  Util::WideToUTF8(following_text, context->mutable_following_text());
+  Util::WideToUtf8(preceding_text, context->mutable_preceding_text());
+  Util::WideToUtf8(following_text, context->mutable_following_text());
 }
 
 KeyEventHandlerResult ImeCore::ImeProcessKey(
-    mozc::client::ClientInterface *client,
-    const VirtualKey &virtual_key,
-    const LParamKeyInfo &lparam,
-    const KeyboardStatus &keyboard_status,
-    const InputBehavior &behavior,
-    const InputState &initial_state,
-    const mozc::commands::Context &context,
-    InputState *next_state,
+    mozc::client::ClientInterface *client, const VirtualKey &virtual_key,
+    const LParamKeyInfo &lparam, const KeyboardStatus &keyboard_status,
+    const InputBehavior &behavior, const InputState &initial_state,
+    const mozc::commands::Context &context, InputState *next_state,
     commands::Output *output) {
-  unique_ptr<Win32KeyboardInterface>
-      keyboard(Win32KeyboardInterface::CreateDefault());
+  std::unique_ptr<Win32KeyboardInterface> keyboard(
+      Win32KeyboardInterface::CreateDefault());
   return KeyEventHandler::ImeProcessKey(
       virtual_key, lparam.GetScanCode(), lparam.IsKeyDownInImeProcessKey(),
       keyboard_status, behavior, initial_state, context, client, keyboard.get(),
@@ -284,18 +278,13 @@ KeyEventHandlerResult ImeCore::ImeProcessKey(
 }
 
 KeyEventHandlerResult ImeCore::ImeToAsciiEx(
-    mozc::client::ClientInterface *client,
-    const VirtualKey &virtual_key,
-    BYTE scan_code,
-    bool is_key_down,
-    const KeyboardStatus &keyboard_status,
-    const InputBehavior &behavior,
-    const InputState &initial_state,
-    const commands::Context &context,
-    InputState *next_state,
+    mozc::client::ClientInterface *client, const VirtualKey &virtual_key,
+    BYTE scan_code, bool is_key_down, const KeyboardStatus &keyboard_status,
+    const InputBehavior &behavior, const InputState &initial_state,
+    const commands::Context &context, InputState *next_state,
     commands::Output *output) {
-  unique_ptr<Win32KeyboardInterface>
-      keyboard(Win32KeyboardInterface::CreateDefault());
+  std::unique_ptr<Win32KeyboardInterface> keyboard(
+      Win32KeyboardInterface::CreateDefault());
   return KeyEventHandler::ImeToAsciiEx(
       virtual_key, scan_code, is_key_down, keyboard_status, behavior,
       initial_state, context, client, keyboard.get(), next_state, output);
@@ -320,8 +309,8 @@ bool ImeCore::OpenIME(mozc::client::ClientInterface *client, DWORD next_mode) {
   return true;
 }
 
-bool ImeCore::CloseIME(mozc::client::ClientInterface *client,
-                       DWORD next_mode, commands::Output *output) {
+bool ImeCore::CloseIME(mozc::client::ClientInterface *client, DWORD next_mode,
+                       commands::Output *output) {
   commands::CompositionMode mode = commands::DIRECT;
   if (!ConversionModeUtil::GetMozcModeFromNativeMode(next_mode, &mode)) {
     return false;
@@ -359,8 +348,8 @@ bool ImeCore::CancelComposition(HIMC himc, bool generate_message) {
   return UpdateInputContext(himc, output, generate_message);
 }
 
-bool ImeCore::SwitchInputMode(
-    HIMC himc, DWORD native_mode, bool generate_message) {
+bool ImeCore::SwitchInputMode(HIMC himc, DWORD native_mode,
+                              bool generate_message) {
   UIContext context(himc);
 
   const bool open = context.GetOpenStatus();
@@ -387,12 +376,12 @@ DWORD ImeCore::GetSupportableConversionMode(DWORD raw_conversion_mode) {
   // If the initial |fdwConversion| is not a supported combination of flags,
   // we have to update it and then send the IMN_SETCONVERSIONMODE message.
   // See b/2914115 for details.
-  const DWORD kHiragana = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE;
-  const DWORD kFullKatakana = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE |
-                              IME_CMODE_KATAKANA;
-  const DWORD kHalfKatakana = IME_CMODE_NATIVE | IME_CMODE_KATAKANA;
-  const DWORD kFullAlpha = IME_CMODE_ALPHANUMERIC | IME_CMODE_FULLSHAPE;
-  const DWORD kHalfAlpha = IME_CMODE_ALPHANUMERIC;
+  constexpr DWORD kHiragana = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE;
+  constexpr DWORD kFullKatakana =
+      IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE | IME_CMODE_KATAKANA;
+  constexpr DWORD kHalfKatakana = IME_CMODE_NATIVE | IME_CMODE_KATAKANA;
+  constexpr DWORD kFullAlpha = IME_CMODE_ALPHANUMERIC | IME_CMODE_FULLSHAPE;
+  constexpr DWORD kHalfAlpha = IME_CMODE_ALPHANUMERIC;
 
   // Separate Roman flag
   DWORD roman_flag = (raw_conversion_mode & IME_CMODE_ROMAN);
@@ -454,18 +443,14 @@ bool ImeCore::IsInputContextInitialized(HIMC himc) {
 }
 
 void ImeCore::SortIMEMessages(
-    const vector<UIMessage> &composition_messages,
-    const vector<UIMessage> &candidate_messages,
-    bool previous_open_status,
-    DWORD previous_conversion_mode,
-    bool next_open_status,
-    DWORD next_conversion_mode,
-    vector<UIMessage> *sorted_messages) {
+    const std::vector<UIMessage> &composition_messages,
+    const std::vector<UIMessage> &candidate_messages, bool previous_open_status,
+    DWORD previous_conversion_mode, bool next_open_status,
+    DWORD next_conversion_mode, std::vector<UIMessage> *sorted_messages) {
   DCHECK(sorted_messages);
   sorted_messages->clear();
 
-  const bool open_status_changed =
-      (previous_open_status != next_open_status);
+  const bool open_status_changed = (previous_open_status != next_open_status);
   const bool conversion_mode_changed =
       (previous_conversion_mode != next_conversion_mode);
 
@@ -476,13 +461,13 @@ void ImeCore::SortIMEMessages(
 
   // Notify IMN_SETCONVERSIONMODE.
   if (conversion_mode_changed) {
-    sorted_messages->push_back(UIMessage(
-        WM_IME_NOTIFY, IMN_SETCONVERSIONMODE, 0));
+    sorted_messages->push_back(
+        UIMessage(WM_IME_NOTIFY, IMN_SETCONVERSIONMODE, 0));
   }
 
   // Notify IMN_CLOSECANDIDATE.
-  vector<UIMessage> other_candidate_messages;
-  for (vector<UIMessage>::const_iterator it = candidate_messages.begin();
+  std::vector<UIMessage> other_candidate_messages;
+  for (std::vector<UIMessage>::const_iterator it = candidate_messages.begin();
        it != candidate_messages.end(); ++it) {
     const bool is_close_candidate = ((it->message() == WM_IME_NOTIFY) &&
                                      (it->wparam() == IMN_CLOSECANDIDATE));
@@ -495,8 +480,8 @@ void ImeCore::SortIMEMessages(
 
   // Notify all composition UI messages except for WM_IME_ENDCOMPOSITION.
   // Typically WM_IME_STARTCOMPOSITION / WM_IME_COMPOSITION will be handled.
-  vector<UIMessage> end_composition_messages;
-  for (vector<UIMessage>::const_iterator it = composition_messages.begin();
+  std::vector<UIMessage> end_composition_messages;
+  for (std::vector<UIMessage>::const_iterator it = composition_messages.begin();
        it != composition_messages.end(); ++it) {
     if (it->message() == WM_IME_ENDCOMPOSITION) {
       end_composition_messages.push_back(*it);
@@ -507,7 +492,8 @@ void ImeCore::SortIMEMessages(
 
   // Notify all other candidate UI messages.
   // Typically IMN_OPENCANDIDATE and IMN_CHANGECANDIDATE will be handled.
-  for (vector<UIMessage>::const_iterator it = other_candidate_messages.begin();
+  for (std::vector<UIMessage>::const_iterator it =
+           other_candidate_messages.begin();
        it != other_candidate_messages.end(); ++it) {
     DCHECK(!((it->message() == WM_IME_NOTIFY) &&
              (it->wparam() == IMN_CLOSECANDIDATE)));
@@ -515,7 +501,8 @@ void ImeCore::SortIMEMessages(
   }
 
   // Notify WM_IME_ENDCOMPOSITION
-  for (vector<UIMessage>::const_iterator it = end_composition_messages.begin();
+  for (std::vector<UIMessage>::const_iterator it =
+           end_composition_messages.begin();
        it != end_composition_messages.end(); ++it) {
     DCHECK_EQ(WM_IME_ENDCOMPOSITION, it->message());
     sorted_messages->push_back(*it);
@@ -530,8 +517,7 @@ void ImeCore::SortIMEMessages(
       UIMessage(WM_IME_NOTIFY, IMN_PRIVATE, kNotifyUpdateUI));
 }
 
-bool ImeCore::UpdateContext(HIMC himc,
-                            const InputState &next_state,
+bool ImeCore::UpdateContext(HIMC himc, const InputState &next_state,
                             const commands::Output &new_output,
                             MessageQueue *message_queue) {
   if (!IsInputContextInitialized(himc)) {
@@ -571,12 +557,11 @@ bool ImeCore::UpdateContext(HIMC himc,
   if (!GetNextState(himc, callback_output, &callback_state)) {
     return false;
   }
-  return UpdateContextMain(himc, callback_state,
-                           callback_output, message_queue);
+  return UpdateContextMain(himc, callback_state, callback_output,
+                           message_queue);
 }
 
-bool ImeCore::UpdateContextMain(HIMC himc,
-                                const InputState &next_state,
+bool ImeCore::UpdateContextMain(HIMC himc, const InputState &next_state,
                                 const commands::Output &new_output,
                                 MessageQueue *message_queue) {
   DCHECK(IsInputContextInitialized(himc));
@@ -586,8 +571,8 @@ bool ImeCore::UpdateContextMain(HIMC himc,
 
   // If the deletion range matches commands::Capability::DELETE_PRECEDING_TEXT,
   // initialize the deleter.
-  if (generate_message &&
-      new_output.has_consumed() && new_output.has_deletion_range() &&
+  if (generate_message && new_output.has_consumed() &&
+      new_output.has_deletion_range() &&
       new_output.deletion_range().has_length() &&
       new_output.deletion_range().has_offset() &&
       (new_output.deletion_range().length() ==
@@ -597,16 +582,15 @@ bool ImeCore::UpdateContextMain(HIMC himc,
     UIContext uicontext(himc);
     if (!uicontext.IsCompositionStringEmpty()) {
       commands::Output empty_output;
-      if (!UpdateCompositionStringAndPushMessages(
-              himc, empty_output, message_queue)) {
+      if (!UpdateCompositionStringAndPushMessages(himc, empty_output,
+                                                  message_queue)) {
         return false;
       }
     }
 
     // Make sure the pending output does not have |deletion_range|.
     // Otherwise, an infinite loop will be created.
-    commands::Output output;
-    output.CopyFrom(new_output);
+    commands::Output output = new_output;
     output.clear_deletion_range();
     private_context->deleter->BeginDeletion(
         new_output.deletion_range().length(), output, next_state);
@@ -614,56 +598,50 @@ bool ImeCore::UpdateContextMain(HIMC himc,
   }
 
   if (new_output.has_consumed()) {
-    private_context->last_output->CopyFrom(new_output);
+    *private_context->last_output = new_output;
   }
 
   *private_context->ime_state = next_state;
   const bool previous_open = (context->fOpen != FALSE);
   const DWORD previous_conversion = context->fdwConversion;
-  const commands::Output &output =
-      *private_context->last_output;
+  const commands::Output &output = *private_context->last_output;
 
   // Update context.
   context->fOpen = next_state.open ? TRUE : FALSE;
   context->fdwConversion = next_state.logical_conversion_mode;
 
-  vector<UIMessage> composition_messages;
+  std::vector<UIMessage> composition_messages;
   if (!UpdateCompositionString(himc, output, &composition_messages)) {
     return false;
   }
 
-  vector<UIMessage> candidate_messages;
-  context->hCandInfo =
-      mozc::win32::CandidateInfoUtil::Update(context->hCandInfo,
-                                             output, &candidate_messages);
+  std::vector<UIMessage> candidate_messages;
+  context->hCandInfo = mozc::win32::CandidateInfoUtil::Update(
+      context->hCandInfo, output, &candidate_messages);
   if (context->hCandInfo == nullptr) {
     return false;
   }
 
   if (generate_message) {
     // In order to minimize the risk of application compatibility problem,
-    // we might want to send these messages in the the same order to MS-IME.
+    // we might want to send these messages in the same order to MS-IME.
     // See b/3488848 for details.
-    vector<UIMessage> sorted_messages;
-    SortIMEMessages(composition_messages,
-                    candidate_messages,
-                    previous_open,
-                    previous_conversion,
-                    next_state.open,
-                    next_state.logical_conversion_mode,
-                    &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    SortIMEMessages(composition_messages, candidate_messages, previous_open,
+                    previous_conversion, next_state.open,
+                    next_state.logical_conversion_mode, &sorted_messages);
 
     // Allow visibility trackers to track if each UI message will be
     UIVisibilityTracker *ui_visibility_tracker =
         private_context->ui_visibility_tracker;
-    for (vector<UIMessage>::const_iterator it = sorted_messages.begin();
+    for (std::vector<UIMessage>::const_iterator it = sorted_messages.begin();
          it != sorted_messages.end(); ++it) {
       if (UIVisibilityTracker::IsVisibilityTestMessageForCandidateWindow(
-             it->message(), it->wparam(), it->lparam())) {
-       ui_visibility_tracker->BeginVisibilityTestForCandidateWindow();
+              it->message(), it->wparam(), it->lparam())) {
+        ui_visibility_tracker->BeginVisibilityTestForCandidateWindow();
       }
       if (UIVisibilityTracker::IsVisibilityTestMessageForComposiwionWindow(
-             it->message(), it->wparam(), it->lparam())) {
+              it->message(), it->wparam(), it->lparam())) {
         ui_visibility_tracker->BeginVisibilityTestForCompositionWindow();
       }
       message_queue->AddMessage(it->message(), it->wparam(), it->lparam());
@@ -686,8 +664,7 @@ BOOL ImeCore::IMEOff(HIMC himc, bool generate_message) {
   }
 
   commands::Output output;
-  if (!ImeCore::CloseIME(context.client(), logical_conversion_mode,
-                         &output)) {
+  if (!ImeCore::CloseIME(context.client(), logical_conversion_mode, &output)) {
     return FALSE;
   }
   bool next_open_status = false;
@@ -699,10 +676,9 @@ BOOL ImeCore::IMEOff(HIMC himc, bool generate_message) {
       return FALSE;
     }
     next_visible_mode = next_logical_mode;
-  } else if (!mozc::win32::ConversionModeUtil::
-                  ConvertStatusFromMozcToNative(
-      output.status(), context.IsKanaInputPreferred(),
-      &next_open_status, &next_logical_mode, &next_visible_mode)) {
+  } else if (!mozc::win32::ConversionModeUtil::ConvertStatusFromMozcToNative(
+                 output.status(), context.IsKanaInputPreferred(),
+                 &next_open_status, &next_logical_mode, &next_visible_mode)) {
     return FALSE;
   }
   InputState next_state;
@@ -723,8 +699,8 @@ BOOL ImeCore::IMEOff(HIMC himc, bool generate_message) {
   return (message_queue.Send() ? TRUE : FALSE);
 }
 
-BOOL ImeCore::HighlightCandidate(
-    HIMC himc, int32 candidate_index, bool generate_message) {
+BOOL ImeCore::HighlightCandidate(HIMC himc, int32 candidate_index,
+                                 bool generate_message) {
   if (!IsInputContextInitialized(himc)) {
     return FALSE;
   }
@@ -741,8 +717,8 @@ BOOL ImeCore::HighlightCandidate(
       return FALSE;
     }
 
-    if (!OutputUtil::GetCandidateIdByIndex(
-             last_output, candidate_index, &next_candidate_id)) {
+    if (!OutputUtil::GetCandidateIdByIndex(last_output, candidate_index,
+                                           &next_candidate_id)) {
       return FALSE;
     }
 
@@ -750,8 +726,7 @@ BOOL ImeCore::HighlightCandidate(
     // selected.  If the |last_output| does not have focused candidate,
     // HIGHLIGHT_CANDIDATE is always be sent.
     int32 focused_candidate_id = 0;
-    if (OutputUtil::GetFocusedCandidateId(
-            last_output, &focused_candidate_id) &&
+    if (OutputUtil::GetFocusedCandidateId(last_output, &focused_candidate_id) &&
         (next_candidate_id == focused_candidate_id)) {
       // Already highlighted.
       return TRUE;
@@ -798,8 +773,8 @@ BOOL ImeCore::CloseCandidate(HIMC himc, bool generate_message) {
     // displayed, currently we need this path to support mouse clicking for
     // suggest window.
 
-    if (!OutputUtil::GetFocusedCandidateId(
-             last_output, &focused_candidate_id)) {
+    if (!OutputUtil::GetFocusedCandidateId(last_output,
+                                           &focused_candidate_id)) {
       return FALSE;
     }
   }
@@ -821,8 +796,7 @@ BOOL ImeCore::CloseCandidate(HIMC himc, bool generate_message) {
 bool ImeCore::IsActiveContext(HIMC himc) {
   bool is_active = false;
   const HWND focus_window = ::GetFocus();
-  if (focus_window != nullptr &&
-      ::IsWindow(focus_window) != FALSE) {
+  if (focus_window != nullptr && ::IsWindow(focus_window) != FALSE) {
     const HIMC active_himc = ::ImmGetContext(focus_window);
     is_active = (himc == active_himc);
     ::ImmReleaseContext(focus_window, active_himc);
@@ -845,7 +819,7 @@ bool ImeCore::TurnOnIMEAndTryToReconvertFromIME(HIMC himc) {
     return false;
   }
 
-  const string &text_utf8 = GetTextForReconversionFromIME(himc);
+  const std::string &text_utf8 = GetTextForReconversionFromIME(himc);
   if (text_utf8.empty()) {
     if (context.GetOpenStatus()) {
       return true;
@@ -870,7 +844,7 @@ bool ImeCore::TurnOnIMEAndTryToReconvertFromIME(HIMC himc) {
   return UpdateInputContext(himc, output, true);
 }
 
-string ImeCore::GetTextForReconversionFromIME(HIMC himc) {
+std::string ImeCore::GetTextForReconversionFromIME(HIMC himc) {
   // Implementation Note:
   // In order to implement IMM32 reconversion, IME is responsible to update
   // the following fields in RECONVERTSTRING.
@@ -895,7 +869,7 @@ string ImeCore::GetTextForReconversionFromIME(HIMC himc) {
     return "";
   }
 
-  unique_ptr<BYTE[]> buffer(new BYTE[buffer_size]);
+  std::unique_ptr<BYTE[]> buffer(new BYTE[buffer_size]);
 
   RECONVERTSTRING *reconvert_string =
       reinterpret_cast<RECONVERTSTRING *>(buffer.get());
@@ -909,7 +883,7 @@ string ImeCore::GetTextForReconversionFromIME(HIMC himc) {
     return "";
   }
 
-  unique_ptr<BYTE[]> copied_buffer(new BYTE[buffer_size]);
+  std::unique_ptr<BYTE[]> copied_buffer(new BYTE[buffer_size]);
   for (size_t i = 0; i < buffer_size; ++i) {
     copied_buffer[i] = buffer[i];
   }
@@ -921,15 +895,15 @@ string ImeCore::GetTextForReconversionFromIME(HIMC himc) {
           expanded_reconvert_string)) {
     return "";
   }
-  result = ::ImmRequestMessageW(
-      himc, IMR_CONFIRMRECONVERTSTRING,
-      reinterpret_cast<LPARAM>(expanded_reconvert_string));
+  result =
+      ::ImmRequestMessageW(himc, IMR_CONFIRMRECONVERTSTRING,
+                           reinterpret_cast<LPARAM>(expanded_reconvert_string));
   if (result != FALSE) {
     // The application accepted |expanded_reconvert_string|.
     reconvert_string = expanded_reconvert_string;
   }
 
-  string total_composition_utf8;
+  std::string total_composition_utf8;
   if (!GetReconvertString(reconvert_string, &total_composition_utf8)) {
     return "";
   }
@@ -947,7 +921,7 @@ bool ImeCore::QueryReconversionFromApplication(
     return false;
   }
 
-  string total_composition_utf8;
+  std::string total_composition_utf8;
   if (!GetReconvertString(composition_info, &total_composition_utf8)) {
     return false;
   }
@@ -981,7 +955,7 @@ bool ImeCore::ReconversionFromApplication(
     return false;
   }
 
-  string total_composition_utf8;
+  std::string total_composition_utf8;
   if (!GetReconvertString(composition_info, &total_composition_utf8)) {
     return false;
   }

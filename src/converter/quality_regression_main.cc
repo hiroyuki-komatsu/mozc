@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,37 +32,54 @@
 #include <string>
 #include <vector>
 
-#include "base/flags.h"
 #include "base/init_mozc.h"
 #include "base/util.h"
 #include "converter/quality_regression_util.h"
-#include "engine/engine_factory.h"
-#include "engine/engine_interface.h"
+#include "engine/eval_engine_factory.h"
+#include "absl/flags/flag.h"
 
-DEFINE_string(test_file, "", "regression test file");
+ABSL_FLAG(std::string, test_file, "", "regression test file");
+ABSL_FLAG(std::string, data_file, "", "engine data file");
+ABSL_FLAG(std::string, data_type, "", "engine data type");
+ABSL_FLAG(std::string, engine_type, "desktop", "engine type");
 
-using mozc::EngineFactory;
-using mozc::EngineInterface;
+using mozc::Engine;
 using mozc::quality_regression::QualityRegressionUtil;
 
 int main(int argc, char **argv) {
-  mozc::InitMozc(argv[0], &argc, &argv, false);
+  mozc::InitMozc(argv[0], &argc, &argv);
 
-  std::unique_ptr<EngineInterface> engine(EngineFactory::Create());
-  QualityRegressionUtil util(engine->GetConverter());
+  absl::StatusOr<std::unique_ptr<Engine>> create_result =
+      mozc::CreateEvalEngine(absl::GetFlag(FLAGS_data_file),
+                             absl::GetFlag(FLAGS_data_type),
+                             absl::GetFlag(FLAGS_engine_type));
+  if (!create_result.ok()) {
+    LOG(ERROR) << create_result.status();
+    return static_cast<int>(create_result.status().code());
+  }
+  QualityRegressionUtil util((*create_result)->GetConverter());
 
   std::vector<QualityRegressionUtil::TestItem> items;
-  QualityRegressionUtil::ParseFile(FLAGS_test_file, &items);
+  const absl::Status parse_result =
+      QualityRegressionUtil::ParseFile(absl::GetFlag(FLAGS_test_file), &items);
+  if (!parse_result.ok()) {
+    LOG(ERROR) << parse_result;
+    return static_cast<int>(parse_result.code());
+  }
 
   for (size_t i = 0; i < items.size(); ++i) {
-    string actual_value;
-    const  bool result = util.ConvertAndTest(items[i], &actual_value);
-    if (result) {
-      std::cout << "OK:\t" << items[i].OutputAsTSV() << std::endl;
-    } else {
-      std::cout << "FAILED:\t" << items[i].OutputAsTSV() << "\t" << actual_value
-                << std::endl;
+    std::string actual_value;
+    const auto &result = util.ConvertAndTest(items[i], &actual_value);
+    if (!result.ok()) {
+      LOG(ERROR) << result.status();
+      return static_cast<int>(result.status().code());
     }
+    std::cout << (*result ? "OK:\t" : "FAILED:\t") << items[i].key << "\t"
+              << actual_value << "\t" << items[i].command;
+    if (items[i].expected_rank != 0) {
+      std::cout << " " << items[i].expected_rank;
+    }
+    std::cout << "\t" << items[i].expected_value << "\t" << std::endl;
   }
 
   return 0;

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -42,57 +42,36 @@
 namespace mozc {
 namespace {
 
-const char kPrefix[] = "【";
-const char kSuffix[] = "】";
-const char kDescription[] = "設定を変更します";
+constexpr char kPrefix[] = "【";
+constexpr char kSuffix[] = "】";
+constexpr char kDescription[] = "設定を変更します";
 
 // Trigger CommandRewriter if and only if the Segment::key is one of
 // kTriggerKeys[]
 const char *kTriggerKeys[] = {
-    "こまんど",
-    "しーくれっと",
-    "しーくれっともーど",
-    "ひみつ",
-    "ぷらいばしー",
-    "ぷらいべーと",
-    "さじぇすと",
-    "ぷれぜんてーしょん",
-    "ぷれぜん",
-    "よそく",
-    "よそくにゅうりょく",
-    "よそくへんかん",
-    "すいそくこうほ"
-};
+    "こまんど",      "しーくれっと", "しーくれっともーど", "ひみつ",
+    "ぷらいばしー",  "ぷらいべーと", "さじぇすと",         "ぷれぜんてーしょん",
+    "ぷれぜん",      "よそく",       "よそくにゅうりょく", "よそくへんかん",
+    "すいそくこうほ"};
 
 // Trigger Values for all commands
-const char *kCommandValues[] = {
-    "コマンド"
-};
+const char *kCommandValues[] = {"コマンド"};
 
 // Trigger Values for Incoginito Mode.
-const char *kIncognitoModeValues[] = {
-    "秘密",
-    "シークレット",
-    "シークレットモード",
-    "プライバシー",
-    "プライベート"
-};
+const char *kIncognitoModeValues[] = {"秘密", "シークレット",
+                                      "シークレットモード", "プライバシー",
+                                      "プライベート"};
 
-const char *kDisableAllSuggestionValues[] = {
-    "サジェスト",
-    "予測",
-    "予測入力",
-    "予測変換",
-    "プレゼンテーション",
-    "プレゼン"
-};
+const char *kDisableAllSuggestionValues[] = {"サジェスト",         "予測",
+                                             "予測入力",           "予測変換",
+                                             "プレゼンテーション", "プレゼン"};
 
-const char kIncoginitoModeOn[] = "シークレットモードをオン";
-const char kIncoginitoModeOff[] = "シークレットモードをオフ";
-const char kDisableAllSuggestionOn[] = "サジェスト機能の一時停止";
-const char kDisableAllSuggestionOff[] = "サジェスト機能を元に戻す";
+constexpr char kIncoginitoModeOn[] = "シークレットモードをオン";
+constexpr char kIncoginitoModeOff[] = "シークレットモードをオフ";
+constexpr char kDisableAllSuggestionOn[] = "サジェスト機能の一時停止";
+constexpr char kDisableAllSuggestionOff[] = "サジェスト機能を元に戻す";
 
-bool FindString(const string &query, const char **values, size_t size) {
+bool FindString(const std::string &query, const char **values, size_t size) {
   DCHECK(values);
   DCHECK_GT(size, 0);
   for (size_t i = 0; i < size; ++i) {
@@ -103,13 +82,14 @@ bool FindString(const string &query, const char **values, size_t size) {
   return false;
 }
 
-Segment::Candidate *InsertCommandCandidate(
-    Segment *segment, size_t reference_pos, size_t insert_pos) {
+Segment::Candidate *InsertCommandCandidate(Segment *segment,
+                                           size_t reference_pos,
+                                           size_t insert_pos) {
   DCHECK(segment);
   Segment::Candidate *candidate = segment->insert_candidate(
       std::min(segment->candidates_size(), insert_pos));
   DCHECK(candidate);
-  candidate->CopyFrom(segment->candidate(reference_pos));
+  *candidate = segment->candidate(reference_pos);
   candidate->attributes |= Segment::Candidate::COMMAND_CANDIDATE;
   candidate->attributes |= Segment::Candidate::NO_LEARNING;
   candidate->description = kDescription;
@@ -121,9 +101,8 @@ Segment::Candidate *InsertCommandCandidate(
 }
 
 bool IsSuggestionEnabled(const config::Config &config) {
-  return config.use_history_suggest() ||
-      config.use_dictionary_suggest() ||
-      config.use_realtime_conversion();
+  return config.use_history_suggest() || config.use_dictionary_suggest() ||
+         config.use_realtime_conversion();
 }
 }  // namespace
 
@@ -132,8 +111,8 @@ CommandRewriter::CommandRewriter() {}
 CommandRewriter::~CommandRewriter() {}
 
 void CommandRewriter::InsertIncognitoModeToggleCommand(
-    const config::Config &config,
-    Segment *segment, size_t reference_pos, size_t insert_pos) const {
+    const config::Config &config, Segment *segment, size_t reference_pos,
+    size_t insert_pos) const {
   Segment::Candidate *candidate =
       InsertCommandCandidate(segment, reference_pos, insert_pos);
   DCHECK(candidate);
@@ -148,8 +127,8 @@ void CommandRewriter::InsertIncognitoModeToggleCommand(
 }
 
 void CommandRewriter::InsertDisableAllSuggestionToggleCommand(
-    const config::Config &config,
-    Segment *segment, size_t reference_pos, size_t insert_pos) const {
+    const config::Config &config, Segment *segment, size_t reference_pos,
+    size_t insert_pos) const {
   if (!IsSuggestionEnabled(config)) {
     return;
   }
@@ -173,20 +152,20 @@ bool CommandRewriter::RewriteSegment(const config::Config &config,
   DCHECK(segment);
 
   for (size_t i = 0; i < segment->candidates_size(); ++i) {
-    const string &value = segment->candidate(i).value;
-    if (FindString(value, kCommandValues, arraysize(kCommandValues))) {
+    const std::string &value = segment->candidate(i).value;
+    if (FindString(value, kCommandValues, std::size(kCommandValues))) {
       // insert command candidate at an fixed position.
       InsertDisableAllSuggestionToggleCommand(config, segment, i, 6);
       InsertIncognitoModeToggleCommand(config, segment, i, 6);
       return true;
     }
     if (FindString(value, kIncognitoModeValues,
-                   arraysize(kIncognitoModeValues))) {
+                   std::size(kIncognitoModeValues))) {
       InsertIncognitoModeToggleCommand(config, segment, i, i + 3);
       return true;
     }
     if (FindString(value, kDisableAllSuggestionValues,
-                   arraysize(kDisableAllSuggestionValues))) {
+                   std::size(kDisableAllSuggestionValues))) {
       InsertDisableAllSuggestionToggleCommand(config, segment, i, i + 3);
       return true;
     }
@@ -197,17 +176,17 @@ bool CommandRewriter::RewriteSegment(const config::Config &config,
 
 bool CommandRewriter::Rewrite(const ConversionRequest &request,
                               Segments *segments) const {
-  if (segments == NULL || segments->conversion_segments_size() != 1) {
+  if (segments == nullptr || segments->conversion_segments_size() != 1) {
     return false;
   }
 
   Segment *segment = segments->mutable_conversion_segment(0);
   DCHECK(segment);
-  const string &key = segment->key();
+  const std::string &key = segment->key();
 
   // TODO(taku): we want to replace the linear search with STL map when
   // kTriggerKeys become bigger.
-  if (!FindString(key, kTriggerKeys, arraysize(kTriggerKeys))) {
+  if (!FindString(key, kTriggerKeys, std::size(kTriggerKeys))) {
     return false;
   }
 

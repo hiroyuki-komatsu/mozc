@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,17 +27,16 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// Pool of Client instances, implemented with LRUCache.
+// Pool of Client instances, implemented with LruCache.
 
 #include "unix/emacs/client_pool.h"
 
 namespace mozc {
 namespace emacs {
 
-static const int kMaxClients = 64;  // max number of parallel clients
+static constexpr int kMaxClients = 64;  // max number of parallel clients
 
-ClientPool::ClientPool() : lru_cache_(kMaxClients), next_id_(1) {
-}
+ClientPool::ClientPool() : lru_cache_(kMaxClients), next_id_(1) {}
 
 int ClientPool::CreateClient() {
   // Emacs supports at-least 28-bit integer.
@@ -51,9 +50,7 @@ int ClientPool::CreateClient() {
   return next_id_++;
 }
 
-void ClientPool::DeleteClient(int id) {
-  lru_cache_.Erase(id);
-}
+void ClientPool::DeleteClient(int id) { lru_cache_.Erase(id); }
 
 std::shared_ptr<ClientPool::Client> ClientPool::GetClient(int id) {
   const std::shared_ptr<Client> *value = lru_cache_.Lookup(id);

@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -54,6 +54,7 @@
         'internal/keymap.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../base/base.gyp:base',
         '../composer/composer.gyp:key_event_util',
         '../composer/composer.gyp:key_parser',
@@ -96,6 +97,7 @@
         'key_info_util.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../base/base.gyp:base',
         '../base/base.gyp:config_file_stream',
         '../composer/composer.gyp:key_event_util',
@@ -124,24 +126,12 @@
         'session_usage_stats_util.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../base/base.gyp:base',
         '../protobuf/protobuf.gyp:protobuf',
         '../protocol/protocol.gyp:commands_proto',
         '../usage_stats/usage_stats_base.gyp:usage_stats',
       ],
-    },
-    {
-      'target_name': 'generic_storage_manager',
-      'type': 'static_library',
-      'sources': [
-        'generic_storage_manager.cc',
-      ],
-      'dependencies': [
-        '../base/base.gyp:base',
-        '../base/base.gyp:config_file_stream',
-        '../protocol/protocol.gyp:commands_proto',
-        '../storage/storage.gyp:storage',
-      ]
     },
   ],
 }

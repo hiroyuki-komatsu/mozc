@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,10 +31,12 @@
 
 #define _ATL_NO_AUTOMATIC_NAMESPACE
 #define _WTL_NO_AUTOMATIC_NAMESPACE
+// clang-format off
 #include <atlbase.h>
 #include <atlapp.h>
 #include <atlmisc.h>
 #include <atlgdi.h>
+// clang-format on
 
 #include <safeint.h>
 
@@ -43,6 +45,7 @@
 #include "base/logging.h"
 #include "base/port.h"
 #include "base/util.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace win32 {
@@ -55,31 +58,24 @@ using ::WTL::CBitmapHandle;
 using ::WTL::CDC;
 using ::WTL::CFont;
 using ::WTL::CFontHandle;
+using ::WTL::CIconHandle;
 using ::WTL::CLogFont;
 using ::WTL::CRect;
 using ::WTL::CSize;
-using ::WTL::CIconHandle;
 
 RGBQUAD ToRGBQuad(DWORD color_ref) {
-  const RGBQUAD rgbquad = {
-    GetBValue(color_ref),
-    GetGValue(color_ref),
-    GetRValue(color_ref),
-    0xff
-  };
+  const RGBQUAD rgbquad = {GetBValue(color_ref), GetGValue(color_ref),
+                           GetRValue(color_ref), 0xff};
   return rgbquad;
 }
 
-CIconHandle CreateMonochromeIconInternal(
-    int bitmap_width,
-    int bitmap_height,
-    StringPiece text,
-    StringPiece fontname,
-    COLORREF text_color) {
-
+CIconHandle CreateMonochromeIconInternal(int bitmap_width, int bitmap_height,
+                                         absl::string_view text,
+                                         absl::string_view fontname,
+                                         COLORREF text_color) {
   struct MonochromeBitmapInfo {
     BITMAPINFOHEADER header;
-    RGBQUAD          color_palette[2];
+    RGBQUAD color_palette[2];
   };
 
   uint8 *src_dib_buffer = nullptr;
@@ -91,8 +87,8 @@ CIconHandle CreateMonochromeIconInternal(
   //  - pixel bit is 1 if the pixel should be transparent.
   //  - |src_dib_buffer| is a 4-byte aligned bitmap image.
   {
-    const DWORD kBackgroundColor = RGB(0x00, 0x00, 0x00);
-    const DWORD kForegroundColor = RGB(0xff, 0xff, 0xff);
+    constexpr DWORD kBackgroundColor = RGB(0x00, 0x00, 0x00);
+    constexpr DWORD kForegroundColor = RGB(0xff, 0xff, 0xff);
 
     MonochromeBitmapInfo info = {};
     info.header.biSize = sizeof(info.header);
@@ -109,9 +105,8 @@ CIconHandle CreateMonochromeIconInternal(
     info.color_palette[1] = ToRGBQuad(kBackgroundColor);
 
     src_dib.CreateDIBSection(
-        nullptr, reinterpret_cast<const BITMAPINFO *>(&info),
-        DIB_RGB_COLORS, reinterpret_cast<void **>(&src_dib_buffer),
-        nullptr, 0);
+        nullptr, reinterpret_cast<const BITMAPINFO *>(&info), DIB_RGB_COLORS,
+        reinterpret_cast<void **>(&src_dib_buffer), nullptr, 0);
     if (src_dib.IsNull()) {
       return nullptr;
     }
@@ -129,8 +124,8 @@ CIconHandle CreateMonochromeIconInternal(
       logfont.lfCharSet = DEFAULT_CHARSET;
       logfont.lfHeight = bitmap_height;
       logfont.lfQuality = NONANTIALIASED_QUALITY;
-      wstring wide_fontname;
-      Util::UTF8ToWide(fontname, &wide_fontname);
+      std::wstring wide_fontname;
+      Util::Utf8ToWide(fontname, &wide_fontname);
       const errno_t error = wcscpy_s(logfont.lfFaceName, wide_fontname.c_str());
       if (error != 0) {
         return nullptr;
@@ -147,8 +142,8 @@ CIconHandle CreateMonochromeIconInternal(
     dc.SetBkMode(OPAQUE);
     dc.SetBkColor(kBackgroundColor);
     dc.SetTextColor(kForegroundColor);
-    wstring wide_text;
-    Util::UTF8ToWide(text, &wide_text);
+    std::wstring wide_text;
+    Util::Utf8ToWide(text, &wide_text);
     CRect rect(0, 0, bitmap_width, bitmap_height);
     dc.FillSolidRect(rect, kBackgroundColor);
     dc.DrawTextW(wide_text.c_str(), wide_text.size(), &rect,
@@ -187,8 +182,8 @@ CIconHandle CreateMonochromeIconInternal(
 
     uint8 *xor_dib_buffer = nullptr;
     xor_dib.CreateDIBSection(
-        nullptr, reinterpret_cast<const BITMAPINFO *>(&info),
-        DIB_RGB_COLORS, reinterpret_cast<void **>(&xor_dib_buffer), nullptr, 0);
+        nullptr, reinterpret_cast<const BITMAPINFO *>(&info), DIB_RGB_COLORS,
+        reinterpret_cast<void **>(&xor_dib_buffer), nullptr, 0);
     if (xor_dib.IsNull()) {
       return nullptr;
     }
@@ -217,7 +212,7 @@ CIconHandle CreateMonochromeIconInternal(
     // 4-byte alignment. Here we need to do alignment conversion.
     const size_t mask_buffer_stride = (bitmap_width + 0x0f) / 16 * 2;
     const size_t mask_buffer_size = mask_buffer_stride * bitmap_width;
-    unique_ptr<uint8[]> mask_buffer(new uint8[mask_buffer_size]);
+    std::unique_ptr<uint8[]> mask_buffer(new uint8[mask_buffer_size]);
     for (size_t y = 0; y < bitmap_height; ++y) {
       for (size_t x = 0; x < bitmap_width; ++x) {
         const uint8 *src_line_start =
@@ -247,25 +242,22 @@ CIconHandle CreateMonochromeIconInternal(
 }  // namespace
 
 // static
-HICON TextIcon::CreateMonochromeIcon(size_t width,
-                                     size_t height,
-                                     StringPiece text,
-                                     StringPiece fontname,
+HICON TextIcon::CreateMonochromeIcon(size_t width, size_t height,
+                                     absl::string_view text,
+                                     absl::string_view fontname,
                                      COLORREF text_color) {
   int safe_width = 0;
   int safe_height = 0;
   int safe_num_pixels = 0;
-  if (!SafeCast(width, safe_width) ||
-      !SafeCast(height, safe_height) ||
+  if (!SafeCast(width, safe_width) || !SafeCast(height, safe_height) ||
       !SafeMultiply(safe_width, safe_height, safe_num_pixels)) {
     LOG(ERROR) << "Requested size is too large."
-               << " width: " << width
-               << " height: " << height;
+               << " width: " << width << " height: " << height;
     return nullptr;
   }
 
-  return CreateMonochromeIconInternal(
-      safe_width, safe_height, text, fontname, text_color);
+  return CreateMonochromeIconInternal(safe_width, safe_height, text, fontname,
+                                      text_color);
 }
 
 }  // namespace win32

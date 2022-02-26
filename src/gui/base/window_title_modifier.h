@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,29 +27,26 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef MOZC_GUI_BASE_WINDOW_TITLE_MODIFIER_
-#define MOZC_GUI_BASE_WINDOW_TITLE_MODIFIER_
+#ifndef MOZC_GUI_BASE_WINDOW_TITLE_MODIFIER_H_
+#define MOZC_GUI_BASE_WINDOW_TITLE_MODIFIER_H_
 
-#include <QtCore/QEvent>
-#include <QtCore/QObject>
-#include <QtCore/QString>
+#include <QEvent>
+#include <QObject>
+#include <QString>
 
 namespace mozc {
 namespace gui {
 class WindowTitleModifier : public QObject {
   Q_OBJECT;
+
  public:
-  WindowTitleModifier();
-  ~WindowTitleModifier();
+  WindowTitleModifier() = default;
+  ~WindowTitleModifier() override = default;
 
  protected:
-  bool eventFilter(QObject *obj, QEvent *event);
-
- private:
-  const QString prefix_;
-  const QString suffix_;
+  bool eventFilter(QObject *obj, QEvent *event) override;
 };
 }  // namespace gui
 }  // namespace mozc
 
-#endif  // MOZC_GUI_BASE_WINDOW_TITLE_MODIFIER_
+#endif  // MOZC_GUI_BASE_WINDOW_TITLE_MODIFIER_H_

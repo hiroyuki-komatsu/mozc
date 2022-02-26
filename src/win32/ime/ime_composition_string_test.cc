@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -38,21 +38,10 @@
 namespace mozc {
 namespace win32 {
 namespace {
-const size_t kNumCandidates = 13;
-const char* kValueList[kNumCandidates] = {
-    "Beta",
-    "ベータ",
-    "BETA",
-    "beta",
-    "β",
-    "Β",
-    "㌼",
-    "Beta",
-    "べーた",
-    "ベータ",
-    "be-ta",
-    "ｂｅ－ｔａ",
-    "ﾍﾞｰﾀ",
+constexpr size_t kNumCandidates = 13;
+const char *kValueList[kNumCandidates] = {
+    "Beta", "ベータ", "BETA",   "beta",  "β",          "Β",    "㌼",
+    "Beta", "べーた", "ベータ", "be-ta", "ｂｅ－ｔａ", "ﾍﾞｰﾀ",
 };
 const int32 kValueLengths[kNumCandidates] = {
     4, 3, 4, 4, 1, 1, 1, 4, 3, 3, 5, 5, 4,
@@ -61,35 +50,33 @@ const int32 kIDs[kNumCandidates] = {
     0, 1, 2, 3, 4, 5, 6, 7, -1, -2, -3, -7, -11,
 };
 
-string GetStringImpl(const CompositionString &composition,
-                     const DWORD offset, const DWORD length) {
-  const BYTE *addr = reinterpret_cast<const BYTE*>(&composition);
+std::string GetStringImpl(const CompositionString &composition,
+                          const DWORD offset, const DWORD length) {
+  const BYTE *addr = reinterpret_cast<const BYTE *>(&composition);
   const wchar_t *string_start =
       reinterpret_cast<const wchar_t *>(addr + offset);
-  const wstring wstr(string_start, string_start + length);
-  string str;
-  Util::WideToUTF8(wstr.c_str(), &str);
+  const std::wstring wstr(string_start, string_start + length);
+  std::string str;
+  Util::WideToUtf8(wstr.c_str(), &str);
   return str;
 }
 
-BYTE GetAttributeImpl(const CompositionString &composition,
-                      const DWORD offset, const DWORD length, size_t index) {
-  const BYTE *addr = reinterpret_cast<const BYTE*>(&composition);
+BYTE GetAttributeImpl(const CompositionString &composition, const DWORD offset,
+                      const DWORD length, size_t index) {
+  const BYTE *addr = reinterpret_cast<const BYTE *>(&composition);
   const BYTE *attribute_start = addr + offset;
   EXPECT_LE(0, index);
   EXPECT_LT(index, length);
   return attribute_start[index];
 }
 
-#define GET_STRING(composition, field_name)                                  \
-    GetStringImpl((composition), (composition).info.dw##field_name##Offset,  \
-                  (composition).info.dw##field_name##Len)
+#define GET_STRING(composition, field_name)                               \
+  GetStringImpl((composition), (composition).info.dw##field_name##Offset, \
+                (composition).info.dw##field_name##Len)
 
 #define GET_ATTRIBUTE(composition, field_name, index)                        \
-    GetAttributeImpl((composition),                                          \
-                     (composition).info.dw##field_name##Offset,              \
-                     (composition).info.dw##field_name##Len,                 \
-                     (index))
+  GetAttributeImpl((composition), (composition).info.dw##field_name##Offset, \
+                   (composition).info.dw##field_name##Len, (index))
 
 // TODO(yukawa): Make a common library for this function.
 void FillOutputForSuggestion(commands::Output *output) {
@@ -237,8 +224,8 @@ void FillOutputForPrediction(commands::Output *output) {
 }
 
 // TODO(yukawa): Make a common library for this function.
-void FillOutputForConversion(
-    commands::Output *output, int focused_index, bool has_candidates) {
+void FillOutputForConversion(commands::Output *output, int focused_index,
+                             bool has_candidates) {
   DCHECK_LE(0, focused_index);
   DCHECK_GT(kNumCandidates, focused_index);
   DCHECK_NE(nullptr, output);
@@ -487,7 +474,7 @@ TEST(ImeCompositionStringTest, StartCompositionTest) {
   segment->set_value("が");
   segment->set_value_length(1);
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
   EXPECT_EQ(2, messages.size());
 
@@ -501,10 +488,10 @@ TEST(ImeCompositionStringTest, StartCompositionTest) {
   // regardless of which field is actually updated. Otherwise, some
   // applications such as wordpad OOo Writer 3.0 will not update composition
   // window and caret state properly.
-  EXPECT_EQ((GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE |
-             GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS |
-             GCS_DELTASTART),
-            messages[1].lparam());
+  EXPECT_EQ(
+      (GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_COMPSTR |
+       GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS | GCS_DELTASTART),
+      messages[1].lparam());
 
   EXPECT_EQ(0, compstr.focused_character_index_);
   EXPECT_EQ(2, compstr.info.dwCompReadAttrLen);
@@ -541,7 +528,7 @@ TEST(ImeCompositionStringTest, EndCompositionWhenCompositionBecomesEmpty) {
   output.mutable_status()->set_activated(true);
   output.mutable_status()->set_mode(mozc::commands::HIRAGANA);
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
   EXPECT_EQ(2, messages.size());
 
@@ -568,9 +555,9 @@ TEST(ImeCompositionStringTest, EndCompositionWhenCompositionBecomesEmpty) {
   EXPECT_EQ(0, compstr.info.dwResultStrLen);
 }
 
-TEST(ImeCompositionStringTest, EndCompositionWhenCompositionIsCommited) {
+TEST(ImeCompositionStringTest, EndCompositionWhenCompositionIsCommitted) {
   // WM_IME_COMPOSITION should be sent up to once.
-  // Otherwise, the result string will be commited twice in wordpad.exe.
+  // Otherwise, the result string will be committed twice in wordpad.exe.
 
   CompositionString compstr;
   EXPECT_TRUE(compstr.Initialize());
@@ -588,7 +575,7 @@ TEST(ImeCompositionStringTest, EndCompositionWhenCompositionIsCommited) {
   result->set_value("が");
   result->set_type(mozc::commands::Result::STRING);
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
   EXPECT_EQ(2, messages.size());
 
@@ -643,7 +630,7 @@ TEST(ImeCompositionStringTest, SpaceKeyWhenIMEIsTurnedOn_Issue3200585) {
   output.mutable_status()->set_activated(true);
   output.mutable_status()->set_mode(mozc::commands::HIRAGANA);
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
   EXPECT_EQ(3, messages.size());
 
@@ -679,9 +666,9 @@ TEST(ImeCompositionStringTest, SpaceKeyWhenIMEIsTurnedOn_Issue3200585) {
 }
 
 TEST(ImeCompositionStringTest,
-     EndCompositionWhenCompositionIsCommitedWithPreedit) {
+     EndCompositionWhenCompositionIsCommittedWithPreedit) {
   // WM_IME_COMPOSITION should be sent up to once.
-  // Otherwise, the result string will be commited twice in wordpad.exe.
+  // Otherwise, the result string will be committed twice in wordpad.exe.
 
   CompositionString compstr;
   EXPECT_TRUE(compstr.Initialize());
@@ -708,7 +695,7 @@ TEST(ImeCompositionStringTest,
   segment->set_value("が");
   segment->set_value_length(1);
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
   EXPECT_EQ(1, messages.size());
 
@@ -718,12 +705,12 @@ TEST(ImeCompositionStringTest,
   // should be sent regardless of which field is actually updated. Otherwise,
   // some applications such as wordpad OOo Writer 3.0 will not update
   // composition window and caret state properly.
-  EXPECT_EQ((GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE |
-             GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS |
-             GCS_DELTASTART) |
-            (GCS_RESULTREADSTR | GCS_RESULTREADCLAUSE | GCS_RESULTSTR |
-             GCS_RESULTCLAUSE),
-            messages[0].lparam());
+  EXPECT_EQ(
+      (GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_COMPSTR |
+       GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS | GCS_DELTASTART) |
+          (GCS_RESULTREADSTR | GCS_RESULTREADCLAUSE | GCS_RESULTSTR |
+           GCS_RESULTCLAUSE),
+      messages[0].lparam());
 
   EXPECT_EQ(0, compstr.focused_character_index_);
   EXPECT_EQ(2, compstr.info.dwCompReadAttrLen);
@@ -752,7 +739,7 @@ TEST(ImeCompositionStringTest, Suggest) {
   CompositionString compstr;
   EXPECT_TRUE(compstr.Initialize());
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
   EXPECT_EQ(2, messages.size());
 
@@ -766,10 +753,10 @@ TEST(ImeCompositionStringTest, Suggest) {
   // regardless of which field is actually updated. Otherwise, some
   // applications such as wordpad OOo Writer 3.0 will not update composition
   // window and caret state properly.
-  EXPECT_EQ((GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE |
-             GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS |
-             GCS_DELTASTART),
-            messages[1].lparam());
+  EXPECT_EQ(
+      (GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_COMPSTR |
+       GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS | GCS_DELTASTART),
+      messages[1].lparam());
 
   EXPECT_EQ(0, compstr.focused_character_index_);
   EXPECT_EQ(4, compstr.info.dwCompReadAttrLen);
@@ -806,7 +793,7 @@ TEST(ImeCompositionStringTest, Predict) {
   CompositionString compstr;
   EXPECT_TRUE(compstr.Initialize());
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
   EXPECT_EQ(2, messages.size());
 
@@ -820,10 +807,10 @@ TEST(ImeCompositionStringTest, Predict) {
   // regardless of which field is actually updated. Otherwise, some
   // applications such as wordpad OOo Writer 3.0 will not update composition
   // window and caret state properly.
-  EXPECT_EQ((GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE |
-             GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS |
-             GCS_DELTASTART),
-            messages[1].lparam());
+  EXPECT_EQ(
+      (GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_COMPSTR |
+       GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS | GCS_DELTASTART),
+      messages[1].lparam());
 
   EXPECT_EQ(0, compstr.focused_character_index_);
   EXPECT_EQ(4, compstr.info.dwCompReadAttrLen);
@@ -840,7 +827,7 @@ TEST(ImeCompositionStringTest, Predict) {
   EXPECT_EQ(0, compstr.info.dwResultStrLen);
 
   EXPECT_EQ("ｱﾙﾌｧ", GET_STRING(compstr, CompReadStr));
-  EXPECT_EQ("AlphaBeta",  GET_STRING(compstr, CompStr));
+  EXPECT_EQ("AlphaBeta", GET_STRING(compstr, CompStr));
 
   EXPECT_EQ(ATTR_TARGET_CONVERTED, GET_ATTRIBUTE(compstr, CompReadAttr, 0));
   EXPECT_EQ(ATTR_TARGET_CONVERTED, GET_ATTRIBUTE(compstr, CompReadAttr, 1));
@@ -872,7 +859,7 @@ TEST(ImeCompositionStringTest, Convert) {
   // conversion.
   FillOutputForConversion(&output, 0, false);
   {
-    vector<UIMessage> messages;
+    std::vector<UIMessage> messages;
     EXPECT_TRUE(compstr.Update(output, &messages));
     EXPECT_EQ(2, messages.size());
 
@@ -886,10 +873,10 @@ TEST(ImeCompositionStringTest, Convert) {
     // regardless of which field is actually updated. Otherwise, some
     // applications such as wordpad OOo Writer 3.0 will not update composition
     // window and caret state properly.
-    EXPECT_EQ((GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE |
-               GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS |
-               GCS_DELTASTART),
-              messages[1].lparam());
+    EXPECT_EQ(
+        (GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_COMPSTR |
+         GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS | GCS_DELTASTART),
+        messages[1].lparam());
 
     EXPECT_EQ(5, compstr.focused_character_index_);
     EXPECT_EQ(8, compstr.info.dwCompReadAttrLen);
@@ -906,7 +893,7 @@ TEST(ImeCompositionStringTest, Convert) {
     EXPECT_EQ(0, compstr.info.dwResultStrLen);
 
     EXPECT_EQ("ｱﾙﾌｧﾍﾞｰﾀ", GET_STRING(compstr, CompReadStr));
-    EXPECT_EQ("AlphaBeta",  GET_STRING(compstr, CompStr));
+    EXPECT_EQ("AlphaBeta", GET_STRING(compstr, CompStr));
 
     EXPECT_EQ(ATTR_CONVERTED, GET_ATTRIBUTE(compstr, CompReadAttr, 0));
     EXPECT_EQ(ATTR_CONVERTED, GET_ATTRIBUTE(compstr, CompReadAttr, 1));
@@ -931,7 +918,7 @@ TEST(ImeCompositionStringTest, Convert) {
   // Second conversion
   FillOutputForConversion(&output, 1, true);
   {
-    vector<UIMessage> messages;
+    std::vector<UIMessage> messages;
     EXPECT_TRUE(compstr.Update(output, &messages));
     EXPECT_EQ(1, messages.size());
 
@@ -941,10 +928,10 @@ TEST(ImeCompositionStringTest, Convert) {
     // regardless of which field is actually updated. Otherwise, some
     // applications such as wordpad OOo Writer 3.0 will not update composition
     // window and caret state properly.
-    EXPECT_EQ((GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE |
-               GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS |
-               GCS_DELTASTART),
-              messages[0].lparam());
+    EXPECT_EQ(
+        (GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_COMPSTR |
+         GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS | GCS_DELTASTART),
+        messages[0].lparam());
 
     EXPECT_EQ(5, compstr.focused_character_index_);
     EXPECT_EQ(8, compstr.info.dwCompReadAttrLen);
@@ -1024,7 +1011,7 @@ TEST(ImeCompositionStringTest, SurrogatePairSupport) {
     status->set_mode(commands::HIRAGANA);
   }
 
-  vector<UIMessage> messages;
+  std::vector<UIMessage> messages;
   EXPECT_TRUE(compstr.Update(output, &messages));
 
   // Here, |focused_character_index_| != Preedit::highlighted_position()
@@ -1043,8 +1030,7 @@ TEST(ImeCompositionStringTest, SurrogatePairSupport) {
   EXPECT_EQ(0, compstr.info.dwResultClauseLen);
   EXPECT_EQ(0, compstr.info.dwResultStrLen);
 
-  EXPECT_EQ("ｼｶﾙﾄｼｶﾙ",
-            GET_STRING(compstr, CompReadStr));
+  EXPECT_EQ("ｼｶﾙﾄｼｶﾙ", GET_STRING(compstr, CompReadStr));
 
   EXPECT_EQ(ATTR_CONVERTED, GET_ATTRIBUTE(compstr, CompReadAttr, 0));
   EXPECT_EQ(ATTR_CONVERTED, GET_ATTRIBUTE(compstr, CompReadAttr, 1));

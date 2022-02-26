@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
       ],
       'dependencies': [
         'client.gyp:client',
+        '../base/absl.gyp:absl_strings',
         '../testing/testing.gyp:gtest_main',
       ],
       'variables': {
@@ -53,13 +54,6 @@
       'type': 'none',
       'dependencies': [
         'client_test',
-      ],
-      'conditions': [
-        ['target_platform=="Android"', {
-          'dependencies!': [
-            'client_test',
-          ],
-        }],
       ],
     },
   ],

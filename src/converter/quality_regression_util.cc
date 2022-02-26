@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,14 +29,15 @@
 
 #include "converter/quality_regression_util.h"
 
+#include <cstdint>
 #include <sstream>  // NOLINT
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/file_stream.h"
 #include "base/logging.h"
 #include "base/port.h"
-#include "base/string_piece.h"
 #include "base/text_normalizer.h"
 #include "base/util.h"
 #include "composer/composer.h"
@@ -45,23 +46,34 @@
 #include "converter/segments.h"
 #include "protocol/commands.pb.h"
 #include "request/conversion_request.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace quality_regression {
 namespace {
 
-const char kConversionExpect[]    = "Conversion Expected";
-const char kConversionNotExpect[] = "Conversion Not Expected";
-const char kReverseConversionExpect[]    = "ReverseConversion Expected";
-const char kReverseConversionNotExpect[] = "ReverseConversion Not Expected";
+constexpr char kConversionExpect[] = "Conversion Expected";
+constexpr char kConversionNotExpect[] = "Conversion Not Expected";
+constexpr char kConversionMatch[] = "Conversion Match";
+constexpr char kConversionNotMatch[] = "Conversion Not Match";
+constexpr char kReverseConversionExpect[] = "ReverseConversion Expected";
+constexpr char kReverseConversionNotExpect[] = "ReverseConversion Not Expected";
 // For now, suggestion and prediction are using same implementation
-const char kPredictionExpect[]    = "Prediction Expected";
-const char kPredictionNotExpect[] = "Prediction Not Expected";
-const char kSuggestionExpect[]    = "Suggestion Expected";
-const char kSuggestionNotExpect[] = "Suggestion Not Expected";
+constexpr char kPredictionExpect[] = "Prediction Expected";
+constexpr char kPredictionNotExpect[] = "Prediction Not Expected";
+constexpr char kSuggestionExpect[] = "Suggestion Expected";
+constexpr char kSuggestionNotExpect[] = "Suggestion Not Expected";
+// Zero query
+constexpr char kZeroQueryExpect[] = "ZeroQuery Expected";
+constexpr char kZeroQueryNotExpect[] = "ZeroQuery Not Expected";
 
 // copied from evaluation/quality_regression/evaluator.cc
-int GetRank(const string &value, const Segments *segments,
+int GetRank(const std::string &value, const Segments *segments,
             size_t current_pos, size_t current_segment) {
   if (current_segment == segments->segments_size()) {
     if (current_pos == value.size()) {
@@ -72,17 +84,16 @@ int GetRank(const string &value, const Segments *segments,
   }
   const Segment &seg = segments->segment(current_segment);
   for (size_t i = 0; i < seg.candidates_size(); ++i) {
-    const string &cand_value = seg.candidate(i).value;
+    const std::string &cand_value = seg.candidate(i).value;
     const size_t len = cand_value.size();
     if (current_pos + len > value.size()) {
       continue;
     }
-    if (strncmp(cand_value.c_str(),
-                value.c_str() + current_pos, len) != 0) {
+    if (strncmp(cand_value.c_str(), value.c_str() + current_pos, len) != 0) {
       continue;
     }
-    const int rest = GetRank(value, segments,
-                             current_pos + len, current_segment + 1);
+    const int rest =
+        GetRank(value, segments, current_pos + len, current_segment + 1);
     if (rest == -1) {
       continue;
     }
@@ -91,8 +102,8 @@ int GetRank(const string &value, const Segments *segments,
   return -1;
 }
 
-uint32 GetPlatfromFromString(StringPiece str) {
-  string lower;
+absl::StatusOr<uint32_t> GetPlatformFromString(absl::string_view str) {
+  std::string lower;
   lower.assign(str.data(), str.size());
   Util::LowerString(&lower);
   if (str == "desktop") {
@@ -107,90 +118,107 @@ uint32 GetPlatfromFromString(StringPiece str) {
   if (str == "mobile_ambiguous") {
     return QualityRegressionUtil::MOBILE_AMBIGUOUS;
   }
-  if (str == "chromeos") {
-    return QualityRegressionUtil::CHROMEOS;
-  }
-  LOG(FATAL) << "Unknown platform name: " << str;
-  return QualityRegressionUtil::DESKTOP;
+  return absl::InvalidArgumentError(
+      absl::StrCat("Unknown platform name: ", str));
 }
-}   // namespace
+}  // namespace
 
-string QualityRegressionUtil::TestItem::OutputAsTSV() const {
+std::string QualityRegressionUtil::TestItem::OutputAsTSV() const {
   std::ostringstream os;
-  os << label << '\t' << key << '\t' << expected_value << '\t'
-     << command << '\t' << expected_rank << '\t' << accuracy
-     << '\t' << platform;
+  os << label << '\t' << key << '\t' << expected_value << '\t' << command
+     << '\t' << expected_rank << '\t' << accuracy << '\t' << platform;
   // TODO(toshiyuki): platform enum to string
   return os.str();
 }
 
-bool QualityRegressionUtil::TestItem::ParseFromTSV(const string &line) {
-  std::vector<StringPiece> tokens;
-  Util::SplitStringUsing(line, "\t", &tokens);
-  if (tokens.size() < 6) {
-    return false;
+absl::Status QualityRegressionUtil::TestItem::ParseFromTSV(
+    const std::string &line) {
+  std::vector<absl::string_view> tokens =
+      absl::StrSplit(line, '\t', absl::SkipEmpty());
+  if (tokens.size() < 4) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Invalid token size: ", line));
   }
   label.assign(tokens[0].data(), tokens[0].size());
   key.assign(tokens[1].data(), tokens[1].size());
-  TextNormalizer::NormalizeText(tokens[2], &expected_value);
+  expected_value = TextNormalizer::NormalizeText(tokens[2]);
   command.assign(tokens[3].data(), tokens[3].size());
-  expected_rank  = NumberUtil::SimpleAtoi(tokens[4]);
-  NumberUtil::SafeStrToDouble(tokens[5], &accuracy);
+
+  if (tokens.size() == 4) {
+    if (absl::StartsWith(command, kConversionExpect) &&
+        command != kConversionExpect) {
+      constexpr int kSize = std::size(kConversionExpect);  // Size with '\0'.
+      expected_rank = NumberUtil::SimpleAtoi(command.substr(kSize));
+      command = kConversionExpect;
+    } else {
+      expected_rank = 0;
+    }
+  } else {
+    expected_rank = NumberUtil::SimpleAtoi(tokens[4]);
+  }
+
+  if (tokens.size() > 5) {
+    NumberUtil::SafeStrToDouble(tokens[5], &accuracy);
+  } else {
+    accuracy = 1.0;
+  }
   platform = 0;
   if (tokens.size() >= 7) {
-    std::vector<StringPiece> platforms;
-    Util::SplitStringUsing(tokens[6], ",", &platforms);
+    std::vector<absl::string_view> platforms =
+        absl::StrSplit(tokens[6], ',', absl::SkipEmpty());
     for (size_t i = 0; i < platforms.size(); ++i) {
-      platform |= GetPlatfromFromString(platforms[i]);
+      auto result = GetPlatformFromString(platforms[i]);
+      if (!result.ok()) {
+        return std::move(result.status());
+      }
+      platform |= *result;
     }
   } else {
     // Default platform: desktop
     platform = QualityRegressionUtil::DESKTOP;
   }
-  return true;
+  return absl::OkStatus();
 }
 
 QualityRegressionUtil::QualityRegressionUtil(ConverterInterface *converter)
     : converter_(converter),
       request_(new commands::Request),
       config_(new config::Config),
-      segments_(new Segments) {
-}
+      segments_(new Segments) {}
 
-QualityRegressionUtil::~QualityRegressionUtil() {
-}
+QualityRegressionUtil::~QualityRegressionUtil() {}
 
 // static
-bool QualityRegressionUtil::ParseFile(const string &filename,
-                                      std::vector<TestItem> *outputs) {
+absl::Status QualityRegressionUtil::ParseFile(const std::string &filename,
+                                              std::vector<TestItem> *outputs) {
   // TODO(taku): support an XML file of Mozcsu.
   outputs->clear();
   InputFileStream ifs(filename.c_str());
   if (!ifs.good()) {
-    return false;
+    return absl::UnavailableError(absl::StrCat("Failed to read: ", filename));
   }
-  string line;
-  while (!getline(ifs, line).fail()) {
+  std::string line;
+  while (!std::getline(ifs, line).fail()) {
     if (line.empty() || line.c_str()[0] == '#') {
       continue;
     }
     TestItem item;
-    if (!item.ParseFromTSV(line)) {
-      LOG(ERROR) << "Cannot parse: " << line;
-      return false;
+    if (!item.ParseFromTSV(line).ok()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Failed to parse: ", line));
     }
     outputs->push_back(item);
   }
-  return true;
+  return absl::OkStatus();
 }
 
 // static
 
-bool QualityRegressionUtil::ConvertAndTest(const TestItem &item,
-                                           string *actual_value) {
-  const string &key = item.key;
-  const string &expected_value = item.expected_value;
-  const string &command = item.command;
+absl::StatusOr<bool> QualityRegressionUtil::ConvertAndTest(
+    const TestItem &item, std::string *actual_value) {
+  const std::string &key = item.key;
+  const std::string &expected_value = item.expected_value;
+  const std::string &command = item.command;
   const int expected_rank = item.expected_rank;
 
   CHECK(actual_value);
@@ -200,34 +228,59 @@ bool QualityRegressionUtil::ConvertAndTest(const TestItem &item,
 
   composer::Table table;
 
-  if (command == kConversionExpect ||
-      command == kConversionNotExpect) {
+  if (command == kConversionExpect || command == kConversionNotExpect ||
+      command == kConversionMatch || command == kConversionNotMatch) {
     composer::Composer composer(&table, request_.get(), config_.get());
     composer.SetPreeditTextForTestOnly(key);
-    ConversionRequest request(&composer, request_.get(), config_.get());
-    converter_->StartConversionForRequest(request, segments_.get());
+    ConversionRequest conversion_request(&composer, request_.get(),
+                                         config_.get());
+    converter_->StartConversionForRequest(conversion_request, segments_.get());
   } else if (command == kReverseConversionExpect ||
-    command == kReverseConversionNotExpect) {
+             command == kReverseConversionNotExpect) {
     converter_->StartReverseConversion(segments_.get(), key);
-  } else if (command == kPredictionExpect ||
-             command == kPredictionNotExpect) {
+  } else if (command == kPredictionExpect || command == kPredictionNotExpect) {
     composer::Composer composer(&table, request_.get(), config_.get());
     composer.SetPreeditTextForTestOnly(key);
-    ConversionRequest request(&composer, request_.get(), config_.get());
-    converter_->StartPredictionForRequest(request, segments_.get());
-  } else if (command == kSuggestionExpect ||
-             command == kSuggestionNotExpect) {
+    ConversionRequest conversion_request(&composer, request_.get(),
+                                         config_.get());
+    converter_->StartPredictionForRequest(conversion_request, segments_.get());
+
+  } else if (command == kSuggestionExpect || command == kSuggestionNotExpect) {
     composer::Composer composer(&table, request_.get(), config_.get());
     composer.SetPreeditTextForTestOnly(key);
-    ConversionRequest request(&composer, request_.get(), config_.get());
-    converter_->StartSuggestionForRequest(request, segments_.get());
+    ConversionRequest conversion_request(&composer, request_.get(),
+                                         config_.get());
+    converter_->StartSuggestionForRequest(conversion_request, segments_.get());
+  } else if (command == kZeroQueryExpect || command == kZeroQueryNotExpect) {
+    commands::Request request = *request_;
+    request.set_zero_query_suggestion(true);
+    request.set_mixed_conversion(true);
+    {
+      composer::Composer composer(&table, &request, config_.get());
+      composer.SetPreeditTextForTestOnly(key);
+      ConversionRequest conversion_request(&composer, &request, config_.get());
+      conversion_request.set_max_conversion_candidates_size(10);
+      converter_->StartSuggestionForRequest(conversion_request,
+                                            segments_.get());
+      converter_->CommitSegmentValue(segments_.get(), 0, 0);
+      converter_->FinishConversion(conversion_request, segments_.get());
+    }
+    {
+      // Issues zero-query request.
+      composer::Composer composer(&table, &request, config_.get());
+      ConversionRequest conversion_request(&composer, &request, config_.get());
+      conversion_request.set_max_conversion_candidates_size(10);
+      converter_->StartPredictionForRequest(conversion_request,
+                                            segments_.get());
+      segments_->clear_history_segments();
+    }
   } else {
-    LOG(FATAL) << "Unknown command: " << command;
+    return absl::InvalidArgumentError(
+        absl::StrCat("Unknown command: ", item.OutputAsTSV()));
   }
 
   // No results is OK if "prediction not expect" command
-  if ((command == kPredictionNotExpect ||
-       command == kSuggestionNotExpect) &&
+  if ((command == kPredictionNotExpect || command == kSuggestionNotExpect) &&
       (segments_->segments_size() == 0 ||
        (segments_->segments_size() >= 1 &&
         segments_->segment(0).candidates_size() == 0))) {
@@ -238,15 +291,21 @@ bool QualityRegressionUtil::ConvertAndTest(const TestItem &item,
     *actual_value += segments_->segment(i).candidate(0).value;
   }
 
-  const int32 actual_rank = GetRank(expected_value, segments_.get(),
-                                    0, 0);
+  if (command == kConversionMatch) {
+    return (actual_value->find(expected_value) != std::string::npos);
+  }
+  if (command == kConversionNotMatch) {
+    return (actual_value->find(expected_value) == std::string::npos);
+  }
+
+  const int32_t actual_rank = GetRank(expected_value, segments_.get(), 0, 0);
 
   bool result = (actual_rank >= 0 && actual_rank <= expected_rank);
 
   if (command == kConversionNotExpect ||
       command == kReverseConversionNotExpect ||
-      command == kPredictionNotExpect ||
-      command == kSuggestionNotExpect) {
+      command == kPredictionNotExpect || command == kSuggestionNotExpect ||
+      command == kZeroQueryNotExpect) {
     result = !result;
   }
 
@@ -261,8 +320,9 @@ void QualityRegressionUtil::SetConfig(const config::Config &config) {
   *config_ = config;
 }
 
-string QualityRegressionUtil::GetPlatformString(uint32 platform_bitfiled) {
-  std::vector<string> v;
+std::string QualityRegressionUtil::GetPlatformString(
+    uint32_t platform_bitfiled) {
+  std::vector<std::string> v;
   if (platform_bitfiled & DESKTOP) {
     v.push_back("DESKTOP");
   }
@@ -275,16 +335,11 @@ string QualityRegressionUtil::GetPlatformString(uint32 platform_bitfiled) {
   if (platform_bitfiled & MOBILE_AMBIGUOUS) {
     v.push_back("MOBILE_AMBIGUOUS");
   }
-  if (platform_bitfiled & CHROMEOS) {
-    v.push_back("CHROMEOS");
-  }
   if (v.empty()) {
     v.push_back("UNKNOWN");
   }
-  string s;
-  Util::JoinStrings(v, "|", &s);
-  return s;
+  return absl::StrJoin(v, "|");
 }
 
-}   // namespace quality_regression
-}   // namespace mozc
+}  // namespace quality_regression
+}  // namespace mozc

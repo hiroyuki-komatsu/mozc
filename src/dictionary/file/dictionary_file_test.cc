@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -33,23 +33,22 @@
 #include <string>
 
 #include "base/file_util.h"
-#include "base/flags.h"
 #include "base/logging.h"
 #include "dictionary/file/codec_factory.h"
 #include "dictionary/file/dictionary_file_builder.h"
+#include "testing/base/public/gmock.h"
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
-
-DECLARE_string(test_tmpdir);
+#include "absl/flags/flag.h"
 
 namespace mozc {
 namespace dictionary {
 namespace {
 
 TEST(DictionaryFileTest, Basic) {
-  const string dfn = FLAGS_test_tmpdir + "/test-dictionary";
-  const string fn1 = FLAGS_test_tmpdir + "/sec1";
-  const string fn2 = FLAGS_test_tmpdir + "/sec2";
+  const std::string dfn = absl::GetFlag(FLAGS_test_tmpdir) + "/test-dictionary";
+  const std::string fn1 = absl::GetFlag(FLAGS_test_tmpdir) + "/sec1";
+  const std::string fn2 = absl::GetFlag(FLAGS_test_tmpdir) + "/sec2";
 
   FILE *fp1 = fopen(fn1.c_str(), "w");
   CHECK(fp1) << "failed to open temporary file";
@@ -68,27 +67,27 @@ TEST(DictionaryFileTest, Basic) {
     builder.WriteImageToFile(dfn);
   }
 
-  EXPECT_TRUE(FileUtil::FileExists(dfn));
+  EXPECT_OK(FileUtil::FileExists(dfn));
 
   {
     DictionaryFile df(DictionaryFileCodecFactory::GetCodec());
-    df.OpenFromFile(dfn);
+    ASSERT_TRUE(df.OpenFromFile(dfn).ok());
     int len;
-    const char* ptr = df.GetSection("sec1", &len);
+    const char *ptr = df.GetSection("sec1", &len);
     EXPECT_EQ(10, len);
-    string content(ptr, len);
+    std::string content(ptr, len);
     EXPECT_EQ("0123456789", content);
     ptr = df.GetSection("sec2", &len);
     EXPECT_EQ(10, len);
     content.assign(ptr, len);
     EXPECT_EQ("9876543210", content);
     ptr = df.GetSection("sec3", &len);
-    EXPECT_TRUE(ptr == NULL);
+    EXPECT_TRUE(ptr == nullptr);
   }
 
-  FileUtil::Unlink(dfn);
-  FileUtil::Unlink(fn1);
-  FileUtil::Unlink(fn2);
+  EXPECT_OK(FileUtil::Unlink(dfn));
+  EXPECT_OK(FileUtil::Unlink(fn1));
+  EXPECT_OK(FileUtil::Unlink(fn2));
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,12 +29,12 @@
 
 #include "win32/base/imm_util.h"
 
-#include <windows.h>
 #include <atlbase.h>
 #include <atlstr.h>
 #include <imm.h>
 #include <msctf.h>
 #include <strsafe.h>
+#include <windows.h>
 
 #include <memory>
 #include <string>
@@ -55,22 +55,21 @@ namespace mozc {
 namespace win32 {
 namespace {
 
-using std::unique_ptr;
-
 // Timeout value used by a work around against b/5765783. As b/6165722
 // this value is determined to be:
 // - smaller than the default time-out used in IsHungAppWindow API.
 // - similar to the same timeout used by TSF.
-const uint32 kWaitForAsmCacheReadyEventTimeout = 4500;  // 4.5 sec.
+constexpr uint32 kWaitForAsmCacheReadyEventTimeout = 4500;  // 4.5 sec.
 
 bool GetDefaultLayout(LAYOUTORTIPPROFILE *profile) {
-  const UINT num_element = ::EnumEnabledLayoutOrTip(
-      nullptr, nullptr, nullptr, nullptr, 0);
+  const UINT num_element =
+      ::EnumEnabledLayoutOrTip(nullptr, nullptr, nullptr, nullptr, 0);
 
-  unique_ptr<LAYOUTORTIPPROFILE[]> buffer(new LAYOUTORTIPPROFILE[num_element]);
+  std::unique_ptr<LAYOUTORTIPPROFILE[]> buffer(
+      new LAYOUTORTIPPROFILE[num_element]);
 
-  const UINT num_copied =::EnumEnabledLayoutOrTip(
-      nullptr, nullptr, nullptr, buffer.get(), num_element);
+  const UINT num_copied = ::EnumEnabledLayoutOrTip(nullptr, nullptr, nullptr,
+                                                   buffer.get(), num_element);
 
   for (size_t i = 0; i < num_copied; ++i) {
     if ((buffer[i].dwFlags & LOT_DEFAULT) == LOT_DEFAULT) {
@@ -82,9 +81,10 @@ bool GetDefaultLayout(LAYOUTORTIPPROFILE *profile) {
   return false;
 }
 
-const wchar_t kTIPKeyboardKey[] = L"Software\\Microsoft\\CTF\\Assemblies\\"
-                                  L"0x00000411\\"
-                                  L"{34745C63-B2F0-4784-8B67-5E12C8701A31}";
+const wchar_t kTIPKeyboardKey[] =
+    L"Software\\Microsoft\\CTF\\Assemblies\\"
+    L"0x00000411\\"
+    L"{34745C63-B2F0-4784-8B67-5E12C8701A31}";
 
 bool IsDefaultWin8() {
   LAYOUTORTIPPROFILE profile = {};
@@ -107,16 +107,16 @@ bool IsDefaultWin8() {
 bool SetDefaultWin8() {
   wchar_t clsid[64] = {};
   if (!::StringFromGUID2(TsfProfile::GetTextServiceGuid(), clsid,
-                         arraysize(clsid))) {
+                         std::size(clsid))) {
     return E_OUTOFMEMORY;
   }
   wchar_t profile_id[64] = {};
   if (!::StringFromGUID2(TsfProfile::GetProfileGuid(), profile_id,
-                         arraysize(profile_id))) {
+                         std::size(profile_id))) {
     return E_OUTOFMEMORY;
   }
 
-  const wstring &profile = wstring(L"0x0411:") + clsid + profile_id;
+  const std::wstring &profile = std::wstring(L"0x0411:") + clsid + profile_id;
   if (!::InstallLayoutOrTip(profile.c_str(), 0)) {
     DLOG(ERROR) << "InstallLayoutOrTip failed";
     return false;
@@ -135,12 +135,9 @@ bool SetDefaultWin8() {
   }
   const LANGID kLANGJaJP = MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN);
   if (FAILED(profile_mgr->ActivateProfile(
-          TF_PROFILETYPE_INPUTPROCESSOR,
-          kLANGJaJP,
-          TsfProfile::GetTextServiceGuid(),
-          TsfProfile::GetProfileGuid(),
-          nullptr,
-          TF_IPPMF_FORPROCESS | TF_IPPMF_FORSESSION))) {
+          TF_PROFILETYPE_INPUTPROCESSOR, kLANGJaJP,
+          TsfProfile::GetTextServiceGuid(), TsfProfile::GetProfileGuid(),
+          nullptr, TF_IPPMF_FORPROCESS | TF_IPPMF_FORSESSION))) {
     DLOG(ERROR) << "ActivateProfile failed";
     return false;
   }
@@ -168,7 +165,7 @@ bool ImeUtil::IsDefault() {
       return false;
     }
 
-    const wstring id(profile.szId);
+    const std::wstring id(profile.szId);
     // A valid |profile.szId| should consists of language ID (LANGID) and
     // keyboard layout ID (KILD) as follows.
     //  <LangID 1>:<KLID 1>
@@ -192,10 +189,8 @@ bool ImeUtil::IsDefault() {
   }
 
   HKL hkl = nullptr;
-  if (0 == ::SystemParametersInfo(SPI_GETDEFAULTINPUTLANG,
-                                  0,
-                                  reinterpret_cast<PVOID>(&hkl),
-                                  0)) {
+  if (0 == ::SystemParametersInfo(SPI_GETDEFAULTINPUTLANG, 0,
+                                  reinterpret_cast<PVOID>(&hkl), 0)) {
     LOG(ERROR) << "SystemParameterInfo failed: " << GetLastError();
     return false;
   }
@@ -213,7 +208,7 @@ bool ImeUtil::SetDefault() {
     return false;
   }
 
-  const wstring &profile_list = L"0x0411:0x" + mozc_klid.ToString();
+  const std::wstring &profile_list = L"0x0411:0x" + mozc_klid.ToString();
   if (!::SetDefaultLayoutOrTip(profile_list.c_str(), 0)) {
     DLOG(ERROR) << "SetDefaultLayoutOrTip failed";
     return false;
@@ -231,8 +226,8 @@ bool ImeUtil::ActivateForCurrentSession() {
   if (!mozc_hkld.has_id()) {
     return false;
   }
-  const HKL mozc_hkl = ::LoadKeyboardLayout(
-      mozc_hkld.ToString().c_str(), KLF_ACTIVATE);
+  const HKL mozc_hkl =
+      ::LoadKeyboardLayout(mozc_hkld.ToString().c_str(), KLF_ACTIVATE);
 
   if (!WaitForAsmCacheReady(kWaitForAsmCacheReadyEventTimeout)) {
     LOG(ERROR) << "ImeUtil::WaitForAsmCacheReady failed.";
@@ -244,25 +239,22 @@ bool ImeUtil::ActivateForCurrentSession() {
   // Note: we have virtually the same code in uninstall_helper.cc too.
   // TODO(yukawa): Make a common function around WM_INPUTLANGCHANGEREQUEST.
   DWORD recipients = BSM_APPLICATIONS;
-  return (0 < ::BroadcastSystemMessage(
-      BSF_POSTMESSAGE,
-      &recipients,
-      WM_INPUTLANGCHANGEREQUEST,
-      INPUTLANGCHANGE_SYSCHARSET,
-      reinterpret_cast<LPARAM>(mozc_hkl)));
+  return (0 < ::BroadcastSystemMessage(BSF_POSTMESSAGE, &recipients,
+                                       WM_INPUTLANGCHANGEREQUEST,
+                                       INPUTLANGCHANGE_SYSCHARSET,
+                                       reinterpret_cast<LPARAM>(mozc_hkl)));
 }
 
 // Wait for "MSCTF.AsmCacheReady.<desktop name><session #>" event signal to
 // work around b/5765783.
 bool ImeUtil::WaitForAsmCacheReady(uint32 timeout_msec) {
-  wstring event_name;
-  if (Util::UTF8ToWide(SystemUtil::GetMSCTFAsmCacheReadyEventName(),
+  std::wstring event_name;
+  if (Util::Utf8ToWide(SystemUtil::GetMSCTFAsmCacheReadyEventName(),
                        &event_name) == 0) {
     LOG(ERROR) << "Failed to compose event name.";
     return false;
   }
-  ScopedHandle handle(
-      ::OpenEventW(SYNCHRONIZE, FALSE, event_name.c_str()));
+  ScopedHandle handle(::OpenEventW(SYNCHRONIZE, FALSE, event_name.c_str()));
   if (handle.get() == nullptr) {
     // Event not found.
     // Returns true assuming that we need not to wait anything.

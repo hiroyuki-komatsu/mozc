@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
         'session_converter.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../base/base.gyp:base',
         '../composer/composer.gyp:key_parser',
         '../config/config.gyp:config_handler',
@@ -67,6 +68,7 @@
         'internal/key_event_transformer.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../base/base.gyp:base',
         '../composer/composer.gyp:composer',
         '../config/config.gyp:config_handler',
@@ -75,7 +77,7 @@
       ],
     },
     {
-      # Android is not supported.
+      # iOS is not supported.
       'target_name': 'session_watch_dog',
       'type': 'static_library',
       'sources': [
@@ -94,6 +96,7 @@
         'session_observer_handler.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../composer/composer.gyp:composer',
         '../config/config.gyp:character_form_manager',
         '../config/config.gyp:config_handler',
@@ -104,15 +107,32 @@
         '../protocol/protocol.gyp:engine_builder_proto',
         '../protocol/protocol.gyp:user_dictionary_storage_proto',
         '../usage_stats/usage_stats_base.gyp:usage_stats',
-        'session_base.gyp:generic_storage_manager',
         ':session_watch_dog',
       ],
       'conditions': [
-        ['(target_platform=="NaCl" and _toolset=="target") or target_platform=="Android"', {
+        ['target_platform=="iOS"', {
           'dependencies!': [
             ':session_watch_dog',
           ],
         }],
+      ],
+    },
+    {
+      'target_name': 'session_handler_tool',
+      'type': 'static_library',
+      'sources': [
+        'session_handler_tool.cc',
+      ],
+      'dependencies': [
+        ':session',
+        ':session_handler',
+        ':session_usage_observer',
+        '../base/absl.gyp:absl_strings',
+        '../base/base.gyp:base',
+        '../config/config.gyp:config_handler',
+        '../engine/engine.gyp:engine_factory',
+        '../protocol/protocol.gyp:commands_proto',
+        '../protocol/protocol.gyp:config_proto',
       ],
     },
     {
@@ -123,6 +143,7 @@
         'session_usage_observer.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_synchronization',
         '../base/base.gyp:base',
         '../config/config.gyp:stats_config_util',
         '../protocol/protocol.gyp:state_proto',
@@ -137,11 +158,8 @@
         'session_server.cc',
       ],
       'dependencies': [
-        # CAUTION: Don't forget to update android.gyp:mozc target as well!
-        # The target has almost the same dependency so if you update this
-        # dependency list you will have to update Android's.
         '../base/base.gyp:base',
-        '../usage_stats/usage_stats.gyp:usage_stats_uploader',
+        '../usage_stats/usage_stats_base.gyp:usage_stats_uploader',
         '../protocol/protocol.gyp:commands_proto',
         'session_handler',
         'session_usage_observer',
@@ -155,6 +173,7 @@
         'random_keyevents_generator.cc',
       ],
       'dependencies': [
+        '../base/absl.gyp:absl_strings',
         '../protocol/protocol.gyp:commands_proto',
         '../protocol/protocol.gyp:config_proto',
         'gen_session_stress_test_data#host',
@@ -185,10 +204,11 @@
             '<(gen_out_dir)/session_stress_test_data.h'
           ],
           'action': [
-            'python', '../build_tools/redirect.py',
-            '<(gen_out_dir)/session_stress_test_data.h',
-            'gen_session_stress_test_data.py',
+            '<(python)', 'gen_session_stress_test_data.py',
+            '--input',
             '../data/test/stress_test/sentences.txt',
+            '--output',
+            '<(gen_out_dir)/session_stress_test_data.h',
           ],
           'message': 'Generating <(gen_out_dir)/session_stress_test_data.h',
         },

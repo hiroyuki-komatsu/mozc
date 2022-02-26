@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -34,27 +34,28 @@
 
 #include "base/file_util.h"
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "base/singleton.h"
 #include "base/system_util.h"
 #include "storage/storage_interface.h"
 #include "storage/tiny_storage.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace storage {
-
 namespace {
-Mutex g_mutex;
+
+ABSL_CONST_INIT absl::Mutex g_mutex(absl::kConstInit);
+
 #ifdef OS_WIN
-const char kRegistryFileName[] = "registry.db";
-#else
-const char kRegistryFileName[] = ".registry.db";   // hidden file
-#endif
+constexpr char kRegistryFileName[] = "registry.db";
+#else   // OS_WIN
+constexpr char kRegistryFileName[] = ".registry.db";  // hidden file
+#endif  // OS_WIN
 
 class StorageInitializer {
  public:
-  StorageInitializer() :
-      default_storage_(TinyStorage::New()), current_storage_(NULL) {
+  StorageInitializer()
+      : default_storage_(TinyStorage::New()), current_storage_(nullptr) {
     if (!default_storage_->Open(FileUtil::JoinPath(
             SystemUtil::GetUserProfileDirectory(), kRegistryFileName))) {
       LOG(ERROR) << "cannot open registry";
@@ -62,16 +63,14 @@ class StorageInitializer {
   }
 
   StorageInterface *GetStorage() const {
-    if (current_storage_ == NULL) {
+    if (current_storage_ == nullptr) {
       return default_storage_.get();
     } else {
       return current_storage_;
     }
   }
 
-  void SetStorage(StorageInterface *storage) {
-    current_storage_ = storage;
-  }
+  void SetStorage(StorageInterface *storage) { current_storage_ = storage; }
 
  private:
   std::unique_ptr<StorageInterface> default_storage_;
@@ -79,35 +78,36 @@ class StorageInitializer {
 };
 }  // namespace
 
-bool Registry::Erase(const string &key) {
-  scoped_lock l(&g_mutex);
+bool Registry::Erase(const std::string &key) {
+  absl::MutexLock l(&g_mutex);
   return Singleton<StorageInitializer>::get()->GetStorage()->Erase(key);
 }
 
 bool Registry::Sync() {
-  scoped_lock l(&g_mutex);
+  absl::MutexLock l(&g_mutex);
   return Singleton<StorageInitializer>::get()->GetStorage()->Sync();
 }
 
 // clear internal keys and values
 bool Registry::Clear() {
-  scoped_lock l(&g_mutex);
+  absl::MutexLock l(&g_mutex);
   return Singleton<StorageInitializer>::get()->GetStorage()->Clear();
 }
 
 void Registry::SetStorage(StorageInterface *handler) {
   VLOG(1) << "New storage interface is set";
-  scoped_lock l(&g_mutex);
+  absl::MutexLock l(&g_mutex);
   Singleton<StorageInitializer>::get()->SetStorage(handler);
 }
 
-bool Registry::LookupInternal(const string &key, string *value) {
-  scoped_lock l(&g_mutex);   // just for safe
+bool Registry::LookupInternal(const std::string &key, std::string *value) {
+  absl::MutexLock l(&g_mutex);  // just for safe
   return Singleton<StorageInitializer>::get()->GetStorage()->Lookup(key, value);
 }
 
-bool Registry::InsertInternal(const string &key, const string &value) {
-  scoped_lock l(&g_mutex);
+bool Registry::InsertInternal(const std::string &key,
+                              const std::string &value) {
+  absl::MutexLock l(&g_mutex);
   return Singleton<StorageInitializer>::get()->GetStorage()->Insert(key, value);
 }
 }  // namespace storage

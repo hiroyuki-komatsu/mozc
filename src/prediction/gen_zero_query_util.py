@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,8 @@
 For output format, see zero_query_dict.h.
 """
 
-__author__ = "toshiyuki"
+from __future__ import absolute_import
+from __future__ import print_function
 
 import os
 import struct
@@ -67,9 +68,9 @@ class ZeroQueryEntry(object):
 
 def WriteZeroQueryData(zero_query_dict, output_token_array,
                        output_string_array):
-  # Collect all the strings and assing index in ascending order
+  # Collect all the strings and assign index in ascending order
   string_index = {}
-  for key, entry_list in zero_query_dict.iteritems():
+  for key, entry_list in zero_query_dict.items():
     string_index[key] = 0
     for entry in entry_list:
       string_index[entry.value] = 0

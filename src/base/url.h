@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,16 +36,17 @@
 
 namespace mozc {
 
-class URL {
+class Url {
  public:
   // Composes a URL for an uninstallation survey.  Note that we should set
   // version because, in Mac OS, we can not get mozc version from uninstaller
   // binary.
-  static bool GetUninstallationSurveyURL(const string &version, string *url);
+  static bool GetUninstallationSurveyUrl(const std::string &version,
+                                         std::string *url);
 
   // should never be allocated.
  private:
-  DISALLOW_IMPLICIT_CONSTRUCTORS(URL);
+  DISALLOW_IMPLICIT_CONSTRUCTORS(Url);
 };
 
 }  // namespace mozc

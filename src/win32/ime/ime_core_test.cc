@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,9 +27,11 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// clang-format off
 #include <windows.h>
 #include <ime.h>
 #include <msctf.h>
+// clang-format on
 
 #include <string>
 
@@ -70,13 +72,9 @@ class TestServerLauncher : public client::ServerLauncherInterface {
     return start_server_result_;
   }
 
-  virtual bool ForceTerminateServer(const string &name) {
-    return true;
-  }
+  virtual bool ForceTerminateServer(const std::string &name) { return true; }
 
-  virtual bool WaitServer(uint32 pid) {
-    return true;
-  }
+  virtual bool WaitServer(uint32 pid) { return true; }
 
   virtual void OnFatal(ServerLauncherInterface::ServerErrorType type) {
     LOG(ERROR) << static_cast<int>(type);
@@ -87,9 +85,7 @@ class TestServerLauncher : public client::ServerLauncherInterface {
     return error_map_[static_cast<int>(type)];
   }
 
-  bool start_server_called() const {
-    return start_server_called_;
-  }
+  bool start_server_called() const { return start_server_called_; }
 
   void set_start_server_called(bool start_server_called) {
     start_server_called_ = start_server_called;
@@ -99,10 +95,10 @@ class TestServerLauncher : public client::ServerLauncherInterface {
 
   virtual void set_suppress_error_dialog(bool suppress) {}
 
-  virtual void set_server_program(const string &server_path) {}
+  virtual void set_server_program(const std::string &server_path) {}
 
-  virtual const string &server_program() const {
-    static const string path;
+  virtual const std::string &server_program() const {
+    static const std::string path;
     return path;
   }
 
@@ -127,14 +123,13 @@ class TestServerLauncher : public client::ServerLauncherInterface {
   bool start_server_result_;
   bool start_server_called_;
   uint32 server_protocol_version_;
-  string response_;
-  map<int, int> error_map_;
+  std::string response_;
+  std::map<int, int> error_map_;
 };
 
 class MockClient : public client::Client {
  public:
-  MockClient()
-      : launcher_(nullptr) {}
+  MockClient() : launcher_(nullptr) {}
   explicit MockClient(const commands::Output &mock_response)
       : launcher_(nullptr) {
     client_factory_.SetConnection(true);
@@ -153,9 +148,7 @@ class MockClient : public client::Client {
     return input->ParseFromString(client_factory_.GetGeneratedRequest());
   }
 
-  bool start_server_called() {
-    return launcher_->start_server_called();
-  }
+  bool start_server_called() { return launcher_->start_server_called(); }
 
  private:
   IPCClientFactoryMock client_factory_;
@@ -173,9 +166,8 @@ TEST(ImeCoreTest, OpenIME) {
   mock_output.mutable_status()->set_mode(commands::FULL_KATAKANA);
 
   MockClient mock_client(mock_output);
-  const DWORD kFullKatakana =
-      IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE | IME_CMODE_ROMAN |
-      IME_CMODE_KATAKANA;
+  constexpr DWORD kFullKatakana = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE |
+                                  IME_CMODE_ROMAN | IME_CMODE_KATAKANA;
   EXPECT_TRUE(ImeCore::OpenIME(&mock_client, kFullKatakana));
   {
     commands::Input actual_input;
@@ -200,9 +192,8 @@ TEST(ImeCoreTest, CloseIME) {
 
   MockClient mock_client(mock_output);
 
-  const DWORD kFullKatakana =
-      IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE | IME_CMODE_ROMAN |
-      IME_CMODE_KATAKANA;
+  constexpr DWORD kFullKatakana = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE |
+                                  IME_CMODE_ROMAN | IME_CMODE_KATAKANA;
 
   commands::Output output;
   EXPECT_TRUE(ImeCore::CloseIME(&mock_client, kFullKatakana, &output));
@@ -222,8 +213,8 @@ TEST(ImeCoreTest, CloseIME) {
 
 TEST(ImeCoreTest, GetSupportableConversionMode) {
   EXPECT_EQ(IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE,
-            ImeCore::GetSupportableConversionMode(
-                IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE));
+            ImeCore::GetSupportableConversionMode(IME_CMODE_NATIVE |
+                                                  IME_CMODE_FULLSHAPE));
 
   EXPECT_EQ(IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE | IME_CMODE_ROMAN,
             ImeCore::GetSupportableConversionMode(
@@ -292,106 +283,98 @@ TEST(ImeCoreTest, GetSupportableSentenceMode_Issue2955175) {
   EXPECT_NE(IME_SMODE_NONE,
             ImeCore::GetSupportableSentenceMode(IME_SMODE_RESERVED));
 
-  EXPECT_NE(IME_SMODE_NONE,
-            ImeCore::GetSupportableSentenceMode(MAXDWORD));
+  EXPECT_NE(IME_SMODE_NONE, ImeCore::GetSupportableSentenceMode(MAXDWORD));
 }
 
 namespace {
 // constants for unit tests
-const DWORD kHiragana = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE;
-const DWORD kHalfAlpha = IME_CMODE_ALPHANUMERIC;
+constexpr DWORD kHiragana = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE;
+constexpr DWORD kHalfAlpha = IME_CMODE_ALPHANUMERIC;
 
 // Mozc uses only one candidate form.  This is why |kCandidateFormIndex| is
 // always to be 1.
-const DWORD kCandidateFormIndex = 1;
+constexpr DWORD kCandidateFormIndex = 1;
 
 // Currently, Mozc always set 0 (L'\0') to the wparam of the
 // WM_IME_COMPOSITION.
 // TODO(yukawa): Support wparam of the WM_IME_COMPOSITION.
 const wchar_t kLastUpdatedCharacter = L'\0';
 
-const DWORD kCompositionUpdateFlag =
+constexpr DWORD kCompositionUpdateFlag =
     GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_COMPSTR |
     GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS | GCS_DELTASTART;
 static_assert(kCompositionUpdateFlag == 0x1bf, "Must be 0x1bf");
 
-const DWORD kCompositionResultFlag =
-    GCS_RESULTREADSTR | GCS_RESULTREADCLAUSE |
-    GCS_RESULTSTR | GCS_RESULTCLAUSE;
+constexpr DWORD kCompositionResultFlag =
+    GCS_RESULTREADSTR | GCS_RESULTREADCLAUSE | GCS_RESULTSTR | GCS_RESULTCLAUSE;
 static_assert(kCompositionResultFlag == 0x1e00, "Must be 0x1e00");
 
-const DWORD kCompositionResultAndUpdateFlag =
+constexpr DWORD kCompositionResultAndUpdateFlag =
     kCompositionResultFlag | kCompositionUpdateFlag;
 static_assert(kCompositionResultAndUpdateFlag == 0x1fbf, "Must be 0x1fbf");
 
 const UIMessage kMsgMozcUIUpdate(WM_IME_NOTIFY, IMN_PRIVATE, kNotifyUpdateUI);
 const UIMessage kMsgSetConversionMode(WM_IME_NOTIFY, IMN_SETCONVERSIONMODE, 0);
 const UIMessage kMsgStartComposition(WM_IME_STARTCOMPOSITION, 0, 0);
-const UIMessage kMsgCompositionUpdate(
-    WM_IME_COMPOSITION, kLastUpdatedCharacter, kCompositionUpdateFlag);
-const UIMessage kMsgCompositionResult(
-    WM_IME_COMPOSITION, kLastUpdatedCharacter, kCompositionResultFlag);
-const UIMessage kMsgCompositionResultAndUpdate(
-    WM_IME_COMPOSITION, kLastUpdatedCharacter,
-    kCompositionResultAndUpdateFlag);
+const UIMessage kMsgCompositionUpdate(WM_IME_COMPOSITION, kLastUpdatedCharacter,
+                                      kCompositionUpdateFlag);
+const UIMessage kMsgCompositionResult(WM_IME_COMPOSITION, kLastUpdatedCharacter,
+                                      kCompositionResultFlag);
+const UIMessage kMsgCompositionResultAndUpdate(WM_IME_COMPOSITION,
+                                               kLastUpdatedCharacter,
+                                               kCompositionResultAndUpdateFlag);
 const UIMessage kMsgEndComposition(WM_IME_ENDCOMPOSITION, 0, 0);
 
-const UIMessage kMsgOpenCandidate(
-    WM_IME_NOTIFY, IMN_OPENCANDIDATE, kCandidateFormIndex);
-const UIMessage kMsgChangeCandidate(WM_IME_NOTIFY,
-    IMN_CHANGECANDIDATE, kCandidateFormIndex);
-const UIMessage kMsgCloseCandidate(WM_IME_NOTIFY,
-    IMN_CLOSECANDIDATE, kCandidateFormIndex);
+const UIMessage kMsgOpenCandidate(WM_IME_NOTIFY, IMN_OPENCANDIDATE,
+                                  kCandidateFormIndex);
+const UIMessage kMsgChangeCandidate(WM_IME_NOTIFY, IMN_CHANGECANDIDATE,
+                                    kCandidateFormIndex);
+const UIMessage kMsgCloseCandidate(WM_IME_NOTIFY, IMN_CLOSECANDIDATE,
+                                   kCandidateFormIndex);
 
-#define EXPECT_UI_MSG(expected_message, expected_wparam,                    \
-                      expected_lparam, actual_ui_msg)                       \
-  do {                                                                      \
-     EXPECT_EQ((expected_message), (actual_ui_msg).message());              \
-     EXPECT_EQ((expected_wparam), (actual_ui_msg).wparam());                \
-     EXPECT_EQ((expected_lparam), (actual_ui_msg).lparam());                \
+#define EXPECT_UI_MSG(expected_message, expected_wparam, expected_lparam, \
+                      actual_ui_msg)                                      \
+  do {                                                                    \
+    EXPECT_EQ((expected_message), (actual_ui_msg).message());             \
+    EXPECT_EQ((expected_wparam), (actual_ui_msg).wparam());               \
+    EXPECT_EQ((expected_lparam), (actual_ui_msg).lparam());               \
   } while (false)
 
-#define EXPECT_UI_UPDATE_MSG(actual_msg)                                    \
-    EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_PRIVATE, kNotifyUpdateUI, (actual_msg))
-#define EXPECT_SET_OPEN_STATUS_MSG(actual_msg)                              \
-    EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_SETOPENSTATUS, 0, (actual_msg))
-#define EXPECT_SET_CONVERSION_MODE_MSG(actual_msg)                          \
-    EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_SETCONVERSIONMODE, 0, (actual_msg))
-#define EXPECT_STARTCOMPOSITION_MSG(actual_msg)                             \
-    EXPECT_UI_MSG(WM_IME_STARTCOMPOSITION, 0, 0, (actual_msg))
+#define EXPECT_UI_UPDATE_MSG(actual_msg) \
+  EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_PRIVATE, kNotifyUpdateUI, (actual_msg))
+#define EXPECT_SET_OPEN_STATUS_MSG(actual_msg) \
+  EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_SETOPENSTATUS, 0, (actual_msg))
+#define EXPECT_SET_CONVERSION_MODE_MSG(actual_msg) \
+  EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_SETCONVERSIONMODE, 0, (actual_msg))
+#define EXPECT_STARTCOMPOSITION_MSG(actual_msg) \
+  EXPECT_UI_MSG(WM_IME_STARTCOMPOSITION, 0, 0, (actual_msg))
 #define EXPECT_COMPOSITION_MSG(expected_flag, actual_msg)                   \
-    EXPECT_UI_MSG(WM_IME_COMPOSITION, kLastUpdatedCharacter,                \
-                  (expected_flag), (actual_msg))
-#define EXPECT_ENDCOMPOSITION_MSG(actual_msg)                               \
-    EXPECT_UI_MSG(WM_IME_ENDCOMPOSITION, 0, 0, (actual_msg))
-#define EXPECT_OPENCANDIDATE_MSG(actual_msg)                                \
-    EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_OPENCANDIDATE, kCandidateFormIndex,    \
-                  (actual_msg))
-#define EXPECT_CHANGECANDIDATE_MSG(actual_msg)                              \
-    EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_CHANGECANDIDATE, kCandidateFormIndex,  \
-                  (actual_msg))
-#define EXPECT_CLOSECANDIDATE_MSG(actual_msg)                               \
-    EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_CLOSECANDIDATE, kCandidateFormIndex,   \
-                  (actual_msg))
+  EXPECT_UI_MSG(WM_IME_COMPOSITION, kLastUpdatedCharacter, (expected_flag), \
+                (actual_msg))
+#define EXPECT_ENDCOMPOSITION_MSG(actual_msg) \
+  EXPECT_UI_MSG(WM_IME_ENDCOMPOSITION, 0, 0, (actual_msg))
+#define EXPECT_OPENCANDIDATE_MSG(actual_msg)                           \
+  EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_OPENCANDIDATE, kCandidateFormIndex, \
+                (actual_msg))
+#define EXPECT_CHANGECANDIDATE_MSG(actual_msg)                           \
+  EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_CHANGECANDIDATE, kCandidateFormIndex, \
+                (actual_msg))
+#define EXPECT_CLOSECANDIDATE_MSG(actual_msg)                           \
+  EXPECT_UI_MSG(WM_IME_NOTIFY, IMN_CLOSECANDIDATE, kCandidateFormIndex, \
+                (actual_msg))
 }  // namespace
-
 
 // Check UI message order for
 //   "Hankaku/Zenkaku" -> "(Shift +)G" -> "Hankaku/Zenkaku"
 TEST(ImeCoreTest, TemporalConversionModeMessageOrderTest) {
   // "Hankaku/Zenkaku"
   {
-    vector<UIMessage> composition_messages;
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> composition_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             false,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, false,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(2, sorted_messages.size());
     EXPECT_SET_OPEN_STATUS_MSG(sorted_messages[0]);
@@ -400,20 +383,15 @@ TEST(ImeCoreTest, TemporalConversionModeMessageOrderTest) {
 
   // "(Shift +)G"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgStartComposition);
     composition_messages.push_back(kMsgCompositionUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             true,
-                             kHalfAlpha,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, true, kHalfAlpha, &sorted_messages);
 
     EXPECT_EQ(4, sorted_messages.size());
 
@@ -425,19 +403,14 @@ TEST(ImeCoreTest, TemporalConversionModeMessageOrderTest) {
 
   // "Hankaku/Zenkaku"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgCompositionResult);
     composition_messages.push_back(kMsgEndComposition);
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHalfAlpha,
-                             false,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHalfAlpha, false, kHiragana, &sorted_messages);
 
     EXPECT_EQ(5, sorted_messages.size());
     EXPECT_SET_CONVERSION_MODE_MSG(sorted_messages[0]);
@@ -453,17 +426,12 @@ TEST(ImeCoreTest, TemporalConversionModeMessageOrderTest) {
 TEST(ImeCoreTest, CompositionMessageOrderTest) {
   // "Hankaku/Zenkaku"
   {
-    vector<UIMessage> composition_messages;
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> composition_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             false,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, false,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(2, sorted_messages.size());
     EXPECT_SET_OPEN_STATUS_MSG(sorted_messages[0]);
@@ -472,20 +440,15 @@ TEST(ImeCoreTest, CompositionMessageOrderTest) {
 
   // "(Shift +)G"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgStartComposition);
     composition_messages.push_back(kMsgCompositionUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             true,
-                             kHalfAlpha,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, true, kHalfAlpha, &sorted_messages);
 
     EXPECT_EQ(4, sorted_messages.size());
 
@@ -497,19 +460,14 @@ TEST(ImeCoreTest, CompositionMessageOrderTest) {
 
   // "o"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgCompositionUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHalfAlpha,
-                             true,
-                             kHalfAlpha,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHalfAlpha, true, kHalfAlpha, &sorted_messages);
 
     EXPECT_EQ(2, sorted_messages.size());
 
@@ -519,20 +477,15 @@ TEST(ImeCoreTest, CompositionMessageOrderTest) {
 
   // "Enter"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgCompositionResult);
     composition_messages.push_back(kMsgEndComposition);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHalfAlpha,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHalfAlpha, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(4, sorted_messages.size());
 
@@ -544,17 +497,12 @@ TEST(ImeCoreTest, CompositionMessageOrderTest) {
 
   // "Hankaku/Zenkaku"
   {
-    vector<UIMessage> composition_messages;
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> composition_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             false,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, false, kHiragana, &sorted_messages);
 
     EXPECT_EQ(2, sorted_messages.size());
     EXPECT_SET_OPEN_STATUS_MSG(sorted_messages[0]);
@@ -567,17 +515,12 @@ TEST(ImeCoreTest, CompositionMessageOrderTest) {
 TEST(ImeCoreTest, CandidateMessageOrderTest) {
   // "Hankaku/Zenkaku"
   {
-    vector<UIMessage> composition_messages;
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> composition_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             false,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, false,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(2, sorted_messages.size());
     EXPECT_SET_OPEN_STATUS_MSG(sorted_messages[0]);
@@ -586,20 +529,15 @@ TEST(ImeCoreTest, CandidateMessageOrderTest) {
 
   // "a"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgStartComposition);
     composition_messages.push_back(kMsgCompositionUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(3, sorted_messages.size());
 
@@ -610,19 +548,14 @@ TEST(ImeCoreTest, CandidateMessageOrderTest) {
 
   // "Space"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgCompositionUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(2, sorted_messages.size());
 
@@ -632,20 +565,15 @@ TEST(ImeCoreTest, CandidateMessageOrderTest) {
 
   // "Space"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgCompositionUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
     candidate_messages.push_back(kMsgOpenCandidate);
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(3, sorted_messages.size());
 
@@ -656,20 +584,15 @@ TEST(ImeCoreTest, CandidateMessageOrderTest) {
 
   // "Space"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgCompositionUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
     candidate_messages.push_back(kMsgChangeCandidate);
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(3, sorted_messages.size());
 
@@ -680,20 +603,15 @@ TEST(ImeCoreTest, CandidateMessageOrderTest) {
 
   // "i"
   {
-    vector<UIMessage> composition_messages;
+    std::vector<UIMessage> composition_messages;
     composition_messages.push_back(kMsgCompositionResultAndUpdate);
 
-    vector<UIMessage> candidate_messages;
+    std::vector<UIMessage> candidate_messages;
     candidate_messages.push_back(kMsgCloseCandidate);
 
-    vector<UIMessage> sorted_messages;
-    ImeCore::SortIMEMessages(composition_messages,
-                             candidate_messages,
-                             true,
-                             kHiragana,
-                             true,
-                             kHiragana,
-                             &sorted_messages);
+    std::vector<UIMessage> sorted_messages;
+    ImeCore::SortIMEMessages(composition_messages, candidate_messages, true,
+                             kHiragana, true, kHiragana, &sorted_messages);
 
     EXPECT_EQ(3, sorted_messages.size());
     // IMN_CLOSECANDIDATE must prior to any composition message!

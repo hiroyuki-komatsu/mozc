@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@
 #ifndef MOZC_SESSION_INTERNAL_IME_CONTEXT_H_
 #define MOZC_SESSION_INTERNAL_IME_CONTEXT_H_
 
+#include <cstdint>
 #include <memory>
 
 #include "base/port.h"
@@ -54,17 +55,11 @@ class ImeContext {
   ImeContext();
   virtual ~ImeContext();
 
-  uint64 create_time() const {
-    return create_time_;
-  }
-  void set_create_time(uint64 create_time) {
-    create_time_ = create_time;
-  }
+  uint64_t create_time() const { return create_time_; }
+  void set_create_time(uint64_t create_time) { create_time_ = create_time; }
 
-  uint64 last_command_time() const {
-    return last_command_time_;
-  }
-  void set_last_command_time(uint64 last_command_time) {
+  uint64_t last_command_time() const { return last_command_time_; }
+  void set_last_command_time(uint64_t last_command_time) {
     last_command_time_ = last_command_time;
   }
 
@@ -79,7 +74,7 @@ class ImeContext {
   void set_converter(SessionConverterInterface *converter);
 
   const KeyEventTransformer &key_event_transformer() const {
-    return *key_event_transformer_;
+    return key_event_transformer_;
   }
 
   enum State {
@@ -89,21 +84,13 @@ class ImeContext {
     COMPOSITION = 4,
     CONVERSION = 8,
   };
-  State state() const {
-    return state_;
-  }
-  void set_state(State state) {
-    state_ = state;
-  }
+  State state() const { return state_; }
+  void set_state(State state) { state_ = state; }
 
   // Returns the current keymap.  This might be temporary and different from
   // the keymap in the config.
-  config::Config::SessionKeymap keymap() const {
-    return keymap_;
-  }
-  void set_keymap(config::Config::SessionKeymap keymap) {
-    keymap_ = keymap;
-  }
+  config::Config::SessionKeymap keymap() const { return keymap_; }
+  void set_keymap(config::Config::SessionKeymap keymap) { keymap_ = keymap; }
 
   void SetRequest(const commands::Request *request);
   const commands::Request &GetRequest() const;
@@ -128,19 +115,11 @@ class ImeContext {
   // Note that this may not be the latest info: this is likely to be a snapshot
   // of during the precomposition state and may not be updated during
   // composition/conversion state.
-  const commands::Context &client_context() const {
-    return client_context_;
-  }
-  commands::Context *mutable_client_context() {
-    return &client_context_;
-  }
+  const commands::Context &client_context() const { return client_context_; }
+  commands::Context *mutable_client_context() { return &client_context_; }
 
-  const commands::Output &output() const {
-    return output_;
-  }
-  commands::Output *mutable_output() {
-    return &output_;
-  }
+  const commands::Output &output() const { return output_; }
+  commands::Output *mutable_output() { return &output_; }
 
   // Copy |source| context to |destination| context.
   // TODO(hsumita): Renames it as CopyFrom and make it non-static to keep
@@ -152,19 +131,19 @@ class ImeContext {
   // session holding this instance is created and not the time when this
   // instance is created. We may want to move out |create_time_| from ImeContext
   // to Session, or somewhere more appropriate.
-  uint64 create_time_;
-  uint64 last_command_time_;
+  uint64_t create_time_;
+  uint64_t last_command_time_;
 
   std::unique_ptr<composer::Composer> composer_;
 
   std::unique_ptr<SessionConverterInterface> converter_;
 
-  std::unique_ptr<KeyEventTransformer> key_event_transformer_;
-
-  State state_;
+  KeyEventTransformer key_event_transformer_;
 
   const commands::Request *request_;
   const config::Config *config_;
+
+  State state_;
 
   config::Config::SessionKeymap keymap_;
 

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -50,6 +50,7 @@
 #include "request/conversion_request.h"
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace dictionary {
@@ -58,28 +59,28 @@ namespace {
 struct DictionaryData {
   std::unique_ptr<DictionaryInterface> user_dictionary;
   std::unique_ptr<SuppressionDictionary> suppression_dictionary;
-  POSMatcher pos_matcher;
+  PosMatcher pos_matcher;
   std::unique_ptr<DictionaryInterface> dictionary;
 };
 
-DictionaryData *CreateDictionaryData() {
-  DictionaryData *ret = new DictionaryData;
+std::unique_ptr<DictionaryData> CreateDictionaryData() {
+  auto ret = std::make_unique<DictionaryData>();
   testing::MockDataManager data_manager;
-  ret->pos_matcher.Set(data_manager.GetPOSMatcherData());
-  const char *dictionary_data = NULL;
+  ret->pos_matcher.Set(data_manager.GetPosMatcherData());
+  const char *dictionary_data = nullptr;
   int dictionary_size = 0;
   data_manager.GetSystemDictionaryData(&dictionary_data, &dictionary_size);
-  SystemDictionary *sys_dict =
-      SystemDictionary::Builder(dictionary_data, dictionary_size).Build();
-  ValueDictionary *val_dict =
-      new ValueDictionary(ret->pos_matcher, &sys_dict->value_trie());
-  ret->user_dictionary.reset(new UserDictionaryStub);
-  ret->suppression_dictionary.reset(new SuppressionDictionary);
-  ret->dictionary.reset(new DictionaryImpl(sys_dict,
-                                           val_dict,
-                                           ret->user_dictionary.get(),
-                                           ret->suppression_dictionary.get(),
-                                           &ret->pos_matcher));
+  std::unique_ptr<SystemDictionary> sys_dict =
+      SystemDictionary::Builder(dictionary_data, dictionary_size)
+          .Build()
+          .value();
+  auto val_dict = std::make_unique<ValueDictionary>(ret->pos_matcher,
+                                                    &sys_dict->value_trie());
+  ret->user_dictionary = std::make_unique<UserDictionaryStub>();
+  ret->suppression_dictionary = std::make_unique<SuppressionDictionary>();
+  ret->dictionary = std::make_unique<DictionaryImpl>(
+      std::move(sys_dict), std::move(val_dict), ret->user_dictionary.get(),
+      ret->suppression_dictionary.get(), &ret->pos_matcher);
   return ret;
 }
 
@@ -87,20 +88,18 @@ DictionaryData *CreateDictionaryData() {
 
 class DictionaryImplTest : public ::testing::Test {
  protected:
-  DictionaryImplTest() {
-    convreq_.set_config(&config_);
-  }
+  DictionaryImplTest() { convreq_.set_config(&config_); }
 
-  void SetUp() override {
-    config::ConfigHandler::GetDefaultConfig(&config_);
-  }
+  void SetUp() override { config::ConfigHandler::GetDefaultConfig(&config_); }
 
   class CheckKeyValueExistenceCallback : public DictionaryInterface::Callback {
    public:
-    CheckKeyValueExistenceCallback(StringPiece key, StringPiece value)
+    CheckKeyValueExistenceCallback(absl::string_view key,
+                                   absl::string_view value)
         : key_(key), value_(value), found_(false) {}
 
-    ResultType OnToken(StringPiece /* key */, StringPiece /* actual_key */,
+    ResultType OnToken(absl::string_view /* key */,
+                       absl::string_view /* actual_key */,
                        const Token &token) override {
       if (token.key == key_ && token.value == value_) {
         found_ = true;
@@ -112,16 +111,18 @@ class DictionaryImplTest : public ::testing::Test {
     bool found() const { return found_; }
 
    private:
-    const StringPiece key_, value_;
+    const absl::string_view key_, value_;
     bool found_;
   };
 
   class CheckSpellingExistenceCallback : public DictionaryInterface::Callback {
    public:
-    CheckSpellingExistenceCallback(StringPiece key, StringPiece value)
+    CheckSpellingExistenceCallback(absl::string_view key,
+                                   absl::string_view value)
         : key_(key), value_(value), found_(false) {}
 
-    ResultType OnToken(StringPiece /* key */, StringPiece /* actual_key */,
+    ResultType OnToken(absl::string_view /* key */,
+                       absl::string_view /* actual_key */,
                        const Token &token) override {
       if (token.key == key_ && token.value == value_ &&
           (token.attributes & Token::SPELLING_CORRECTION)) {
@@ -134,17 +135,19 @@ class DictionaryImplTest : public ::testing::Test {
     bool found() const { return found_; }
 
    private:
-    const StringPiece key_, value_;
+    const absl::string_view key_, value_;
     bool found_;
   };
 
   class CheckZipCodeExistenceCallback : public DictionaryInterface::Callback {
    public:
-    explicit CheckZipCodeExistenceCallback(StringPiece key, StringPiece value,
-                                           const POSMatcher *pos_matcher)
+    explicit CheckZipCodeExistenceCallback(absl::string_view key,
+                                           absl::string_view value,
+                                           const PosMatcher *pos_matcher)
         : key_(key), value_(value), pos_matcher_(pos_matcher), found_(false) {}
 
-    ResultType OnToken(StringPiece /* key */, StringPiece /* actual_key */,
+    ResultType OnToken(absl::string_view /* key */,
+                       absl::string_view /* actual_key */,
                        const Token &token) override {
       if (token.key == key_ && token.value == value_ &&
           pos_matcher_->IsZipcode(token.lid)) {
@@ -157,17 +160,18 @@ class DictionaryImplTest : public ::testing::Test {
     bool found() const { return found_; }
 
    private:
-    const StringPiece key_, value_;
-    const POSMatcher *pos_matcher_;
+    const absl::string_view key_, value_;
+    const PosMatcher *pos_matcher_;
     bool found_;
   };
 
   class CheckEnglishT13nCallback : public DictionaryInterface::Callback {
    public:
-    CheckEnglishT13nCallback(StringPiece key, StringPiece value)
+    CheckEnglishT13nCallback(absl::string_view key, absl::string_view value)
         : key_(key), value_(value), found_(false) {}
 
-    ResultType OnToken(StringPiece /* key */, StringPiece /* actual_key */,
+    ResultType OnToken(absl::string_view /* key */,
+                       absl::string_view /* actual_key */,
                        const Token &token) override {
       if (token.key == key_ && token.value == value_ &&
           Util::IsEnglishTransliteration(token.value)) {
@@ -180,15 +184,14 @@ class DictionaryImplTest : public ::testing::Test {
     bool found() const { return found_; }
 
    private:
-    const StringPiece key_, value_;
+    const absl::string_view key_, value_;
     bool found_;
   };
 
   // Pair of DictionaryInterface's lookup method and query text.
   struct LookupMethodAndQuery {
     void (DictionaryInterface::*lookup_method)(
-        StringPiece,
-        const ConversionRequest &,
+        absl::string_view, const ConversionRequest &,
         DictionaryInterface::Callback *) const;
     const char *query;
   };
@@ -198,12 +201,12 @@ class DictionaryImplTest : public ::testing::Test {
 };
 
 TEST_F(DictionaryImplTest, WordSuppressionTest) {
-  std::unique_ptr<DictionaryData> data(CreateDictionaryData());
+  std::unique_ptr<DictionaryData> data = CreateDictionaryData();
   DictionaryInterface *d = data->dictionary.get();
   SuppressionDictionary *s = data->suppression_dictionary.get();
 
-  const char kKey[] = "ぐーぐる";
-  const char kValue[] = "グーグル";
+  constexpr char kKey[] = "ぐーぐる";
+  constexpr char kValue[] = "グーグル";
 
   const LookupMethodAndQuery kTestPair[] = {
       {&DictionaryInterface::LookupPrefix, "ぐーぐるは"},
@@ -216,7 +219,7 @@ TEST_F(DictionaryImplTest, WordSuppressionTest) {
   s->Clear();
   s->AddEntry(kKey, kValue);
   s->UnLock();
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckKeyValueExistenceCallback callback(kKey, kValue);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_FALSE(callback.found());
@@ -226,7 +229,7 @@ TEST_F(DictionaryImplTest, WordSuppressionTest) {
   s->Lock();
   s->Clear();
   s->UnLock();
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckKeyValueExistenceCallback callback(kKey, kValue);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_TRUE(callback.found());
@@ -234,22 +237,22 @@ TEST_F(DictionaryImplTest, WordSuppressionTest) {
 }
 
 TEST_F(DictionaryImplTest, DisableSpellingCorrectionTest) {
-  std::unique_ptr<DictionaryData> data(CreateDictionaryData());
+  std::unique_ptr<DictionaryData> data = CreateDictionaryData();
   DictionaryInterface *d = data->dictionary.get();
 
   // "あぼがど" -> "アボカド", which is in the test dictionary.
-  const char kKey[] = "あぼがど";
-  const char kValue[] = "アボカド";
+  constexpr char kKey[] = "あぼがど";
+  constexpr char kValue[] = "アボカド";
 
   const LookupMethodAndQuery kTestPair[] = {
-    {&DictionaryInterface::LookupPrefix, kKey},
-    {&DictionaryInterface::LookupPredictive, "あぼ"},
+      {&DictionaryInterface::LookupPrefix, kKey},
+      {&DictionaryInterface::LookupPredictive, "あぼ"},
   };
 
   // The spelling correction entry (kKey, kValue) should be found if spelling
   // correction flag is set in the config.
   config_.set_use_spelling_correction(true);
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckSpellingExistenceCallback callback(kKey, kValue);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_TRUE(callback.found());
@@ -257,7 +260,7 @@ TEST_F(DictionaryImplTest, DisableSpellingCorrectionTest) {
 
   // Without the flag, it should be suppressed.
   config_.set_use_spelling_correction(false);
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckSpellingExistenceCallback callback(kKey, kValue);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_FALSE(callback.found());
@@ -265,22 +268,22 @@ TEST_F(DictionaryImplTest, DisableSpellingCorrectionTest) {
 }
 
 TEST_F(DictionaryImplTest, DisableZipCodeConversionTest) {
-  std::unique_ptr<DictionaryData> data(CreateDictionaryData());
+  std::unique_ptr<DictionaryData> data = CreateDictionaryData();
   DictionaryInterface *d = data->dictionary.get();
 
   // "100-0000" -> "東京都千代田区", which is in the test dictionary.
-  const char kKey[] = "100-0000";
-  const char kValue[] = "東京都千代田区";
+  constexpr char kKey[] = "100-0000";
+  constexpr char kValue[] = "東京都千代田区";
 
   const LookupMethodAndQuery kTestPair[] = {
-    {&DictionaryInterface::LookupPrefix, kKey},
-    {&DictionaryInterface::LookupPredictive, "100"},
+      {&DictionaryInterface::LookupPrefix, kKey},
+      {&DictionaryInterface::LookupPredictive, "100"},
   };
 
   // The zip code entry (kKey, kValue) should be found if the flag is set in the
   // config.
   config_.set_use_zip_code_conversion(true);
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckZipCodeExistenceCallback callback(kKey, kValue, &data->pos_matcher);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_TRUE(callback.found());
@@ -288,7 +291,7 @@ TEST_F(DictionaryImplTest, DisableZipCodeConversionTest) {
 
   // Without the flag, it should be suppressed.
   config_.set_use_zip_code_conversion(false);
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckZipCodeExistenceCallback callback(kKey, kValue, &data->pos_matcher);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_FALSE(callback.found());
@@ -296,22 +299,22 @@ TEST_F(DictionaryImplTest, DisableZipCodeConversionTest) {
 }
 
 TEST_F(DictionaryImplTest, DisableT13nConversionTest) {
-  std::unique_ptr<DictionaryData> data(CreateDictionaryData());
+  std::unique_ptr<DictionaryData> data = CreateDictionaryData();
   DictionaryInterface *d = data->dictionary.get();
   NodeAllocator allocator;
 
-  const char kKey[] = "ぐーぐる";
-  const char kValue[] = "Google";
+  constexpr char kKey[] = "ぐーぐる";
+  constexpr char kValue[] = "Google";
 
   const LookupMethodAndQuery kTestPair[] = {
-    {&DictionaryInterface::LookupPrefix, kKey},
-    {&DictionaryInterface::LookupPredictive, "ぐー"},
+      {&DictionaryInterface::LookupPrefix, kKey},
+      {&DictionaryInterface::LookupPredictive, "ぐー"},
   };
 
   // The T13N entry (kKey, kValue) should be found if the flag is set in the
   // config.
   config_.set_use_t13n_conversion(true);
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckEnglishT13nCallback callback(kKey, kValue);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_TRUE(callback.found());
@@ -319,7 +322,7 @@ TEST_F(DictionaryImplTest, DisableT13nConversionTest) {
 
   // Without the flag, it should be suppressed.
   config_.set_use_t13n_conversion(false);
-  for (size_t i = 0; i < arraysize(kTestPair); ++i) {
+  for (size_t i = 0; i < std::size(kTestPair); ++i) {
     CheckEnglishT13nCallback callback(kKey, kValue);
     (d->*kTestPair[i].lookup_method)(kTestPair[i].query, convreq_, &callback);
     EXPECT_FALSE(callback.found());
@@ -327,11 +330,11 @@ TEST_F(DictionaryImplTest, DisableT13nConversionTest) {
 }
 
 TEST_F(DictionaryImplTest, LookupComment) {
-  std::unique_ptr<DictionaryData> data(CreateDictionaryData());
+  std::unique_ptr<DictionaryData> data = CreateDictionaryData();
   DictionaryInterface *d = data->dictionary.get();
   NodeAllocator allocator;
 
-  string comment;
+  std::string comment;
   EXPECT_FALSE(d->LookupComment("key", "value", convreq_, &comment));
   EXPECT_TRUE(comment.empty());
 

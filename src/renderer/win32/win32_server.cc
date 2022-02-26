@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -37,8 +37,7 @@
 #include "base/util.h"
 #include "protocol/renderer_command.pb.h"
 #include "renderer/win32/window_manager.h"
-
-using std::unique_ptr;
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace renderer {
@@ -71,8 +70,7 @@ bool IsTSFMessage(const commands::RendererCommand &command) {
 namespace win32 {
 
 Win32Server::Win32Server()
-    : event_(nullptr),
-      window_manager_(new WindowManager) {
+    : event_(nullptr), window_manager_(new WindowManager) {
   // Manual reset event to notify we have a renderer command
   // to be handled in the UI thread.
   // The renderer command is serialized into "message_".
@@ -81,14 +79,12 @@ Win32Server::Win32Server()
       << "CreateEvent failed, Error = " << ::GetLastError();
 }
 
-Win32Server::~Win32Server() {
-  ::CloseHandle(event_);
-}
+Win32Server::~Win32Server() { ::CloseHandle(event_); }
 
 void Win32Server::AsyncHide() {
   {
     // Cancel the remaining event
-    scoped_lock l(&mutex_);
+    absl::MutexLock l(&mutex_);
     ::ResetEvent(event_);
   }
   window_manager_->AsyncHideAllWindows();
@@ -97,7 +93,7 @@ void Win32Server::AsyncHide() {
 void Win32Server::AsyncQuit() {
   {
     // Cancel the remaining event
-    scoped_lock l(&mutex_);
+    absl::MutexLock l(&mutex_);
     ::ResetEvent(event_);
   }
   window_manager_->AsyncQuitAllWindows();
@@ -146,10 +142,10 @@ void Win32Server::SetSendCommandInterface(
   window_manager_->SetSendCommandInterface(send_command_interface);
 }
 
-bool Win32Server::AsyncExecCommand(string *proto_message) {
+bool Win32Server::AsyncExecCommand(std::string *proto_message) {
   // Take the ownership of |proto_message|.
-  unique_ptr<string> proto_message_owner(proto_message);
-  scoped_lock l(&mutex_);
+  std::unique_ptr<std::string> proto_message_owner(proto_message);
+  absl::MutexLock l(&mutex_);
   if (message_ == *proto_message_owner.get()) {
     // This is exactly the same to the previous message. Theoretically it is
     // safe to do nothing here.
@@ -183,13 +179,13 @@ int Win32Server::StartMessageLoop() {
 
     // Wait for the next window message or next rendering message.
     const DWORD wait_result =
-      ::MsgWaitForMultipleObjects(1, &event_, FALSE, INFINITE, QS_ALLINPUT);
+        ::MsgWaitForMultipleObjects(1, &event_, FALSE, INFINITE, QS_ALLINPUT);
     if (wait_result == WAIT_OBJECT_0) {
       // "event_" is signaled so that we have to handle the renderer command
       // stored in "message_"
-      string message;
+      std::string message;
       {
-        scoped_lock l(&mutex_);
+        absl::MutexLock l(&mutex_);
         message.assign(message_);
         ::ResetEvent(event_);
       }

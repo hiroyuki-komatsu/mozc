@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -52,12 +52,11 @@
 namespace mozc {
 namespace {
 
-using std::unique_ptr;
-
 using dictionary::DictionaryMock;
 using dictionary::Token;
 
-void InsertASCIISequence(const string &text, composer::Composer *composer) {
+void InsertASCIISequence(const std::string &text,
+                         composer::Composer *composer) {
   for (size_t i = 0; i < text.size(); ++i) {
     commands::KeyEvent key;
     key.set_key_code(text[i]);
@@ -75,7 +74,7 @@ class LanguageAwareRewriterTest : public ::testing::Test {
 
   void SetUp() override {
     usage_stats::UsageStats::ClearAllStatsForTest();
-    dictionary_mock_.reset(new DictionaryMock);
+    dictionary_mock_ = std::make_unique<DictionaryMock>();
   }
 
   void TearDown() override {
@@ -85,12 +84,13 @@ class LanguageAwareRewriterTest : public ::testing::Test {
 
   LanguageAwareRewriter *CreateLanguageAwareRewriter() const {
     return new LanguageAwareRewriter(
-        dictionary::POSMatcher(data_manager_.GetPOSMatcherData()),
+        dictionary::PosMatcher(data_manager_.GetPosMatcherData()),
         dictionary_mock_.get());
   }
 
   bool RewriteWithLanguageAwareInput(const LanguageAwareRewriter *rewriter,
-                                     const string &key, string *composition,
+                                     const std::string &key,
+                                     std::string *composition,
                                      Segments *segments) {
     commands::Request client_request;
     client_request.set_language_aware_input(
@@ -117,7 +117,7 @@ class LanguageAwareRewriterTest : public ::testing::Test {
     return rewriter->Rewrite(request, segments);
   }
 
-  unique_ptr<DictionaryMock> dictionary_mock_;
+  std::unique_ptr<DictionaryMock> dictionary_mock_;
   usage_stats::scoped_usage_stats_enabler usage_stats_enabler_;
 
   const testing::MockDataManager data_manager_;
@@ -128,7 +128,7 @@ class LanguageAwareRewriterTest : public ::testing::Test {
 
 namespace {
 
-void PushFrontCandidate(const string &data, Segment *segment) {
+void PushFrontCandidate(const std::string &data, Segment *segment) {
   Segment::Candidate *candidate = segment->push_front_candidate();
   candidate->Init();
   candidate->value = data;
@@ -145,15 +145,16 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInput) {
   dictionary_mock_->AddLookupExact("naru", "naru", "naru", Token::NONE);
   dictionary_mock_->AddLookupExact("なる", "なる", "naru", Token::NONE);
 
-  unique_ptr<LanguageAwareRewriter> rewriter(CreateLanguageAwareRewriter());
+  std::unique_ptr<LanguageAwareRewriter> rewriter(
+      CreateLanguageAwareRewriter());
 
-  const string &kPrefix = "→ ";
-  const string &kDidYouMean = "もしかして";
+  const std::string &kPrefix = "→ ";
+  const std::string &kDidYouMean = "もしかして";
 
   {
     // "python" is composed to "ｐｙてょｎ", but "python" should be suggested,
     // because alphabet characters are in the middle of the word.
-    string composition;
+    std::string composition;
     Segments segments;
     EXPECT_TRUE(RewriteWithLanguageAwareInput(rewriter.get(), "python",
                                               &composition, &segments));
@@ -170,7 +171,7 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInput) {
   {
     // "mozuk" is composed to "もずｋ", then "mozuk" is not suggested.
     // The tailing alphabet characters are not counted.
-    string composition;
+    std::string composition;
     Segments segments;
     EXPECT_FALSE(RewriteWithLanguageAwareInput(rewriter.get(), "mozuk",
                                                &composition, &segments));
@@ -182,7 +183,7 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInput) {
   {
     // "house" is composed to "ほうせ".  Since "house" is in the dictionary
     // dislike the above "mozuk" case, "house" should be suggested.
-    string composition;
+    std::string composition;
     Segments segments;
 
     if (segments.conversion_segments_size() == 0) {
@@ -215,7 +216,7 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInput) {
   {
     // "query" is composed to "くえｒｙ".  Since "query" is in the dictionary
     // dislike the above "mozuk" case, "query" should be suggested.
-    string composition;
+    std::string composition;
     Segments segments;
     EXPECT_TRUE(RewriteWithLanguageAwareInput(rewriter.get(), "query",
                                               &composition, &segments));
@@ -233,7 +234,7 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInput) {
     // "google" is composed to "google" by mode_switching_handler.
     // If the suggestion is equal to the composition, that suggestion
     // is not added.
-    string composition;
+    std::string composition;
     Segments segments;
     EXPECT_FALSE(RewriteWithLanguageAwareInput(rewriter.get(), "google",
                                                &composition, &segments));
@@ -243,7 +244,7 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInput) {
   {
     // The key "なる" has two value "naru" and "なる".
     // In this case, language aware rewriter should not be triggered.
-    string composition;
+    std::string composition;
     Segments segments;
     EXPECT_FALSE(RewriteWithLanguageAwareInput(rewriter.get(), "naru",
                                                &composition, &segments));
@@ -254,17 +255,18 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInput) {
 }
 
 TEST_F(LanguageAwareRewriterTest, LanguageAwareInputUsageStats) {
-  unique_ptr<LanguageAwareRewriter> rewriter(CreateLanguageAwareRewriter());
+  std::unique_ptr<LanguageAwareRewriter> rewriter(
+      CreateLanguageAwareRewriter());
 
   EXPECT_STATS_NOT_EXIST("LanguageAwareSuggestionTriggered");
   EXPECT_STATS_NOT_EXIST("LanguageAwareSuggestionCommitted");
 
-  const string kPyTeyoN = "ｐｙてょｎ";
+  const std::string kPyTeyoN = "ｐｙてょｎ";
 
   {
     // "python" is composed to "ｐｙてょｎ", but "python" should be suggested,
     // because alphabet characters are in the middle of the word.
-    string composition;
+    std::string composition;
     Segments segments;
     EXPECT_TRUE(RewriteWithLanguageAwareInput(rewriter.get(), "python",
                                               &composition, &segments));
@@ -284,7 +286,7 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInputUsageStats) {
     // and ...Committed should be incremented.
     // Note, RewriteWithLanguageAwareInput is not used here, because
     // Finish also requires ConversionRequest.
-    string composition;
+    std::string composition;
     Segments segments;
 
     commands::Request client_request;
@@ -319,22 +321,23 @@ TEST_F(LanguageAwareRewriterTest, LanguageAwareInputUsageStats) {
 }
 
 TEST_F(LanguageAwareRewriterTest, NotRewriteFullWidthAsciiToHalfWidthAscii) {
-  unique_ptr<LanguageAwareRewriter> rewriter(CreateLanguageAwareRewriter());
+  std::unique_ptr<LanguageAwareRewriter> rewriter(
+      CreateLanguageAwareRewriter());
 
   {
     // "1d*=" is composed to "１ｄ＊＝", which are the full width ascii
     // characters of "1d*=". We do not want to rewrite full width ascii to
     // half width ascii by LanguageAwareRewriter.
-    string composition;
+    std::string composition;
     Segments segments;
-    EXPECT_FALSE(RewriteWithLanguageAwareInput(rewriter.get(), "1d*=",
-                                               &composition, &segments));
+    EXPECT_FALSE(RewriteWithLanguageAwareInput(
+        rewriter.get(), "1d*=", &composition, &segments));
     EXPECT_EQ("１ｄ＊＝", composition);
   }
 
   {
     // "xyzw" is composed to "ｘｙｚｗ". Do not rewrite.
-    string composition;
+    std::string composition;
     Segments segments;
     EXPECT_FALSE(RewriteWithLanguageAwareInput(rewriter.get(), "xyzw",
                                                &composition, &segments));
@@ -366,7 +369,8 @@ TEST_F(LanguageAwareRewriterTest, IsDisabledInTwelveKeyLayout) {
        RewriterInterface::NOT_AVAILABLE},
   };
 
-  unique_ptr<LanguageAwareRewriter> rewriter(CreateLanguageAwareRewriter());
+  std::unique_ptr<LanguageAwareRewriter> rewriter(
+      CreateLanguageAwareRewriter());
   for (const auto &param : kParams) {
     commands::Request request;
     request.set_language_aware_input(

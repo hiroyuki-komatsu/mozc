@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -43,10 +43,13 @@ class EngineStub : public EngineInterface {
   }
   bool Reload() override { return true; }
   UserDataManagerInterface *GetUserDataManager() override { return nullptr; }
-  StringPiece GetDataVersion() const override { return StringPiece(); }
+  absl::string_view GetDataVersion() const override {
+    return absl::string_view();
+  }
   const DataManagerInterface *GetDataManager() const override {
     return nullptr;
   }
+  std::vector<std::string> GetPosList() const override { return {}; }
 };
 
 }  // namespace mozc

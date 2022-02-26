@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,21 +29,25 @@
 
 #include "gui/word_register_dialog/word_register_dialog.h"
 
-#if defined(OS_ANDROID) || defined(OS_NACL)
+#include <cstdint>
+
+#if defined(OS_ANDROID) || defined(OS_WASM)
 #error "This platform is not supported."
-#endif  // OS_ANDROID || OS_NACL
+#endif  // OS_ANDROID || OS_WASM
 
 #ifdef OS_WIN
-# include <windows.h>
-# include <imm.h>
+// clang-format off
+#include <windows.h>
+#include <imm.h>
+// clang-format on
 #endif  // OS_WIN
 
-#include <QtGui/QtGui>
-#include <QtWidgets/QMessageBox>
+#include <QMessageBox>
+#include <QtGui>
 #include <cstdlib>
 #ifdef OS_WIN
 #include <memory>  // for std::unique_ptr
-#endif  // OS_WIN
+#endif             // OS_WIN
 #include <string>
 #include <vector>
 
@@ -55,6 +59,7 @@
 #include "dictionary/user_dictionary_session.h"
 #include "dictionary/user_dictionary_storage.h"
 #include "dictionary/user_dictionary_util.h"
+#include "gui/base/util.h"
 #include "protocol/user_dictionary_storage.pb.h"
 
 namespace mozc {
@@ -64,37 +69,41 @@ using mozc::user_dictionary::UserDictionary;
 using mozc::user_dictionary::UserDictionaryCommandStatus;
 using mozc::user_dictionary::UserDictionarySession;
 using mozc::user_dictionary::UserDictionaryStorage;
-#ifdef OS_WIN
-using std::unique_ptr;
-#endif  // OS_WIN
 
 namespace {
-const int kSessionTimeout = 100000;
-const int kMaxEditLength = 100;
-const int kMaxReverseConversionLength = 30;
+constexpr int kSessionTimeout = 100000;
+constexpr int kMaxEditLength = 100;
+constexpr int kMaxReverseConversionLength = 30;
 
 QString GetEnv(const char *envname) {
 #if defined(OS_WIN)
-  wstring wenvname;
-  mozc::Util::UTF8ToWide(envname, &wenvname);
+  std::wstring wenvname;
+  mozc::Util::Utf8ToWide(envname, &wenvname);
   const DWORD buffer_size =
-      ::GetEnvironmentVariable(wenvname.c_str(), NULL, 0);
+      ::GetEnvironmentVariable(wenvname.c_str(), nullptr, 0);
   if (buffer_size == 0) {
-    return "";
+    return QLatin1String("");
   }
-  unique_ptr<wchar_t[]> buffer(new wchar_t[buffer_size]);
+  std::unique_ptr<wchar_t[]> buffer(new wchar_t[buffer_size]);
   const DWORD num_copied =
       ::GetEnvironmentVariable(wenvname.c_str(), buffer.get(), buffer_size);
   if (num_copied > 0) {
-    return QString::fromUtf16(buffer.get());
+    // The size of wchar_t can be 2 or 4.
+    if (sizeof(wchar_t) == sizeof(ushort)) {
+      // On Windows the size of wchar_t is 2.
+      return QString::fromUtf16(reinterpret_cast<const ushort *>(buffer.get()));
+    } else {
+      // This is a fallback just in case.
+      return QString::fromUcs4(reinterpret_cast<const uint *>(buffer.get()));
+    }
   }
-  return "";
+  return QLatin1String("");
 #endif  // OS_WIN
-#if defined(OS_MACOSX) || defined(OS_LINUX)
-  return ::getenv(envname);
-#endif  // OS_MACOSX or OS_LINUX
+#if defined(__APPLE__) || defined(OS_LINUX)
+  return QString::fromUtf8(::getenv(envname));
+#endif  // __APPLE__ or OS_LINUX
   // TODO(team): Support other platforms.
-  return "";
+  return QLatin1String("");
 }
 }  // namespace
 
@@ -103,11 +112,10 @@ WordRegisterDialog::WordRegisterDialog()
       session_(new UserDictionarySession(
           UserDictionaryUtil::GetUserDictionaryFileName())),
       client_(client::ClientFactory::NewClient()),
-      window_title_(tr("Mozc")),
-      pos_list_provider_(new POSListProvider()) {
+      window_title_(GuiUtil::ProductName()),
+      pos_list_provider_(new PosListProvider()) {
   setupUi(this);
-  setWindowFlags(Qt::WindowSystemMenuHint |
-                 Qt::WindowCloseButtonHint |
+  setWindowFlags(Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint |
                  Qt::WindowStaysOnTopHint);
   setWindowModality(Qt::NonModal);
 
@@ -138,29 +146,31 @@ WordRegisterDialog::WordRegisterDialog()
 
 #ifndef ENABLE_CLOUD_SYNC
   if (session_->mutable_storage()
-      ->ConvertSyncDictionariesToNormalDictionaries()) {
+          ->ConvertSyncDictionariesToNormalDictionaries()) {
     LOG(INFO) << "Syncable dictionaries are converted to normal dictionaries";
-    session_->mutable_storage()->Save();
+    if (absl::Status s = session_->mutable_storage()->Save(); !s.ok()) {
+      LOG(ERROR) << "Failed to save the storage: " << s;
+    }
   }
 #endif  // !ENABLE_CLOUD_SYNC
 
   // Initialize ComboBox
-  vector<string> pos_set;
-  pos_list_provider_->GetPOSList(&pos_set);
+  std::vector<std::string> pos_set;
+  pos_list_provider_->GetPosList(&pos_set);
   CHECK(!pos_set.empty());
 
-  for (size_t i = 0; i < pos_set.size(); ++i) {
-    CHECK(!pos_set[i].empty());
-    PartOfSpeechcomboBox->addItem(pos_set[i].c_str());
+  for (const std::string &pos : pos_set) {
+    CHECK(!pos.empty());
+    PartOfSpeechcomboBox->addItem(QString::fromUtf8(pos.c_str()));
   }
 
   // Create new dictionary if empty
-  if (!session_->mutable_storage()->Exists() ||
+  if (!session_->mutable_storage()->Exists().ok() ||
       session_->storage().dictionaries_size() == 0) {
     const QString name = tr("User Dictionary 1");
-    uint64 dic_id = 0;
-    if (!session_->mutable_storage()->CreateDictionary(
-            name.toStdString(), &dic_id)) {
+    uint64_t dic_id = 0;
+    if (!session_->mutable_storage()->CreateDictionary(name.toStdString(),
+                                                       &dic_id)) {
       LOG(ERROR) << "Failed to create a new dictionary.";
       is_available_ = false;
       return;
@@ -171,23 +181,21 @@ WordRegisterDialog::WordRegisterDialog()
   {
     const UserDictionaryStorage &storage = session_->storage();
     CHECK_GT(storage.dictionaries_size(), 0);
-    for (size_t i = 0; i < storage.dictionaries_size(); ++i) {
-      DictionarycomboBox->addItem(storage.dictionaries(i).name().c_str());
+    for (const auto &dictionary : storage.dictionaries()) {
+      DictionarycomboBox->addItem(QString::fromUtf8(dictionary.name().c_str()));
     }
   }
 
-  connect(WordlineEdit, SIGNAL(textChanged(const QString &)),
-          this, SLOT(LineEditChanged(const QString &)));
-  connect(ReadinglineEdit, SIGNAL(textChanged(const QString &)),
-          this, SLOT(LineEditChanged(const QString &)));
-  connect(WordlineEdit, SIGNAL(editingFinished()),
-          this, SLOT(CompleteReading()));
-  connect(WordRegisterDialogbuttonBox,
-          SIGNAL(clicked(QAbstractButton *)),
-          this,
+  connect(WordlineEdit, SIGNAL(textChanged(const QString &)), this,
+          SLOT(LineEditChanged(const QString &)));
+  connect(ReadinglineEdit, SIGNAL(textChanged(const QString &)), this,
+          SLOT(LineEditChanged(const QString &)));
+  connect(WordlineEdit, SIGNAL(editingFinished()), this,
+          SLOT(CompleteReading()));
+  connect(WordRegisterDialogbuttonBox, SIGNAL(clicked(QAbstractButton *)), this,
           SLOT(Clicked(QAbstractButton *)));
-  connect(LaunchDictionaryToolpushButton, SIGNAL(clicked()),
-          this, SLOT(LaunchDictionaryTool()));
+  connect(LaunchDictionaryToolpushButton, SIGNAL(clicked()), this,
+          SLOT(LaunchDictionaryTool()));
 
   if (!WordlineEdit->text().isEmpty()) {
     ReadinglineEdit->setFocus(Qt::OtherFocusReason);
@@ -197,6 +205,7 @@ WordRegisterDialog::WordRegisterDialog()
   }
 
   UpdateUIStatus();
+  GuiUtil::ReplaceWidgetLabels(this);
 
   // Turn on IME
   EnableIME();
@@ -204,9 +213,7 @@ WordRegisterDialog::WordRegisterDialog()
 
 WordRegisterDialog::~WordRegisterDialog() {}
 
-bool WordRegisterDialog::IsAvailable() const {
-  return is_available_;
-}
+bool WordRegisterDialog::IsAvailable() const { return is_available_; }
 
 void WordRegisterDialog::LineEditChanged(const QString &str) {
   UpdateUIStatus();
@@ -222,12 +229,11 @@ void WordRegisterDialog::CompleteReading() {
 
 void WordRegisterDialog::UpdateUIStatus() {
   const bool enabled =
-      !ReadinglineEdit->text().isEmpty() &&
-      !WordlineEdit->text().isEmpty();
+      !ReadinglineEdit->text().isEmpty() && !WordlineEdit->text().isEmpty();
 
   QAbstractButton *button =
       WordRegisterDialogbuttonBox->button(QDialogButtonBox::Ok);
-  if (button != NULL) {
+  if (button != nullptr) {
     button->setEnabled(enabled);
   }
 }
@@ -241,22 +247,20 @@ void WordRegisterDialog::Clicked(QAbstractButton *button) {
           LOG(FATAL) << "key/value is empty. This case will never occur.";
           return;
         case INVALID_KEY:
-          QMessageBox::warning(
-              this, window_title_,
-              tr("Reading part contains invalid characters."));
+          QMessageBox::warning(this, window_title_,
+                               tr("Reading part contains invalid characters."));
           return;
         case INVALID_VALUE:
-          QMessageBox::warning(
-              this, window_title_,
-              tr("Word part contains invalid characters."));
+          QMessageBox::warning(this, window_title_,
+                               tr("Word part contains invalid characters."));
           return;
         case FATAL_ERROR:
-          QMessageBox::warning(
-              this, window_title_, tr("Unexpected error occurs."));
+          QMessageBox::warning(this, window_title_,
+                               tr("Unexpected error occurs."));
           break;
         case SAVE_FAILURE:
-          QMessageBox::warning(
-              this, window_title_, tr("Failed to update user dictionary."));
+          QMessageBox::warning(this, window_title_,
+                               tr("Failed to update user dictionary."));
           break;
         case SAVE_SUCCESS:
           break;
@@ -272,8 +276,8 @@ void WordRegisterDialog::Clicked(QAbstractButton *button) {
 }
 
 WordRegisterDialog::ErrorCode WordRegisterDialog::SaveEntry() {
-  const string key = ReadinglineEdit->text().toStdString();
-  const string value = WordlineEdit->text().toStdString();
+  const std::string key = ReadinglineEdit->text().toStdString();
+  const std::string value = WordlineEdit->text().toStdString();
   UserDictionary::PosType pos = UserDictionaryUtil::ToPosType(
       PartOfSpeechcomboBox->currentText().toStdString().c_str());
 
@@ -301,11 +305,11 @@ WordRegisterDialog::ErrorCode WordRegisterDialog::SaveEntry() {
   }
 
   UserDictionary *dic =
-      session_->mutable_storage()->mutable_dictionaries(index);
+      session_->mutable_storage()->GetProto().mutable_dictionaries(index);
   CHECK(dic);
 
-  if (dic->name() != DictionarycomboBox->currentText().toStdString()) {
-    LOG(ERROR) << "Inconsitent dictionary name";
+  if (dic->name() != DictionarycomboBox->currentText().toStdString().c_str()) {
+    LOG(ERROR) << "Inconsistent dictionary name";
     return FATAL_ERROR;
   }
 
@@ -315,10 +319,10 @@ WordRegisterDialog::ErrorCode WordRegisterDialog::SaveEntry() {
   entry->set_value(value);
   entry->set_pos(pos);
 
-  if (!session_->mutable_storage()->Save() &&
-      session_->mutable_storage()->GetLastError() ==
-      mozc::UserDictionaryStorage::SYNC_FAILURE) {
-    LOG(ERROR) << "Cannot save dictionary";
+  if (absl::Status s = session_->mutable_storage()->Save();
+      !s.ok() && session_->mutable_storage()->GetLastError() ==
+                     mozc::UserDictionaryStorage::SYNC_FAILURE) {
+    LOG(ERROR) << "Cannot save dictionary: " << s;
     return SAVE_FAILURE;
   }
 
@@ -327,13 +331,13 @@ WordRegisterDialog::ErrorCode WordRegisterDialog::SaveEntry() {
     return SAVE_SUCCESS;
   }
 
-#ifndef OS_MACOSX
+#ifndef __APPLE__
   // Update server version if need be.
   if (!client_->CheckVersionOrRestartServer()) {
     LOG(ERROR) << "CheckVersionOrRestartServer failed";
     return SAVE_SUCCESS;
   }
-#endif  // OS_MACOSX
+#endif  // __APPLE__
 
   if (!client_->Reload()) {
     LOG(ERROR) << "Reload command failed";
@@ -352,12 +356,12 @@ void WordRegisterDialog::LaunchDictionaryTool() {
 const QString WordRegisterDialog::GetReading(const QString &str) {
   if (str.isEmpty()) {
     LOG(ERROR) << "given string is empty";
-    return "";
+    return QLatin1String("");
   }
 
   if (str.count() >= kMaxReverseConversionLength) {
     LOG(ERROR) << "too long input";
-    return "";
+    return QLatin1String("");
   }
 
   commands::Output output;
@@ -366,7 +370,7 @@ const QString WordRegisterDialog::GetReading(const QString &str) {
     key.set_special_key(commands::KeyEvent::ON);
     if (!client_->SendKey(key, &output)) {
       LOG(ERROR) << "SendKey failed";
-      return "";
+      return QLatin1String("");
     }
 
     commands::SessionCommand command;
@@ -375,7 +379,7 @@ const QString WordRegisterDialog::GetReading(const QString &str) {
 
     if (!client_->SendCommand(command, &output)) {
       LOG(ERROR) << "SendCommand failed";
-      return "";
+      return QLatin1String("");
     }
 
     commands::Output dummy_output;
@@ -385,34 +389,32 @@ const QString WordRegisterDialog::GetReading(const QString &str) {
 
   if (!output.has_preedit()) {
     LOG(ERROR) << "No preedit";
-    return "";
+    return QLatin1String("");
   }
 
-  string key;
+  std::string key;
   for (size_t segment_index = 0;
-       segment_index < output.preedit().segment_size();
-       ++segment_index) {
+       segment_index < output.preedit().segment_size(); ++segment_index) {
     const commands::Preedit::Segment &segment =
         output.preedit().segment(segment_index);
     if (!segment.has_key()) {
       LOG(ERROR) << "No segment";
-      return "";
+      return QLatin1String("");
     }
     key.append(segment.key());
   }
 
-  if (key.empty() ||
-      !UserDictionaryUtil::IsValidReading(key)) {
+  if (key.empty() || !UserDictionaryUtil::IsValidReading(key)) {
     LOG(WARNING) << "containing invalid characters";
-    return "";
+    return QLatin1String("");
   }
 
-  return QString(key.c_str());
+  return QString::fromUtf8(key.c_str());
 }
 
 // Get default value from Clipboard
 void WordRegisterDialog::SetDefaultEntryFromClipboard() {
-  if (QApplication::clipboard() == NULL) {
+  if (QApplication::clipboard() == nullptr) {
     return;
   }
   CopyCurrentSelectionToClipboard();
@@ -424,13 +426,13 @@ void WordRegisterDialog::SetDefaultEntryFromClipboard() {
 void WordRegisterDialog::CopyCurrentSelectionToClipboard() {
 #ifdef OS_WIN
   const HWND foreground_window = ::GetForegroundWindow();
-  if (foreground_window == NULL) {
+  if (foreground_window == nullptr) {
     LOG(ERROR) << "GetForegroundWindow() failed: " << ::GetLastError();
     return;
   }
 
   const DWORD thread_id =
-      ::GetWindowThreadProcessId(foreground_window, NULL);
+      ::GetWindowThreadProcessId(foreground_window, nullptr);
 
   if (!::AttachThreadInput(::GetCurrentThreadId(), thread_id, TRUE)) {
     LOG(ERROR) << "AttachThreadInput failed: " << ::GetLastError();
@@ -441,13 +443,13 @@ void WordRegisterDialog::CopyCurrentSelectionToClipboard() {
 
   ::AttachThreadInput(::GetCurrentThreadId(), thread_id, FALSE);
 
-  if (focus_window == NULL || !::IsWindow(focus_window)) {
+  if (focus_window == nullptr || !::IsWindow(focus_window)) {
     LOG(WARNING) << "No focus window";
     return;
   }
 
   DWORD message_response = 0;
-  const DWORD kSendMessageTimeout = 10 * 1000;  // 10sec.
+  constexpr DWORD kSendMessageTimeout = 10 * 1000;  // 10sec.
   const LRESULT send_result =
       ::SendMessageTimeout(focus_window, WM_COPY, 0, 0, SMTO_NORMAL,
                            kSendMessageTimeout, &message_response);
@@ -455,8 +457,6 @@ void WordRegisterDialog::CopyCurrentSelectionToClipboard() {
     LOG(ERROR) << "SendMessageTimeout() failed: " << ::GetLastError();
   }
 #endif  // OS_WIN
-
-  return;
 }
 
 bool WordRegisterDialog::SetDefaultEntryFromEnvironmentVariable() {
@@ -477,14 +477,16 @@ bool WordRegisterDialog::SetDefaultEntryFromEnvironmentVariable() {
 }
 
 const QString WordRegisterDialog::TrimValue(const QString &str) const {
-  return str.trimmed().replace('\r', "").replace('\n', "");
+  return str.trimmed()
+      .replace(QLatin1Char('\r'), QLatin1String(""))
+      .replace(QLatin1Char('\n'), QLatin1String(""));
 }
 
 void WordRegisterDialog::EnableIME() {
 #ifdef OS_WIN
   // TODO(taku): implement it for other platform.
   HIMC himc = ::ImmGetContext(reinterpret_cast<HWND>(winId()));
-  if (himc != NULL) {
+  if (himc != nullptr) {
     ::ImmSetOpenStatus(himc, TRUE);
   }
 #endif  // OS_WIN

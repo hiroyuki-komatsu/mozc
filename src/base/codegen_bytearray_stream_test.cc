@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -47,45 +47,36 @@ namespace {
 
 class CodeGenByteArrayStreamTest : public testing::Test {
  protected:
-  virtual void SetUp() {
-    result_stream_.reset(new std::ostringstream());
-    codegen_stream_.reset(
-        new mozc::CodeGenByteArrayOutputStream(
-            result_stream_.get(),
-            mozc::codegenstream::NOT_OWN_STREAM));
+  void SetUp() override {
+    codegen_stream_ = std::make_unique<mozc::CodeGenByteArrayOutputStream>(
+        &result_stream_, mozc::codegenstream::NOT_OWN_STREAM);
   }
 
-  virtual void TearDown() {
-    codegen_stream_.reset();
-    result_stream_.reset();
-  }
+  void TearDown() override { codegen_stream_.reset(); }
 
-  string ExpectedOutput(const string &var_name_base,
-                        const string &count, const string &body) {
+  std::string ExpectedOutput(const std::string &var_name_base,
+                             const std::string &count,
+                             const std::string &body) {
+    // clang-format off
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-    return
-        "const " AS_STRING(MOZC_CODEGEN_BYTEARRAY_STREAM_WORD_TYPE)
-        " k" + var_name_base + "_data_wordtype[] = {\n"
-        + body + "};\n"
-        "const char * const k" + var_name_base + "_data = "
-        "reinterpret_cast<const char *>("
-        "k" + var_name_base + "_data_wordtype);\n"
-        "const size_t k" + var_name_base + "_size = " + count + ";\n";
-#else
-    return
-        "const char k" + var_name_base + "_data[] =\n"
-        + body + "\n"
-        ";\n"
-        "const size_t k" + var_name_base + "_size = " + count + ";\n";
-#endif
+    return "const uint64 k" + var_name_base + "_data_wordtype[] = {\n" +
+             body +
+           "};\n"
+           "const char * const k" + var_name_base + "_data = "
+               "reinterpret_cast<const char *>("
+                   "k" + var_name_base + "_data_wordtype);\n"
+           "const size_t k" + var_name_base + "_size = " + count + ";\n";
+#else  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+    return "const char k" + var_name_base + "_data[] =\n" + body + "\n;\n"
+           "const size_t k" + var_name_base + "_size = " + count + ";\n";
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+    // clang-format on
   }
 
-  string ResultOutput() {
-    return result_stream_->str();
-  }
+  std::string ResultOutput() { return result_stream_.str(); }
 
   std::unique_ptr<mozc::CodeGenByteArrayOutputStream> codegen_stream_;
-  std::unique_ptr<std::ostringstream> result_stream_;
+  std::ostringstream result_stream_;
 };
 
 TEST_F(CodeGenByteArrayStreamTest, NoInput) {
@@ -93,10 +84,10 @@ TEST_F(CodeGenByteArrayStreamTest, NoInput) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("NoInput", "0", "");
-#else
-  const string expected = ExpectedOutput("NoInput", "0", "\"\"");
-#endif
+  const std::string expected = ExpectedOutput("NoInput", "0", "");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput("NoInput", "0", "\"\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -107,10 +98,10 @@ TEST_F(CodeGenByteArrayStreamTest, EmptyString) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("EmptyString", "0", "");
-#else
-  const string expected = ExpectedOutput("EmptyString", "0", "\"\"");
-#endif
+  const std::string expected = ExpectedOutput("EmptyString", "0", "");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput("EmptyString", "0", "\"\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -121,10 +112,11 @@ TEST_F(CodeGenByteArrayStreamTest, SingleByte) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("Test", "1", "0x0000000000000001");
-#else
-  const string expected = ExpectedOutput("Test", "1", "\"\\x01\"");
-#endif
+  const std::string expected =
+      ExpectedOutput("Test", "1", "0x0000000000000001");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput("Test", "1", "\"\\x01\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -135,10 +127,11 @@ TEST_F(CodeGenByteArrayStreamTest, SingleByteZero) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("Test", "1", "0x0000000000000000");
-#else
-  const string expected = ExpectedOutput("Test", "1", "\"\\x00\"");
-#endif
+  const std::string expected =
+      ExpectedOutput("Test", "1", "0x0000000000000000");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput("Test", "1", "\"\\x00\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -149,12 +142,12 @@ TEST_F(CodeGenByteArrayStreamTest, SingleWord) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("Test", "8", "0x3837363534333231, ");
-#else
-  const string expected = ExpectedOutput(
-      "Test", "8",
-      "\"\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\"");
-#endif
+  const std::string expected =
+      ExpectedOutput("Test", "8", "0x3837363534333231, ");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput(
+      "Test", "8", "\"\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -163,22 +156,22 @@ TEST_F(CodeGenByteArrayStreamTest, SingleLine) {
   codegen_stream_->OpenVarDef("Test");
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   *codegen_stream_ << "12345678ABCDEFGHabcdefghIJKLMNOP";
-#else
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   *codegen_stream_ << "0123456789abcdefghij";
-#endif
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput(
-      "Test", "32",
-      "0x3837363534333231, 0x4847464544434241, "
-      "0x6867666564636261, 0x504F4E4D4C4B4A49,\n");
-#else
-  const string expected = ExpectedOutput(
-      "Test", "20",
-      "\"\\x30\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\\x39"
-      "\\x61\\x62\\x63\\x64\\x65\\x66\\x67\\x68\\x69\\x6A\"");
-#endif
+  const std::string expected =
+      ExpectedOutput("Test", "32",
+                     "0x3837363534333231, 0x4847464544434241, "
+                     "0x6867666564636261, 0x504F4E4D4C4B4A49,\n");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected =
+      ExpectedOutput("Test", "20",
+                     "\"\\x30\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\\x39"
+                     "\\x61\\x62\\x63\\x64\\x65\\x66\\x67\\x68\\x69\\x6A\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -187,24 +180,24 @@ TEST_F(CodeGenByteArrayStreamTest, SingleLinePlusOne) {
   codegen_stream_->OpenVarDef("Test");
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   *codegen_stream_ << "12345678ABCDEFGHabcdefghIJKLMNOP\xFF";
-#else
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   *codegen_stream_ << "0123456789abcdefghij\xFF";
-#endif
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput(
-      "Test", "33",
-      "0x3837363534333231, 0x4847464544434241, "
-      "0x6867666564636261, 0x504F4E4D4C4B4A49,\n"
-      "0x00000000000000FF");
-#else
-  const string expected = ExpectedOutput(
-      "Test", "21",
-      "\"\\x30\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\\x39"
-      "\\x61\\x62\\x63\\x64\\x65\\x66\\x67\\x68\\x69\\x6A\"\n"
-      "\"\\xFF\"");
-#endif
+  const std::string expected =
+      ExpectedOutput("Test", "33",
+                     "0x3837363534333231, 0x4847464544434241, "
+                     "0x6867666564636261, 0x504F4E4D4C4B4A49,\n"
+                     "0x00000000000000FF");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected =
+      ExpectedOutput("Test", "21",
+                     "\"\\x30\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\\x39"
+                     "\\x61\\x62\\x63\\x64\\x65\\x66\\x67\\x68\\x69\\x6A\"\n"
+                     "\"\\xFF\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -219,12 +212,12 @@ TEST_F(CodeGenByteArrayStreamTest, FragmentaryFlush) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("Test", "8", "0x3837363534333231, ");
-#else
-  const string expected = ExpectedOutput(
-      "Test", "8",
-      "\"\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\"");
-#endif
+  const std::string expected =
+      ExpectedOutput("Test", "8", "0x3837363534333231, ");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput(
+      "Test", "8", "\"\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -239,15 +232,16 @@ TEST_F(CodeGenByteArrayStreamTest, MultipleVarDefs) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("First", "8", "0x3837363534333231, ") +
-                          ExpectedOutput("Second", "8", "0x6867666564636261, ");
-#else
-  const string expected =
+  const std::string expected =
+      ExpectedOutput("First", "8", "0x3837363534333231, ") +
+      ExpectedOutput("Second", "8", "0x6867666564636261, ");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected =
       ExpectedOutput("First", "8",
                      "\"\\x31\\x32\\x33\\x34\\x35\\x36\\x37\\x38\"") +
       ExpectedOutput("Second", "8",
                      "\"\\x61\\x62\\x63\\x64\\x65\\x66\\x67\\x68\"");
-#endif
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -266,10 +260,10 @@ TEST_F(CodeGenByteArrayStreamTest, OpenDoubly) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("Test1", "0", "");
-#else
-  const string expected = ExpectedOutput("Test1", "0", "\"\"");
-#endif
+  const std::string expected = ExpectedOutput("Test1", "0", "");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput("Test1", "0", "\"\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -287,10 +281,10 @@ TEST_F(CodeGenByteArrayStreamTest, CloseBeforeOpen) {
   codegen_stream_->CloseVarDef();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("Test", "0", "");
-#else
-  const string expected = ExpectedOutput("Test", "0", "\"\"");
-#endif
+  const std::string expected = ExpectedOutput("Test", "0", "");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput("Test", "0", "\"\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }
@@ -306,10 +300,10 @@ TEST_F(CodeGenByteArrayStreamTest, CloseDoubly) {
   codegen_stream_->clear();
 
 #ifdef MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
-  const string expected = ExpectedOutput("Test", "0", "");
-#else
-  const string expected = ExpectedOutput("Test", "0", "\"\"");
-#endif
+  const std::string expected = ExpectedOutput("Test", "0", "");
+#else   // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
+  const std::string expected = ExpectedOutput("Test", "0", "\"\"");
+#endif  // MOZC_CODEGEN_BYTEARRAY_STREAM_USES_WORD_ARRAY
   EXPECT_EQ(expected, ResultOutput());
   EXPECT_TRUE(codegen_stream_->good());
 }

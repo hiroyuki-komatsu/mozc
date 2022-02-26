@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,7 @@ class ConfigSnapshot {
     bool use_kana_input;
     bool use_keyboard_to_change_preedit_method;
     bool use_mode_indicator;
-    vector<KeyInformation> direct_mode_keys;
+    std::vector<KeyInformation> direct_mode_keys;
     Info();
   };
 

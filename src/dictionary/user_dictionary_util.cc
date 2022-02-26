@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,12 +30,15 @@
 #include "dictionary/user_dictionary_util.h"
 
 #include <string.h>
+
 #include <algorithm>
+#include <cstdint>
 
 #include "base/config_file_stream.h"
 #include "base/file_stream.h"
+#include "base/japanese_util.h"
 #include "base/logging.h"
-#include "base/protobuf/message.h"
+#include "base/protobuf/protobuf.h"
 #include "base/util.h"
 #include "dictionary/user_pos_interface.h"
 
@@ -46,40 +49,36 @@ using ::mozc::user_dictionary::UserDictionaryCommandStatus;
 
 namespace {
 // Maximum string length in UserDictionaryEntry's field
-const size_t kMaxKeySize = 300;
-const size_t kMaxValueSize = 300;
-const size_t kMaxCommentSize = 300;
-const char kInvalidChars[]= "\n\r\t";
-const char kUserDictionaryFile[] = "user://user_dictionary.db";
+constexpr size_t kMaxKeySize = 300;
+constexpr size_t kMaxValueSize = 300;
+constexpr size_t kMaxCommentSize = 300;
+constexpr char kInvalidChars[] = "\n\r\t";
+constexpr char kUserDictionaryFile[] = "user://user_dictionary.db";
 
 // Maximum string length for dictionary name.
-const size_t kMaxDictionaryNameSize = 300;
+constexpr size_t kMaxDictionaryNameSize = 300;
 
 // The limits of dictionary/entry size.
-const size_t kMaxDictionarySize = 100;
-const size_t kMaxEntrySize = 1000000;
+constexpr size_t kMaxDictionarySize = 100;
+constexpr size_t kMaxEntrySize = 1000000;
 }  // namespace
 
-size_t UserDictionaryUtil::max_dictionary_size() {
-  return kMaxDictionarySize;
-}
+size_t UserDictionaryUtil::max_dictionary_size() { return kMaxDictionarySize; }
 
-size_t UserDictionaryUtil::max_entry_size() {
-  return kMaxEntrySize;
-}
+size_t UserDictionaryUtil::max_entry_size() { return kMaxEntrySize; }
 
 bool UserDictionaryUtil::IsValidEntry(
-    const UserPOSInterface &user_pos,
+    const UserPosInterface &user_pos,
     const user_dictionary::UserDictionary::Entry &entry) {
   return ValidateEntry(entry) ==
-      UserDictionaryCommandStatus::USER_DICTIONARY_COMMAND_SUCCESS;
+         UserDictionaryCommandStatus::USER_DICTIONARY_COMMAND_SUCCESS;
 }
 
 namespace {
 
 #define INRANGE(w, a, b) ((w) >= (a) && (w) <= (b))
 
-bool InternalValidateNormalizedReading(const string &reading) {
+bool InternalValidateNormalizedReading(const std::string &reading) {
   for (ConstChar32Iterator iter(reading); !iter.Done(); iter.Next()) {
     const char32 c = iter.Get();
     if (!INRANGE(c, 0x0021, 0x007E) &&  // Basic Latin (Ascii)
@@ -101,24 +100,25 @@ bool InternalValidateNormalizedReading(const string &reading) {
 
 }  // namespace
 
-bool UserDictionaryUtil::IsValidReading(const string &reading) {
-  string normalized;
+bool UserDictionaryUtil::IsValidReading(const std::string &reading) {
+  std::string normalized;
   NormalizeReading(reading, &normalized);
   return InternalValidateNormalizedReading(normalized);
 }
 
-void UserDictionaryUtil::NormalizeReading(const string &input, string *output) {
+void UserDictionaryUtil::NormalizeReading(const std::string &input,
+                                          std::string *output) {
   output->clear();
-  string tmp1, tmp2;
-  Util::FullWidthAsciiToHalfWidthAscii(input, &tmp1);
-  Util::HalfWidthKatakanaToFullWidthKatakana(tmp1, &tmp2);
-  Util::KatakanaToHiragana(tmp2, output);
+  std::string tmp1, tmp2;
+  japanese_util::FullWidthAsciiToHalfWidthAscii(input, &tmp1);
+  japanese_util::HalfWidthKatakanaToFullWidthKatakana(tmp1, &tmp2);
+  japanese_util::KatakanaToHiragana(tmp2, output);
 }
 
 UserDictionaryCommandStatus::Status UserDictionaryUtil::ValidateEntry(
     const user_dictionary::UserDictionary::Entry &entry) {
   // Validate reading.
-  const string &reading = entry.key();
+  const std::string &reading = entry.key();
   if (reading.empty()) {
     VLOG(1) << "key is empty";
     return UserDictionaryCommandStatus::READING_EMPTY;
@@ -133,7 +133,7 @@ UserDictionaryCommandStatus::Status UserDictionaryUtil::ValidateEntry(
   }
 
   // Validate word.
-  const string &word = entry.value();
+  const std::string &word = entry.value();
   if (word.empty()) {
     return UserDictionaryCommandStatus::WORD_EMPTY;
   }
@@ -141,18 +141,18 @@ UserDictionaryCommandStatus::Status UserDictionaryUtil::ValidateEntry(
     VLOG(1) << "Too long value.";
     return UserDictionaryCommandStatus::WORD_TOO_LONG;
   }
-  if (word.find_first_of(kInvalidChars) != string::npos) {
+  if (word.find_first_of(kInvalidChars) != std::string::npos) {
     VLOG(1) << "Invalid character in value.";
     return UserDictionaryCommandStatus::WORD_CONTAINS_INVALID_CHARACTER;
   }
 
   // Validate comment.
-  const string &comment = entry.comment();
+  const std::string &comment = entry.comment();
   if (comment.size() > kMaxCommentSize) {
     VLOG(1) << "Too long comment.";
     return UserDictionaryCommandStatus::COMMENT_TOO_LONG;
   }
-  if (comment.find_first_of(kInvalidChars) != string::npos) {
+  if (comment.find_first_of(kInvalidChars) != std::string::npos) {
     VLOG(1) << "Invalid character in comment.";
     return UserDictionaryCommandStatus::COMMENT_CONTAINS_INVALID_CHARACTER;
   }
@@ -180,24 +180,23 @@ bool UserDictionaryUtil::IsDictionaryFull(
 const user_dictionary::UserDictionary *
 UserDictionaryUtil::GetUserDictionaryById(
     const user_dictionary::UserDictionaryStorage &storage,
-    uint64 dictionary_id) {
+    uint64_t dictionary_id) {
   int index = GetUserDictionaryIndexById(storage, dictionary_id);
-  return index >= 0 ? &storage.dictionaries(index) : NULL;
+  return index >= 0 ? &storage.dictionaries(index) : nullptr;
 }
 
 user_dictionary::UserDictionary *
 UserDictionaryUtil::GetMutableUserDictionaryById(
-    user_dictionary::UserDictionaryStorage *storage, uint64 dictionary_id) {
+    user_dictionary::UserDictionaryStorage *storage, uint64_t dictionary_id) {
   int index = GetUserDictionaryIndexById(*storage, dictionary_id);
-  return index >= 0 ? storage->mutable_dictionaries(index) : NULL;
+  return index >= 0 ? storage->mutable_dictionaries(index) : nullptr;
 }
 
 int UserDictionaryUtil::GetUserDictionaryIndexById(
     const user_dictionary::UserDictionaryStorage &storage,
-    uint64 dictionary_id) {
+    uint64_t dictionary_id) {
   for (int i = 0; i < storage.dictionaries_size(); ++i) {
-    const user_dictionary::UserDictionary &dictionary =
-        storage.dictionaries(i);
+    const user_dictionary::UserDictionary &dictionary = storage.dictionaries(i);
     if (dictionary.id() == dictionary_id) {
       return i;
     }
@@ -207,7 +206,7 @@ int UserDictionaryUtil::GetUserDictionaryIndexById(
   return -1;
 }
 
-string UserDictionaryUtil::GetUserDictionaryFileName() {
+std::string UserDictionaryUtil::GetUserDictionaryFileName() {
   return ConfigFileStream::GetFileName(kUserDictionaryFile);
 }
 
@@ -227,12 +226,12 @@ bool UserDictionaryUtil::SanitizeEntry(
 }
 
 // static
-bool UserDictionaryUtil::Sanitize(string *str, size_t max_size) {
+bool UserDictionaryUtil::Sanitize(std::string *str, size_t max_size) {
   // First part: Remove invalid characters.
   {
     const size_t original_size = str->size();
-    string::iterator begin = str->begin();
-    string::iterator end = str->end();
+    std::string::iterator begin = str->begin();
+    std::string::iterator end = str->end();
     end = std::remove(begin, end, '\t');
     end = std::remove(begin, end, '\n');
     end = std::remove(begin, end, '\r');
@@ -260,8 +259,7 @@ bool UserDictionaryUtil::Sanitize(string *str, size_t max_size) {
       }
       p += len;
     }
-    LOG(FATAL) <<
-        "There should be a bug in implementation of the function.";
+    LOG(FATAL) << "There should be a bug in implementation of the function.";
   }
 
   return true;
@@ -269,7 +267,7 @@ bool UserDictionaryUtil::Sanitize(string *str, size_t max_size) {
 
 UserDictionaryCommandStatus::Status UserDictionaryUtil::ValidateDictionaryName(
     const user_dictionary::UserDictionaryStorage &storage,
-    const string &dictionary_name) {
+    const std::string &dictionary_name) {
   if (dictionary_name.empty()) {
     VLOG(1) << "Empty dictionary name.";
     return UserDictionaryCommandStatus::DICTIONARY_NAME_EMPTY;
@@ -278,10 +276,10 @@ UserDictionaryCommandStatus::Status UserDictionaryUtil::ValidateDictionaryName(
     VLOG(1) << "Too long dictionary name";
     return UserDictionaryCommandStatus::DICTIONARY_NAME_TOO_LONG;
   }
-  if (dictionary_name.find_first_of(kInvalidChars) != string::npos) {
+  if (dictionary_name.find_first_of(kInvalidChars) != std::string::npos) {
     VLOG(1) << "Invalid character in dictionary name: " << dictionary_name;
-    return UserDictionaryCommandStatus
-        ::DICTIONARY_NAME_CONTAINS_INVALID_CHARACTER;
+    return UserDictionaryCommandStatus ::
+        DICTIONARY_NAME_CONTAINS_INVALID_CHARACTER;
   }
   for (int i = 0; i < storage.dictionaries_size(); ++i) {
     if (storage.dictionaries(i).name() == dictionary_name) {
@@ -299,67 +297,34 @@ namespace {
 // Note that the '0' is invalid in the definition, so the corresponding
 // element is nullptr.
 const char *kPosTypeStringTable[] = {
-  nullptr,
-  "名詞",
-  "短縮よみ",
-  "サジェストのみ",
-  "固有名詞",
-  "人名",
-  "姓",
-  "名",
-  "組織",
-  "地名",
-  "名詞サ変",
-  "名詞形動",
-  "数",
-  "アルファベット",
-  "記号",
-  "顔文字",
+    nullptr,        "名詞",           "短縮よみ",     "サジェストのみ",
+    "固有名詞",     "人名",           "姓",           "名",
+    "組織",         "地名",           "名詞サ変",     "名詞形動",
+    "数",           "アルファベット", "記号",         "顔文字",
 
-  "副詞",
-  "連体詞",
-  "接続詞",
-  "感動詞",
-  "接頭語",
-  "助数詞",
-  "接尾一般",
-  "接尾人名",
-  "接尾地名",
-  "動詞ワ行五段",
-  "動詞カ行五段",
-  "動詞サ行五段",
-  "動詞タ行五段",
-  "動詞ナ行五段",
-  "動詞マ行五段",
-  "動詞ラ行五段",
-  "動詞ガ行五段",
-  "動詞バ行五段",
-  "動詞ハ行四段",
-  "動詞一段",
-  "動詞カ変",
-  "動詞サ変",
-  "動詞ザ変",
-  "動詞ラ変",
-  "形容詞",
-  "終助詞",
-  "句読点",
-  "独立語",
-  "抑制単語",
+    "副詞",         "連体詞",         "接続詞",       "感動詞",
+    "接頭語",       "助数詞",         "接尾一般",     "接尾人名",
+    "接尾地名",     "動詞ワ行五段",   "動詞カ行五段", "動詞サ行五段",
+    "動詞タ行五段", "動詞ナ行五段",   "動詞マ行五段", "動詞ラ行五段",
+    "動詞ガ行五段", "動詞バ行五段",   "動詞ハ行四段", "動詞一段",
+    "動詞カ変",     "動詞サ変",       "動詞ザ変",     "動詞ラ変",
+    "形容詞",       "終助詞",         "句読点",       "独立語",
+    "抑制単語",
 };
 }  // namespace
 
-const char* UserDictionaryUtil::GetStringPosType(
+const char *UserDictionaryUtil::GetStringPosType(
     user_dictionary::UserDictionary::PosType pos_type) {
   if (user_dictionary::UserDictionary::PosType_IsValid(pos_type)) {
     return kPosTypeStringTable[pos_type];
   }
-  return NULL;
+  return nullptr;
 }
 
 user_dictionary::UserDictionary::PosType UserDictionaryUtil::ToPosType(
     const char *string_pos_type) {
   // Skip the element at 0.
-  for (int i = 1; i < arraysize(kPosTypeStringTable); ++i) {
+  for (int i = 1; i < std::size(kPosTypeStringTable); ++i) {
     if (strcmp(kPosTypeStringTable[i], string_pos_type) == 0) {
       return static_cast<user_dictionary::UserDictionary::PosType>(i);
     }
@@ -369,19 +334,13 @@ user_dictionary::UserDictionary::PosType UserDictionaryUtil::ToPosType(
   return static_cast<user_dictionary::UserDictionary::PosType>(-1);
 }
 
-uint64 UserDictionaryUtil::CreateNewDictionaryId(
+uint64_t UserDictionaryUtil::CreateNewDictionaryId(
     const user_dictionary::UserDictionaryStorage &storage) {
-  static const uint64 kInvalidDictionaryId = 0;
+  static constexpr uint64_t kInvalidDictionaryId = 0;
 
-  uint64 id = kInvalidDictionaryId;
+  uint64_t id = kInvalidDictionaryId;
   while (id == kInvalidDictionaryId) {
     Util::GetRandomSequence(reinterpret_cast<char *>(&id), sizeof(id));
-
-#ifdef OS_NACL
-    // Because JavaScript does not support uint64, we downsize the dictionary id
-    // range from uint64 to uint32 in NaCl.
-    id = static_cast<uint32>(id);
-#endif  // OS_NACL
 
     // Duplication check.
     for (int i = 0; i < storage.dictionaries_size(); ++i) {
@@ -398,8 +357,7 @@ uint64 UserDictionaryUtil::CreateNewDictionaryId(
 
 UserDictionaryCommandStatus::Status UserDictionaryUtil::CreateDictionary(
     user_dictionary::UserDictionaryStorage *storage,
-    const string &dictionary_name,
-    uint64 *new_dictionary_id) {
+    const std::string &dictionary_name, uint64_t *new_dictionary_id) {
   UserDictionaryCommandStatus::Status status =
       ValidateDictionaryName(*storage, dictionary_name);
   if (status != UserDictionaryCommandStatus::USER_DICTIONARY_COMMAND_SUCCESS) {
@@ -412,14 +370,14 @@ UserDictionaryCommandStatus::Status UserDictionaryUtil::CreateDictionary(
     return UserDictionaryCommandStatus::DICTIONARY_SIZE_LIMIT_EXCEEDED;
   }
 
-  if (new_dictionary_id == NULL) {
-    LOG(ERROR) << "new_dictionary_id is NULL";
+  if (new_dictionary_id == nullptr) {
+    LOG(ERROR) << "new_dictionary_id is nullptr";
     return UserDictionaryCommandStatus::UNKNOWN_ERROR;
   }
 
   *new_dictionary_id = CreateNewDictionaryId(*storage);
-  user_dictionary::UserDictionary* dictionary = storage->add_dictionaries();
-  if (dictionary == NULL) {
+  user_dictionary::UserDictionary *dictionary = storage->add_dictionaries();
+  if (dictionary == nullptr) {
     LOG(ERROR) << "add_dictionaries failed.";
     return UserDictionaryCommandStatus::UNKNOWN_ERROR;
   }
@@ -430,12 +388,10 @@ UserDictionaryCommandStatus::Status UserDictionaryUtil::CreateDictionary(
 }
 
 bool UserDictionaryUtil::DeleteDictionary(
-    user_dictionary::UserDictionaryStorage *storage,
-    uint64 dictionary_id,
-    int *original_index,
-    user_dictionary::UserDictionary **deleted_dictionary) {
+    user_dictionary::UserDictionaryStorage *storage, uint64_t dictionary_id,
+    int *original_index, user_dictionary::UserDictionary **deleted_dictionary) {
   const int index = GetUserDictionaryIndexById(*storage, dictionary_id);
-  if (original_index != NULL) {
+  if (original_index != nullptr) {
     *original_index = index;
   }
 
@@ -451,7 +407,7 @@ bool UserDictionaryUtil::DeleteDictionary(
               dictionaries->pointer_begin() + index + 1,
               dictionaries->pointer_end());
 
-  if (deleted_dictionary == NULL) {
+  if (deleted_dictionary == nullptr) {
     dictionaries->RemoveLast();
   } else {
     *deleted_dictionary = dictionaries->ReleaseLast();

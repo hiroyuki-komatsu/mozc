@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,19 +36,19 @@ namespace mozc {
 namespace win32 {
 namespace {
 
-const int kErrorLevelSuccess = 0;
-const int kErrorLevelGeneralError = 1;
+constexpr int kErrorLevelSuccess = 0;
+constexpr int kErrorLevelGeneralError = 1;
 
 }  // namespace
 
 int RunRegisterIME(int argc, char *argv[]) {
-  const wstring ime_path = ImmRegistrar::GetFullPathForIME();
+  const std::wstring ime_path = ImmRegistrar::GetFullPathForIME();
   if (ime_path.empty()) {
     return kErrorLevelGeneralError;
   }
-  const wstring ime_filename = ImmRegistrar::GetFileNameForIME();
+  const std::wstring ime_filename = ImmRegistrar::GetFileNameForIME();
 
-  const wstring layout_name = ImmRegistrar::GetLayoutName();
+  const std::wstring layout_name = ImmRegistrar::GetLayoutName();
   if (layout_name.empty()) {
     return kErrorLevelGeneralError;
   }
@@ -68,7 +68,7 @@ int RunRegisterIME(int argc, char *argv[]) {
 int RunUnregisterIME(int argc, char *argv[]) {
   UninstallHelper::RestoreUserIMEEnvironmentMain();
 
-  const wstring ime_filename = ImmRegistrar::GetFileNameForIME();
+  const std::wstring ime_filename = ImmRegistrar::GetFileNameForIME();
   if (ime_filename.empty()) {
     return kErrorLevelGeneralError;
   }

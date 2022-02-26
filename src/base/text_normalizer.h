@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -34,14 +34,27 @@
 #define MOZC_BASE_TEXT_NORMALIZER_H_
 
 #include <string>
+
 #include "base/port.h"
-#include "base/string_piece.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 
 class TextNormalizer {
  public:
-  static void NormalizeText(StringPiece input, string *output);
+  enum Flag {
+    kNone = 0,  // No normalization.
+    kDefault = 1,  // Default behavior (different per platform).
+    kAll = 2,  // All normalizations.
+  };
+
+  // Normalizes `input` with all configurations.
+  static std::string NormalizeTextWithFlag(absl::string_view input, Flag flag);
+
+  // Normalizes `input` considering the platform.
+  static std::string NormalizeText(absl::string_view input) {
+    return NormalizeTextWithFlag(input, kDefault);
+  }
 
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(TextNormalizer);

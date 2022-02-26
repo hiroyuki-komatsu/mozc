@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -96,6 +96,7 @@
             'tip_ui_renderer_immersive.cc',
           ],
           'dependencies': [
+            '../../base/absl.gyp:absl_base',
             '../../base/base.gyp:base',
             '../../base/base.gyp:crash_report_handler',
             '../../base/base.gyp:update_util',

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -45,30 +45,29 @@ class Segment;
 class Segments;
 
 namespace storage {
-class LRUStorage;
+class LruStorage;
 }  // namespace storage
 
 class UserBoundaryHistoryRewriter : public RewriterInterface {
  public:
   explicit UserBoundaryHistoryRewriter(
       const ConverterInterface *parent_converter);
-  virtual ~UserBoundaryHistoryRewriter();
+  ~UserBoundaryHistoryRewriter() override;
 
-  virtual bool Rewrite(const ConversionRequest &request,
-                       Segments *segments) const;
+  bool Rewrite(const ConversionRequest &request,
+               Segments *segments) const override;
 
-  virtual void Finish(const ConversionRequest &request, Segments *segments);
-
-  virtual bool Reload();
-
-  virtual void Clear();
+  void Finish(const ConversionRequest &request, Segments *segments) override;
+  bool Sync() override;
+  bool Reload() override;
+  void Clear() override;
 
  private:
   bool ResizeOrInsert(Segments *segments, const ConversionRequest &request,
                       int type) const;
 
   const ConverterInterface *parent_converter_;
-  std::unique_ptr<mozc::storage::LRUStorage> storage_;
+  std::unique_ptr<mozc::storage::LruStorage> storage_;
 };
 
 }  // namespace mozc

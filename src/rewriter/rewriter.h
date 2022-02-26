@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ class RewriterImpl : public MergerRewriter {
                const dictionary::DictionaryInterface *dictionary);
 
  private:
-  const dictionary::POSMatcher pos_matcher_;
+  const dictionary::PosMatcher pos_matcher_;
   DISALLOW_COPY_AND_ASSIGN(RewriterImpl);
 };
 

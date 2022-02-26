@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@ struct ITfCandidateList;
 namespace mozc {
 namespace commands {
 class Output;
-}  // commands
+}  // namespace commands
 
 namespace win32 {
 namespace tsf {
@@ -50,7 +50,7 @@ namespace tsf {
 class TipCandidateListCallback {
  public:
   virtual ~TipCandidateListCallback();
-  virtual void OnFinalize(size_t index, const wstring &candidate) = 0;
+  virtual void OnFinalize(size_t index, const std::wstring &candidate) = 0;
 };
 
 class TipCandidateList {
@@ -60,9 +60,9 @@ class TipCandidateList {
   // is called with CAND_FINALIZED. TipCandidateList will take the
   // ownership of |callback|. |callback| can be nullptr.
   // Caller must maintain the reference count of the returned object.
-  static ITfCandidateList *New(const vector<wstring> &candidates,
+  static ITfCandidateList *New(const std::vector<std::wstring> &candidates,
                                TipCandidateListCallback *callback);
-  static const IID& GetIID();
+  static const IID &GetIID();
 
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(TipCandidateList);

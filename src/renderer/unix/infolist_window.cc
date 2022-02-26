@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,6 @@
 #include "renderer/unix/infolist_window.h"
 
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "protocol/renderer_command.pb.h"
 #include "protocol/renderer_style.pb.h"
 #include "renderer/renderer_style_handler.h"
@@ -54,19 +53,17 @@ using mozc::renderer::RendererStyleHandler;
 
 namespace {
 RGBA StyleColorToRGBA(const RendererStyle::RGBAColor &rgbacolor) {
-  const RGBA rgba = { static_cast<uint8>(rgbacolor.r()),
-                      static_cast<uint8>(rgbacolor.g()),
-                      static_cast<uint8>(rgbacolor.b()),
-                      0xFF };
+  const RGBA rgba = {static_cast<uint8>(rgbacolor.r()),
+                     static_cast<uint8>(rgbacolor.g()),
+                     static_cast<uint8>(rgbacolor.b()), 0xFF};
   return rgba;
 }
 }  // namespace
 
-InfolistWindow::InfolistWindow(
-    TextRendererInterface *text_renderer,
-    DrawToolInterface *draw_tool,
-    GtkWrapperInterface *gtk,
-    CairoFactoryInterface *cairo_factory)
+InfolistWindow::InfolistWindow(TextRendererInterface *text_renderer,
+                               DrawToolInterface *draw_tool,
+                               GtkWrapperInterface *gtk,
+                               CairoFactoryInterface *cairo_factory)
     : GtkWindowBase(gtk),
       text_renderer_(text_renderer),
       style_(new RendererStyle()),
@@ -76,7 +73,7 @@ InfolistWindow::InfolistWindow(
 }
 
 Size InfolistWindow::Update(const commands::Candidates &candidates) {
-  candidates_.CopyFrom(candidates);
+  candidates_ = candidates;
 
   const RendererStyle::InfolistStyle &infostyle = style_->infolist_style();
   const InformationList &usages = candidates_.usages();
@@ -102,8 +99,8 @@ Rect InfolistWindow::GetCandidateColumnInClientCord() const {
 }
 
 bool InfolistWindow::OnPaint(GtkWidget *widget, GdkEventExpose *event) {
-  draw_tool_->Reset(cairo_factory_->CreateCairoInstance(
-      GetCanvasWidget()->window));
+  draw_tool_->Reset(
+      cairo_factory_->CreateCairoInstance(GetCanvasWidget()->window));
   Draw();
   return true;
 }
@@ -116,21 +113,19 @@ int InfolistWindow::DrawCaption() {
   const RendererStyle::TextStyle &caption_style = infostyle.caption_style();
   const int caption_height = infostyle.caption_height();
   const Rect background_rect(
-      infostyle.window_border(),
-      infostyle.window_border(),
-      infostyle.window_width() - infostyle.window_border() * 2,
-      caption_height);
+      infostyle.window_border(), infostyle.window_border(),
+      infostyle.window_width() - infostyle.window_border() * 2, caption_height);
 
   const RGBA bgcolor = StyleColorToRGBA(infostyle.caption_background_color());
   draw_tool_->FillRect(background_rect, bgcolor);
 
-  const Rect caption_rect(
-      background_rect.Left()
-          + infostyle.caption_padding() + caption_style.left_padding(),
-      background_rect.Top() + infostyle.caption_padding(),
-      background_rect.Width()
-          - infostyle.caption_padding() - caption_style.left_padding(),
-      caption_height - infostyle.caption_padding());
+  const Rect caption_rect(background_rect.Left() + infostyle.caption_padding() +
+                              caption_style.left_padding(),
+                          background_rect.Top() + infostyle.caption_padding(),
+                          background_rect.Width() -
+                              infostyle.caption_padding() -
+                              caption_style.left_padding(),
+                          caption_height - infostyle.caption_padding());
   text_renderer_->RenderText(infostyle.caption_string(), caption_rect,
                              FontSpec::FONTSET_INFOLIST_CAPTION);
   return infostyle.caption_height();
@@ -155,20 +150,16 @@ void InfolistWindow::Draw() {
 }
 
 void InfolistWindow::GetRenderingRects(
-    const renderer::RendererStyle::TextStyle &style,
-    const string &text,
-    FontSpec::FONT_TYPE font_type,
-    int top,
-    Rect *background_rect,
+    const renderer::RendererStyle::TextStyle &style, const std::string &text,
+    FontSpec::FONT_TYPE font_type, int top, Rect *background_rect,
     Rect *textarea_rect) {
   const RendererStyle::InfolistStyle &infostyle = style_->infolist_style();
-  const int text_width = infostyle.window_width()
-      - style.left_padding() - style.right_padding()
-      - infostyle.window_border() * 2 - infostyle.row_rect_padding() * 2;
+  const int text_width = infostyle.window_width() - style.left_padding() -
+                         style.right_padding() - infostyle.window_border() * 2 -
+                         infostyle.row_rect_padding() * 2;
 
-  const Size text_size = text_renderer_->GetMultiLinePixelSize(font_type,
-                                                               text,
-                                                               text_width);
+  const Size text_size =
+      text_renderer_->GetMultiLinePixelSize(font_type, text, text_width);
 
   background_rect->origin.x = infostyle.window_border();
   background_rect->origin.y = top;
@@ -197,19 +188,12 @@ InfolistWindow::RenderingRowRects InfolistWindow::GetRowRects(int row,
 
   RenderingRowRects result;
 
-  GetRenderingRects(title_style,
-                    info.title(),
-                    FontSpec::FONTSET_INFOLIST_TITLE,
-                    ypos,
-                    &result.title_back_rect,
-                    &result.title_rect);
+  GetRenderingRects(title_style, info.title(), FontSpec::FONTSET_INFOLIST_TITLE,
+                    ypos, &result.title_back_rect, &result.title_rect);
   ypos += result.title_back_rect.size.height;
-  GetRenderingRects(desc_style,
-                    info.description(),
-                    FontSpec::FONTSET_INFOLIST_DESCRIPTION,
-                    ypos,
-                    &result.desc_back_rect,
-                    &result.desc_rect);
+  GetRenderingRects(desc_style, info.description(),
+                    FontSpec::FONTSET_INFOLIST_DESCRIPTION, ypos,
+                    &result.desc_back_rect, &result.desc_rect);
   result.whole_rect = result.title_back_rect;
   result.whole_rect.size.height += result.desc_back_rect.Height();
   return result;
@@ -256,7 +240,7 @@ void InfolistWindow::Initialize() {
   text_renderer_->Initialize(GetCanvasWidget()->window);
 }
 
-void InfolistWindow::ReloadFontConfig(const string &font_description) {
+void InfolistWindow::ReloadFontConfig(const std::string &font_description) {
   text_renderer_->ReloadFontConfig(font_description);
 }
 

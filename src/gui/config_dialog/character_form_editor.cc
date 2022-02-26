@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,9 +29,8 @@
 
 #include "gui/config_dialog/character_form_editor.h"
 
-#include <QtGui/QtGui>
-#include <QtWidgets/QHeaderView>
-
+#include <QHeaderView>
+#include <QtGui>
 #include <memory>
 
 #include "config/config_handler.h"
@@ -69,7 +68,7 @@ config::Config::CharacterForm StringToForm(const QString &str) {
   return config::Config::FULL_WIDTH;  // failsafe
 }
 
-QString GroupToString(const string &str) {
+QString GroupToString(const std::string &str) {
   // if (str == "ア") {
   if (str == "ア") {
     return QObject::tr("Katakana");
@@ -81,7 +80,7 @@ QString GroupToString(const string &str) {
   return QString::fromUtf8(str.c_str());
 }
 
-const string StringToGroup(const QString &str) {
+const std::string StringToGroup(const QString &str) {
   if (str == QObject::tr("Katakana")) {
     // return "ア";
     return "ア";
@@ -92,7 +91,7 @@ const string StringToGroup(const QString &str) {
   }
   return str.toUtf8().data();
 }
-}
+}  // namespace
 
 CharacterFormEditor::CharacterFormEditor(QWidget *parent)
     : QTableWidget(parent), delegate_(new ComboBoxDelegate) {
@@ -107,11 +106,11 @@ CharacterFormEditor::CharacterFormEditor(QWidget *parent)
   setSelectionMode(QAbstractItemView::SingleSelection);
   setSelectionBehavior(QAbstractItemView::SelectItems);
   verticalHeader()->hide();
-#ifdef OS_MACOSX
+#ifdef __APPLE__
   // grid is basically hidden in mac ui.
   // Please take a look at iTunes.
   setShowGrid(false);
-#endif
+#endif  // __APPLE__
 }
 
 CharacterFormEditor::~CharacterFormEditor() {}
@@ -127,7 +126,7 @@ void CharacterFormEditor::Load(const config::Config &config) {
 
   // make sure that table isn't empty.
   if (config.character_form_rules_size() == 0) {
-    default_config.reset(new config::Config);
+    default_config = std::make_unique<config::Config>();
     config::ConfigHandler::GetDefaultConfig(default_config.get());
     target_config = default_config.get();
   }
@@ -135,10 +134,10 @@ void CharacterFormEditor::Load(const config::Config &config) {
   setRowCount(0);
   setRowCount(target_config->character_form_rules_size());
 
-  for (size_t row = 0;
-       row < target_config->character_form_rules_size(); ++row) {
-    const config::Config::CharacterFormRule &rule
-        = target_config->character_form_rules(row);
+  for (size_t row = 0; row < target_config->character_form_rules_size();
+       ++row) {
+    const config::Config::CharacterFormRule &rule =
+        target_config->character_form_rules(row);
     const QString group = GroupToString(rule.group());
     const QString preedit = FormToString(rule.preedit_character_form());
     const QString conversion = FormToString(rule.conversion_character_form());
@@ -153,7 +152,7 @@ void CharacterFormEditor::Load(const config::Config &config) {
     // Preedit Katakan is always FULLWIDTH
     // This item should not be editable
     if (group == QObject::tr("Katakana")) {
-      item_preedit->setFlags(0);   // disable flag
+      item_preedit->setFlags(Qt::NoItemFlags);  // disable flag
     }
 
     setItem(row, 0, item_group);
@@ -178,7 +177,7 @@ void CharacterFormEditor::Save(config::Config *config) {
     if (item(row, 0)->text().isEmpty()) {
       continue;
     }
-    const string group = StringToGroup(item(row, 0)->text());
+    const std::string group = StringToGroup(item(row, 0)->text());
     config::Config::CharacterForm preedit_form =
         StringToForm(item(row, 1)->text());
     config::Config::CharacterForm conversion_form =
@@ -190,5 +189,5 @@ void CharacterFormEditor::Save(config::Config *config) {
     rule->set_conversion_character_form(conversion_form);
   }
 }
-}  // gui
-}  // mozc
+}  // namespace gui
+}  // namespace mozc

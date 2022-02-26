@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,25 +30,26 @@
 #ifndef MOZC_GUI_DICTIONARY_TOOL_ZERO_WIDTH_SPLITTER_H_
 #define MOZC_GUI_DICTIONARY_TOOL_ZERO_WIDTH_SPLITTER_H_
 
-#include <QtWidgets/QSplitter>
+#include <QSplitter>
 
 // Special QSplitter whose handle size is only 1px.
 // This line is drawed with a proper colour corresponding to
 // Mac style splitter.
 class ZeroWidthSplitterHandle : public QSplitterHandle {
   Q_OBJECT;
+
  public:
   ZeroWidthSplitterHandle(Qt::Orientation orientation, QSplitter *parent);
-  virtual ~ZeroWidthSplitterHandle();
+  ~ZeroWidthSplitterHandle() override;
 
-  void paintEvent(QPaintEvent *event);
-  QSize sizeHint() const;
+  void paintEvent(QPaintEvent *event) override;
+  QSize sizeHint() const override;
 };
 
 class ZeroWidthSplitter : public QSplitter {
  public:
-  ZeroWidthSplitter(QWidget *parent);
-  QSplitterHandle *createHandle();
+  explicit ZeroWidthSplitter(QWidget *parent);
+  QSplitterHandle *createHandle() override;
 };
 
 #endif  // MOZC_GUI_DICTIONARY_TOOL_ZERO_WIDTH_SPLITTER_H_

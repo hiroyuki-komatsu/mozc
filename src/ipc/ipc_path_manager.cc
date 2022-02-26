@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,37 +29,45 @@
 
 #include "ipc/ipc_path_manager.h"
 
-#if defined(OS_ANDROID) || defined(OS_NACL)
+#include <cstdint>
+
+#include "absl/strings/str_format.h"
+
+#if defined(OS_ANDROID) || defined(OS_WASM)
 #error "This platform is not supported."
-#endif  // OS_ANDROID || OS_NACL
+#endif  // OS_ANDROID || OS_WASM
 
 #include <errno.h>
 
 #ifdef OS_WIN
+// clang-format off
 #include <windows.h>
-#include <psapi.h>   // GetModuleFileNameExW
-#else
+#include <psapi.h>  // GetModuleFileNameExW
+// clang-format on
+#else  // OS_WIN
 // For stat system call
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
-#ifdef OS_MACOSX
+#ifdef __APPLE__
 #include <sys/sysctl.h>
-#endif  // OS_MACOSX
+#endif  // __APPLE__
 #endif  // OS_WIN
 
 #include <cstdlib>
 #include <map>
-#ifdef OS_WIN
-#include <memory>  // for std::unique_ptr
-#endif
+#include <memory>
 
 #include "base/const.h"
 #include "base/file_stream.h"
 #include "base/file_util.h"
+#ifdef OS_WIN
+#include "base/unverified_sha1.h"
+#endif  // OS_WIN
 #include "base/logging.h"
+#if defined(__APPLE__) || defined(OS_IOS)
 #include "base/mac_util.h"
-#include "base/mutex.h"
+#endif  // __APPLE__ || OS_IOS
 #include "base/port.h"
 #include "base/process_mutex.h"
 #include "base/scoped_handle.h"
@@ -67,33 +75,32 @@
 #include "base/system_util.h"
 #include "base/util.h"
 #include "base/version.h"
+#ifdef OS_WIN
 #include "base/win_util.h"
+#endif  // OS_WIN
 #include "ipc/ipc.h"
 #include "ipc/ipc.pb.h"
-
-#ifdef OS_WIN
-using std::unique_ptr;
-#endif  // OS_WIn
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace {
 
 // size of key
-const size_t kKeySize = 32;
+constexpr size_t kKeySize = 32;
 
 // Do not use ConfigFileStream, since client won't link
 // to the embedded resource files
-string GetIPCKeyFileName(const string &name) {
+std::string GetIPCKeyFileName(const std::string &name) {
 #ifdef OS_WIN
-  string basename;
-#else
-  string basename = ".";    // hidden file
-#endif
+  std::string basename;
+#else   // OS_WIN
+  std::string basename = ".";  // hidden file
+#endif  // OS_WIN
   basename += name + ".ipc";
   return FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(), basename);
 }
 
-bool IsValidKey(const string &name) {
+bool IsValidKey(const std::string &name) {
   if (kKeySize != name.size()) {
     LOG(ERROR) << "IPCKey is invalid length";
     return false;
@@ -112,44 +119,38 @@ bool IsValidKey(const string &name) {
   return true;
 }
 
-void CreateIPCKey(char *value) {
-  char buf[16];   // key is 128 bit
+std::string CreateIPCKey() {
+  char buf[16] = {};  // key is 128 bit
+  char value[kKeySize + 1] = {};
 
 #ifdef OS_WIN
-  // LUID guaranties uniqueness
-  LUID luid = { 0 };   // LUID is 64bit value
-
-  DCHECK_EQ(sizeof(luid), sizeof(uint64));
-
-  // first 64 bit is random sequence and last 64 bit is LUID
-  if (::AllocateLocallyUniqueId(&luid)) {
-    Util::GetRandomSequence(buf, sizeof(buf) / 2);
-    ::memcpy(buf + sizeof(buf) / 2, &luid, sizeof(buf) / 2);
-  } else {
-    // use random value for failsafe
-    Util::GetRandomSequence(buf, sizeof(buf));
+  const std::string sid = SystemUtil::GetUserSidAsString();
+  const std::string sha1 = internal::UnverifiedSHA1::MakeDigest(sid);
+  for (int i = 0; i < sizeof(buf) && i < sha1.size(); ++i) {
+    buf[i] = sha1.at(i);
   }
-#else
+#else   // OS_WIN
   // get 128 bit key: Note that collision will happen.
   Util::GetRandomSequence(buf, sizeof(buf));
-#endif
+#endif  // OS_WIN
 
   // escape
   for (size_t i = 0; i < sizeof(buf); ++i) {
     const int hi = ((static_cast<int>(buf[i]) & 0xF0) >> 4);
     const int lo = (static_cast<int>(buf[i]) & 0x0F);
-    value[2 * i]     = static_cast<char>(hi >= 10 ? hi - 10 + 'a' : hi + '0');
+    value[2 * i] = static_cast<char>(hi >= 10 ? hi - 10 + 'a' : hi + '0');
     value[2 * i + 1] = static_cast<char>(lo >= 10 ? lo - 10 + 'a' : lo + '0');
   }
 
   value[kKeySize] = '\0';
+  return std::string(value);
 }
 
 class IPCPathManagerMap {
  public:
-  IPCPathManager *GetIPCPathManager(const string &name) {
-    scoped_lock l(&mutex_);
-    std::map<string, IPCPathManager *>::const_iterator it =
+  IPCPathManager *GetIPCPathManager(const std::string &name) {
+    absl::MutexLock l(&mutex_);
+    std::map<std::string, IPCPathManager *>::const_iterator it =
         manager_map_.find(name);
     if (it != manager_map_.end()) {
       return it->second;
@@ -162,8 +163,9 @@ class IPCPathManagerMap {
   IPCPathManagerMap() {}
 
   ~IPCPathManagerMap() {
-    scoped_lock l(&mutex_);
-    for (std::map<string, IPCPathManager *>::iterator it = manager_map_.begin();
+    absl::MutexLock l(&mutex_);
+    for (std::map<std::string, IPCPathManager *>::iterator it =
+             manager_map_.begin();
          it != manager_map_.end(); ++it) {
       delete it->second;
     }
@@ -171,49 +173,48 @@ class IPCPathManagerMap {
   }
 
  private:
-  std::map<string, IPCPathManager *> manager_map_;
-  Mutex mutex_;
+  std::map<std::string, IPCPathManager *> manager_map_;
+  absl::Mutex mutex_;
 };
 
 }  // namespace
 
-IPCPathManager::IPCPathManager(const string &name)
-    : mutex_(new Mutex),
-      ipc_path_info_(new ipc::IPCPathInfo),
+IPCPathManager::IPCPathManager(const std::string &name)
+    : ipc_path_info_(new ipc::IPCPathInfo),
       name_(name),
       server_pid_(0),
       last_modified_(-1) {}
 
 IPCPathManager::~IPCPathManager() {}
 
-IPCPathManager *IPCPathManager::GetIPCPathManager(const string &name) {
+IPCPathManager *IPCPathManager::GetIPCPathManager(const std::string &name) {
   IPCPathManagerMap *manager_map = Singleton<IPCPathManagerMap>::get();
-  DCHECK(manager_map != NULL);
+  DCHECK(manager_map != nullptr);
   return manager_map->GetIPCPathManager(name);
 }
 
 bool IPCPathManager::CreateNewPathName() {
-  scoped_lock l(mutex_.get());
+  absl::MutexLock l(&mutex_);
+  return CreateNewPathNameUnlocked();
+}
+
+bool IPCPathManager::CreateNewPathNameUnlocked() {
   if (ipc_path_info_->key().empty()) {
-    char ipc_key[kKeySize + 1];
-    CreateIPCKey(ipc_key);
-    ipc_path_info_->set_key(ipc_key);
+    ipc_path_info_->set_key(CreateIPCKey());
   }
   return true;
 }
 
 bool IPCPathManager::SavePathName() {
-  scoped_lock l(mutex_.get());
-  if (path_mutex_.get() != NULL) {
+  absl::MutexLock l(&mutex_);
+  if (path_mutex_ != nullptr) {
     return true;
   }
 
-  path_mutex_.reset(new ProcessMutex("ipc"));
-
+  path_mutex_ = std::make_unique<ProcessMutex>("ipc");
   path_mutex_->set_lock_filename(GetIPCKeyFileName(name_));
 
-  // a little tricky as CreateNewPathName() tries mutex lock
-  CreateNewPathName();
+  CreateNewPathNameUnlocked();
 
   // set the server version
   ipc_path_info_->set_protocol_version(IPC_PROTOCOL_VERSION);
@@ -222,12 +223,12 @@ bool IPCPathManager::SavePathName() {
 #ifdef OS_WIN
   ipc_path_info_->set_process_id(static_cast<uint32>(::GetCurrentProcessId()));
   ipc_path_info_->set_thread_id(static_cast<uint32>(::GetCurrentThreadId()));
-#else
-  ipc_path_info_->set_process_id(static_cast<uint32>(getpid()));
+#else   // OS_WIN
+  ipc_path_info_->set_process_id(static_cast<uint32_t>(getpid()));
   ipc_path_info_->set_thread_id(0);
-#endif
+#endif  // OS_WIN
 
-  string buf;
+  std::string buf;
   if (!ipc_path_info_->SerializeToString(&buf)) {
     LOG(ERROR) << "SerializeToString failed";
     return false;
@@ -248,18 +249,35 @@ bool IPCPathManager::LoadPathName() {
   // On Windows, ShouldReload() always returns false.
   // On other platform, it returns true when timestamp of the file is different
   // from that of previous one.
-  if (ShouldReload() || ipc_path_info_->key().empty()) {
-    if (!LoadPathNameInternal()) {
-      LOG(ERROR) << "LoadPathName failed";
-      return false;
-    }
+  const bool should_load = (ShouldReload() || ipc_path_info_->key().empty());
+  if (!should_load) {
+    return true;
   }
+
+  if (LoadPathNameInternal()) {
+    return true;
+  }
+
+#if defined(OS_WIN)
+  // Fill the default values as fallback.
+  // Applications conerted by Desktop App Converter (DAC) does not read
+  // a file of ipc session name in the LocalLow directory.
+  // For a workaround, let applications to connect the named pipe directly.
+  // See: b/71338191.
+  CreateNewPathName();
+  DCHECK(!ipc_path_info_->key().empty());
+  ipc_path_info_->set_protocol_version(IPC_PROTOCOL_VERSION);
+  ipc_path_info_->set_product_version(Version::GetMozcVersion());
   return true;
+#else   // defined(OS_WIN)
+  LOG(ERROR) << "LoadPathName failed";
+  return false;
+#endif  // defined(OS_WIN)
 }
 
-bool IPCPathManager::GetPathName(string *ipc_name) const {
-  if (ipc_name == NULL) {
-    LOG(ERROR) << "ipc_name is NULL";
+bool IPCPathManager::GetPathName(std::string *ipc_name) const {
+  if (ipc_name == nullptr) {
+    LOG(ERROR) << "ipc_name is nullptr";
     return false;
   }
 
@@ -270,18 +288,18 @@ bool IPCPathManager::GetPathName(string *ipc_name) const {
 
 #ifdef OS_WIN
   *ipc_name = mozc::kIPCPrefix;
-#elif defined(OS_MACOSX)
+#elif defined(__APPLE__)
   ipc_name->assign(MacUtil::GetLabelForSuffix(""));
-#else  // not OS_WIN nor OS_MACOSX
+#else   // not OS_WIN nor __APPLE__
   // GetUserIPCName("<name>") => "/tmp/.mozc.<key>.<name>"
-  const char kIPCPrefix[] = "/tmp/.mozc.";
+  constexpr char kIPCPrefix[] = "/tmp/.mozc.";
   *ipc_name = kIPCPrefix;
 #endif  // OS_WIN
 
 #ifdef OS_LINUX
   // On Linux, use abstract namespace which is independent of the file system.
   (*ipc_name)[0] = '\0';
-#endif
+#endif  // OS_LINUX
 
   ipc_name->append(ipc_path_info_->key());
   ipc_name->append(".");
@@ -290,26 +308,26 @@ bool IPCPathManager::GetPathName(string *ipc_name) const {
   return true;
 }
 
-uint32 IPCPathManager::GetServerProtocolVersion() const {
+uint32_t IPCPathManager::GetServerProtocolVersion() const {
   return ipc_path_info_->protocol_version();
 }
 
-const string &IPCPathManager::GetServerProductVersion() const {
+const std::string &IPCPathManager::GetServerProductVersion() const {
   return ipc_path_info_->product_version();
 }
 
-uint32 IPCPathManager::GetServerProcessId() const {
+uint32_t IPCPathManager::GetServerProcessId() const {
   return ipc_path_info_->process_id();
 }
 
 void IPCPathManager::Clear() {
-  scoped_lock l(mutex_.get());
+  absl::MutexLock l(&mutex_);
   ipc_path_info_->Clear();
 }
 
-bool IPCPathManager::IsValidServer(uint32 pid,
-                                   const string &server_path) {
-  scoped_lock l(mutex_.get());
+bool IPCPathManager::IsValidServer(uint32_t pid,
+                                   const std::string &server_path) {
+  absl::MutexLock l(&mutex_);
   if (pid == 0) {
     // For backward compatibility.
     return true;
@@ -319,7 +337,7 @@ bool IPCPathManager::IsValidServer(uint32 pid,
     return true;
   }
 
-  if (pid == static_cast<uint32>(-1)) {
+  if (pid == static_cast<uint32_t>(-1)) {
     VLOG(1) << "pid is -1. so assume that it is an invalid program";
     return false;
   }
@@ -334,14 +352,14 @@ bool IPCPathManager::IsValidServer(uint32 pid,
 
 #ifdef OS_WIN
   {
-    wstring expected_server_ntpath;
-    const map<string, wstring>::const_iterator it =
+    std::wstring expected_server_ntpath;
+    const std::map<std::string, std::wstring>::const_iterator it =
         expected_server_ntpath_cache_.find(server_path);
     if (it != expected_server_ntpath_cache_.end()) {
       expected_server_ntpath = it->second;
     } else {
-      wstring wide_server_path;
-      Util::UTF8ToWide(server_path, &wide_server_path);
+      std::wstring wide_server_path;
+      Util::Utf8ToWide(server_path, &wide_server_path);
       if (WinUtil::GetNtPath(wide_server_path, &expected_server_ntpath)) {
         // Caches the relationship from |server_path| to
         // |expected_server_ntpath| in case |server_path| is renamed later.
@@ -354,7 +372,7 @@ bool IPCPathManager::IsValidServer(uint32 pid,
       return false;
     }
 
-    wstring actual_server_ntpath;
+    std::wstring actual_server_ntpath;
     if (!WinUtil::GetProcessInitialNtPath(pid, &actual_server_ntpath)) {
       return false;
     }
@@ -370,29 +388,28 @@ bool IPCPathManager::IsValidServer(uint32 pid,
   }
 #endif  // OS_WIN
 
-#ifdef OS_MACOSX
-  int name[] = { CTL_KERN, KERN_PROCARGS, pid };
+#ifdef __APPLE__
+  int name[] = {CTL_KERN, KERN_PROCARGS, static_cast<int>(pid)};
   size_t data_len = 0;
-  if (sysctl(name, arraysize(name), NULL,
-             &data_len, NULL, 0) < 0) {
+  if (sysctl(name, std::size(name), nullptr, &data_len, nullptr, 0) < 0) {
     LOG(ERROR) << "sysctl KERN_PROCARGS failed";
     return false;
   }
 
   server_path_.resize(data_len);
-  if (sysctl(name, arraysize(name), &server_path_[0],
-             &data_len, NULL, 0) < 0) {
+  if (sysctl(name, std::size(name), &server_path_[0], &data_len, nullptr, 0) <
+      0) {
     LOG(ERROR) << "sysctl KERN_PROCARGS failed";
     return false;
   }
   server_pid_ = pid;
-#endif  // OS_MACOSX
+#endif  // __APPLE__
 
 #ifdef OS_LINUX
   // load from /proc/<pid>/exe
   char proc[128];
   char filename[512];
-  snprintf(proc, sizeof(proc) - 1, "/proc/%u/exe", pid);
+  absl::SNPrintF(proc, sizeof(proc) - 1, "/proc/%u/exe", pid);
   const ssize_t size = readlink(proc, filename, sizeof(filename) - 1);
   if (size == -1) {
     LOG(ERROR) << "readlink failed: " << strerror(errno);
@@ -428,8 +445,8 @@ bool IPCPathManager::ShouldReload() const {
   // In windows, no reloading mechanism is necessary because IPC files
   // are automatically removed.
   return false;
-#else
-  scoped_lock l(mutex_.get());
+#else   // OS_WIN
+  absl::MutexLock l(&mutex_);
 
   time_t last_modified = GetIPCFileTimeStamp();
   if (last_modified == last_modified_) {
@@ -445,8 +462,8 @@ time_t IPCPathManager::GetIPCFileTimeStamp() const {
   // In windows, we don't need to get the exact file timestamp, so
   // just returns -1 at this time.
   return static_cast<time_t>(-1);
-#else
-  const string filename = GetIPCKeyFileName(name_);
+#else   // OS_WIN
+  const std::string filename = GetIPCKeyFileName(name_);
   struct stat filestat;
   if (::stat(filename.c_str(), &filestat) == -1) {
     VLOG(2) << "stat(2) failed.  Skipping reload";
@@ -457,48 +474,46 @@ time_t IPCPathManager::GetIPCFileTimeStamp() const {
 }
 
 bool IPCPathManager::LoadPathNameInternal() {
-  scoped_lock l(mutex_.get());
+  absl::MutexLock l(&mutex_);
 
   // try the new file name first.
-  const string filename = GetIPCKeyFileName(name_);
+  const std::string filename = GetIPCKeyFileName(name_);
 
   // Special code for Windows,
   // we want to pass FILE_SHRED_DELETE flag for CreateFile.
 #ifdef OS_WIN
-  wstring wfilename;
-  Util::UTF8ToWide(filename, &wfilename);
+  std::wstring wfilename;
+  Util::Utf8ToWide(filename, &wfilename);
 
   {
-    ScopedHandle handle
-        (::CreateFileW(wfilename.c_str(),
-                       GENERIC_READ,
-                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                       NULL, OPEN_EXISTING, 0, NULL));
+    ScopedHandle handle(
+        ::CreateFileW(wfilename.c_str(), GENERIC_READ,
+                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                      nullptr, OPEN_EXISTING, 0, nullptr));
 
     // ScopedHandle does not receive INVALID_HANDLE_VALUE and
-    // NULL check is appropriate here.
-    if (NULL == handle.get()) {
+    // nullptr check is appropriate here.
+    if (nullptr == handle.get()) {
       LOG(ERROR) << "cannot open: " << filename << " " << ::GetLastError();
       return false;
     }
 
-    const DWORD size = ::GetFileSize(handle.get(), NULL);
+    const DWORD size = ::GetFileSize(handle.get(), nullptr);
     if (-1 == static_cast<int>(size)) {
       LOG(ERROR) << "GetFileSize failed: " << ::GetLastError();
       return false;
     }
 
-    const DWORD kMaxFileSize = 2096;
+    constexpr DWORD kMaxFileSize = 2096;
     if (size == 0 || size >= kMaxFileSize) {
       LOG(ERROR) << "Invalid file size: " << kMaxFileSize;
       return false;
     }
 
-    unique_ptr<char[]> buf(new char[size]);
+    std::unique_ptr<char[]> buf(new char[size]);
 
     DWORD read_size = 0;
-    if (!::ReadFile(handle.get(), buf.get(),
-                    size, &read_size, NULL)) {
+    if (!::ReadFile(handle.get(), buf.get(), size, &read_size, nullptr)) {
       LOG(ERROR) << "ReadFile failed: " << ::GetLastError();
       return false;
     }
@@ -514,7 +529,7 @@ bool IPCPathManager::LoadPathNameInternal() {
     }
   }
 
-#else
+#else   // OS_WIN
 
   InputFileStream is(filename.c_str(), std::ios::binary | std::ios::in);
   if (!is) {
@@ -526,7 +541,7 @@ bool IPCPathManager::LoadPathNameInternal() {
     LOG(ERROR) << "ParseFromStream failed";
     return false;
   }
-#endif
+#endif  // OS_WIN
 
   if (!IsValidKey(ipc_path_info_->key())) {
     LOG(ERROR) << "IPCServer::key is invalid";

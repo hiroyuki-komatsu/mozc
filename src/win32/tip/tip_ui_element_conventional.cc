@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -59,16 +59,13 @@ using ATL::CComPtr;
 using ATL::CComQIPtr;
 using ATL::CComVariant;
 using ATL::CStringW;
-using std::unique_ptr;
 
 class TipCandidateListImpl : public ITfCandidateListUIElementBehavior {
  public:
   TipCandidateListImpl(TipUiElementConventional::UIType type,
-                       TipTextService *text_service,
-                       ITfContext *context)
-      : delegate_(TipUiElementDelegateFactory::Create(
-            text_service, context, ToDelegateType(type))) {
-  }
+                       TipTextService *text_service, ITfContext *context)
+      : delegate_(TipUiElementDelegateFactory::Create(text_service, context,
+                                                      ToDelegateType(type))) {}
 
  private:
   ~TipCandidateListImpl() {}
@@ -104,9 +101,7 @@ class TipCandidateListImpl : public ITfCandidateListUIElementBehavior {
     return S_OK;
   }
 
-  virtual ULONG STDMETHODCALLTYPE AddRef() {
-    return ref_count_.AddRefImpl();
-  }
+  virtual ULONG STDMETHODCALLTYPE AddRef() { return ref_count_.AddRefImpl(); }
 
   virtual ULONG STDMETHODCALLTYPE Release() {
     const ULONG count = ref_count_.ReleaseImpl();
@@ -134,8 +129,8 @@ class TipCandidateListImpl : public ITfCandidateListUIElementBehavior {
   virtual HRESULT STDMETHODCALLTYPE GetUpdatedFlags(DWORD *flags) {
     return delegate_->GetUpdatedFlags(flags);
   }
-  virtual HRESULT STDMETHODCALLTYPE GetDocumentMgr(
-      ITfDocumentMgr **document_manager) {
+  virtual HRESULT STDMETHODCALLTYPE
+  GetDocumentMgr(ITfDocumentMgr **document_manager) {
     return delegate_->GetDocumentMgr(document_manager);
   }
   virtual HRESULT STDMETHODCALLTYPE GetCount(UINT *count) {
@@ -151,8 +146,7 @@ class TipCandidateListImpl : public ITfCandidateListUIElementBehavior {
                                                  UINT *page_count) {
     return delegate_->GetPageIndex(index, size, page_count);
   }
-  virtual HRESULT STDMETHODCALLTYPE SetPageIndex(UINT *index,
-                                                 UINT page_count) {
+  virtual HRESULT STDMETHODCALLTYPE SetPageIndex(UINT *index, UINT page_count) {
     return delegate_->SetPageIndex(index, page_count);
   }
   virtual HRESULT STDMETHODCALLTYPE GetCurrentPage(UINT *current_page) {
@@ -163,12 +157,8 @@ class TipCandidateListImpl : public ITfCandidateListUIElementBehavior {
   virtual HRESULT STDMETHODCALLTYPE SetSelection(UINT index) {
     return delegate_->SetSelection(index);
   }
-  virtual HRESULT STDMETHODCALLTYPE Finalize() {
-    return delegate_->Finalize();
-  }
-  virtual HRESULT STDMETHODCALLTYPE Abort() {
-    return delegate_->Abort();
-  }
+  virtual HRESULT STDMETHODCALLTYPE Finalize() { return delegate_->Finalize(); }
+  virtual HRESULT STDMETHODCALLTYPE Abort() { return delegate_->Abort(); }
 
   static TipUiElementDelegateFactory::ElementType ToDelegateType(
       TipUiElementConventional::UIType type) {
@@ -177,8 +167,8 @@ class TipCandidateListImpl : public ITfCandidateListUIElementBehavior {
         return TipUiElementDelegateFactory::
             kConventionalUnobservableSuggestWindow;
       case TipUiElementConventional::kObservableSuggestWindow:
-        return
-            TipUiElementDelegateFactory::kConventionalObservableSuggestWindow;
+        return TipUiElementDelegateFactory::
+            kConventionalObservableSuggestWindow;
       case TipUiElementConventional::kCandidateWindow:
         return TipUiElementDelegateFactory::kConventionalCandidateWindow;
       default:
@@ -188,7 +178,7 @@ class TipCandidateListImpl : public ITfCandidateListUIElementBehavior {
   }
 
   TipRefCount ref_count_;
-  unique_ptr<TipUiElementDelegate> delegate_;
+  std::unique_ptr<TipUiElementDelegate> delegate_;
   DISALLOW_COPY_AND_ASSIGN(TipCandidateListImpl);
 };
 
@@ -227,9 +217,7 @@ class TipIndicatorImpl : public ITfToolTipUIElement {
     return S_OK;
   }
 
-  virtual ULONG STDMETHODCALLTYPE AddRef() {
-    return ref_count_.AddRefImpl();
-  }
+  virtual ULONG STDMETHODCALLTYPE AddRef() { return ref_count_.AddRefImpl(); }
 
   virtual ULONG STDMETHODCALLTYPE Release() {
     const ULONG count = ref_count_.ReleaseImpl();
@@ -259,15 +247,14 @@ class TipIndicatorImpl : public ITfToolTipUIElement {
   }
 
   TipRefCount ref_count_;
-  unique_ptr<TipUiElementDelegate> delegate_;
+  std::unique_ptr<TipUiElementDelegate> delegate_;
   DISALLOW_COPY_AND_ASSIGN(TipIndicatorImpl);
 };
 
 }  // namespace
 
 ITfUIElement *TipUiElementConventional::New(
-    TipUiElementConventional::UIType type,
-    TipTextService *text_service,
+    TipUiElementConventional::UIType type, TipTextService *text_service,
     ITfContext *context) {
   if (text_service == nullptr) {
     return nullptr;

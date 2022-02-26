@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,12 @@
 #ifndef MOZC_ENGINE_ENGINE_INTERFACE_H_
 #define MOZC_ENGINE_ENGINE_INTERFACE_H_
 
-#include "base/port.h"
-#include "base/string_piece.h"
+#include <string>
+#include <vector>
+
 #include "data_manager/data_manager_interface.h"
 #include "dictionary/suppression_dictionary.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 
@@ -47,6 +49,9 @@ class UserDataManagerInterface;
 // well as Kana-Kanji converter/predictor, etc.
 class EngineInterface {
  public:
+  EngineInterface(const EngineInterface &) = delete;
+  EngineInterface &operator=(const EngineInterface &) = delete;
+
   virtual ~EngineInterface() = default;
 
   // Returns a reference to a converter. The returned instance is managed by the
@@ -68,16 +73,16 @@ class EngineInterface {
   virtual UserDataManagerInterface *GetUserDataManager() = 0;
 
   // Gets the version of underlying data set.
-  virtual StringPiece GetDataVersion() const = 0;
+  virtual absl::string_view GetDataVersion() const = 0;
 
   // Gets the data manager.
   virtual const DataManagerInterface *GetDataManager() const = 0;
 
- protected:
-  EngineInterface() {}
+  // Gets the user POS list.
+  virtual std::vector<std::string> GetPosList() const = 0;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(EngineInterface);
+ protected:
+  EngineInterface() = default;
 };
 
 }  // namespace mozc

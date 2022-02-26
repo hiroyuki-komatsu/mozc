@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -33,14 +33,16 @@
 
 #include "base/file_util.h"
 #include "prediction/predictor_interface.h"
+#include "testing/base/public/gmock.h"
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
 #include "testing/base/public/mozctest.h"
+#include "absl/flags/flag.h"
 
 namespace mozc {
 namespace {
 
-const char kMockMagicNumber[] = "MOCK";
+constexpr char kMockMagicNumber[] = "MOCK";
 
 class EngineBuilderTest : public ::testing::Test {
  protected:
@@ -54,7 +56,7 @@ class EngineBuilderTest : public ::testing::Test {
     response_.Clear();
   }
 
-  const string mock_data_path_;
+  const std::string mock_data_path_;
   EngineBuilder builder_;
   EngineReloadRequest request_;
   EngineReloadResponse response_;
@@ -62,9 +64,6 @@ class EngineBuilderTest : public ::testing::Test {
  private:
   const testing::ScopedTmpUserProfileDirectory scoped_profile_dir_;
 };
-
-// Most of tests are disabled on NaCl as it uses mock file system for tests.
-#ifndef OS_NACL
 
 TEST_F(EngineBuilderTest, PrepareAsync) {
   {
@@ -82,13 +81,14 @@ TEST_F(EngineBuilderTest, PrepareAsync) {
   }
   Clear();
   {
-    // Test request with install.  Since the requested file is moved,
+    // Test request with install.  Since the requested file is copied,
     // |mock_data_path_| is copied to a temporary file.
-    const string src_path = FileUtil::JoinPath({FLAGS_test_tmpdir, "src.data"});
-    ASSERT_TRUE(FileUtil::CopyFile(mock_data_path_, src_path));
+    const std::string src_path =
+        FileUtil::JoinPath({absl::GetFlag(FLAGS_test_tmpdir), "src.data"});
+    ASSERT_OK(FileUtil::CopyFile(mock_data_path_, src_path));
 
-    const string install_path =
-        FileUtil::JoinPath({FLAGS_test_tmpdir, "dst.data"});
+    const std::string install_path =
+        FileUtil::JoinPath({absl::GetFlag(FLAGS_test_tmpdir), "dst.data"});
     request_.set_engine_type(EngineReloadRequest::MOBILE);
     request_.set_file_path(src_path);
     request_.set_install_location(install_path);
@@ -100,9 +100,9 @@ TEST_F(EngineBuilderTest, PrepareAsync) {
     ASSERT_TRUE(builder_.HasResponse());
     builder_.GetResponse(&response_);
     EXPECT_EQ(EngineReloadResponse::RELOAD_READY, response_.status());
-    // Verify |src_path| was renamed.
-    EXPECT_FALSE(FileUtil::FileExists(src_path));
-    EXPECT_TRUE(FileUtil::FileExists(install_path));
+    // Verify |src_path| was copied.
+    EXPECT_OK(FileUtil::FileExists(src_path));
+    EXPECT_OK(FileUtil::FileExists(install_path));
   }
 }
 
@@ -152,16 +152,17 @@ TEST_F(EngineBuilderTest, AsyncBuildWithInstall) {
       {EngineReloadRequest::DESKTOP, "DefaultPredictor"},
       {EngineReloadRequest::MOBILE, "MobilePredictor"},
   };
-  const string &tmp_src = FileUtil::JoinPath({FLAGS_test_tmpdir, "src.data"});
-  const string install_path =
-      FileUtil::JoinPath({FLAGS_test_tmpdir, "dst.data"});
+  const std::string &tmp_src =
+      FileUtil::JoinPath({absl::GetFlag(FLAGS_test_tmpdir), "src.data"});
+  const std::string install_path =
+      FileUtil::JoinPath({absl::GetFlag(FLAGS_test_tmpdir), "dst.data"});
 
   for (const auto &test_case : kTestCases) {
     Clear();
 
-    // Since requested file is renamed, copy |mock_data_path_| to a temporary
+    // Since requested file is copied, copy |mock_data_path_| to a temporary
     // file.
-    ASSERT_TRUE(FileUtil::CopyFile(mock_data_path_, tmp_src));
+    ASSERT_OK(FileUtil::CopyFile(mock_data_path_, tmp_src));
 
     // Request preparation with install.
     request_.set_engine_type(test_case.type);
@@ -178,9 +179,9 @@ TEST_F(EngineBuilderTest, AsyncBuildWithInstall) {
     builder_.GetResponse(&response_);
     ASSERT_EQ(EngineReloadResponse::RELOAD_READY, response_.status());
 
-    // |tmp_src| should be renamed to |install_path|.
-    ASSERT_FALSE(FileUtil::FileExists(tmp_src));
-    ASSERT_TRUE(FileUtil::FileExists(install_path));
+    // |tmp_src| should be copied to |install_path|.
+    ASSERT_OK(FileUtil::FileExists(tmp_src));
+    ASSERT_OK(FileUtil::FileExists(install_path));
 
     // Build an engine and verify its predictor type (desktop or mobile).
     auto engine = builder_.BuildFromPreparedData();
@@ -209,8 +210,6 @@ TEST_F(EngineBuilderTest, FailureCase_DataBroken) {
   builder_.GetResponse(&response_);
   ASSERT_EQ(EngineReloadResponse::DATA_BROKEN, response_.status());
 }
-
-#endif  // !OS_NACL
 
 TEST_F(EngineBuilderTest, FailureCase_FileDoesNotExist) {
   // Test the case where input file doesn't exist.

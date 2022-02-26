@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,50 +28,42 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""
-A tool to generate test sentences for stress test"
-"""
+"""A tool to generate test sentences for stress test."""
 
-__author__ = "taku"
+import argparse
 
-import sys
 
-def escape_string(s):
-  """ escape the string with "\\xXX" format.
-
-  We don't use encode('string_escape') because it doesn't escape ascii
-  characters.
-
-  Args:
-    s: a string to be escaped
-
-  Returns:
-    an escaped string.
-  """
-  result = ''
-  for c in s:
-    hexstr = hex(ord(c))
-    # because hexstr contains '0x', remove the prefix and add our prefix
-    result += '\\x' + hexstr[2:]
-  return result
-
-def GenerateHeader(file):
-  try:
-    print "const char *kTestSentences[] = {"
-    for line in open(file, "r"):
+def GenerateHeader(input_file, output_file):
+  """Convert the file to C++ code."""
+  output = []
+  with open(input_file, encoding='utf-8') as f:
+    for line in f:
       if line.startswith('#'):
         continue
-      line = line.rstrip('\r\n')
+      items = line.rstrip('\r\n').split('\t')
+      if len(items) > 1:
+        line = items[1]
+      else:
+        line = items[0]
       if not line:
         continue
-      print " \"%s\"," % escape_string(line)
-    print "};"
-  except:
-    print "cannot open %s" % (file)
-    sys.exit(1)
+      output.append(line)
+
+  with open(output_file, 'w', encoding='utf-8') as f:
+    f.write('const char *kTestSentences[] = {\n')
+    for line in output:
+      escaped = line.replace('\\', '\\\\').replace('"', '\\"')
+      f.write(' "%s",\n' % escaped)
+    f.write('};\n')
+
 
 def main():
-  GenerateHeader(sys.argv[1])
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--input')
+  parser.add_argument('--output')
+  args = parser.parse_args()
+  GenerateHeader(args.input, args.output)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
   main()

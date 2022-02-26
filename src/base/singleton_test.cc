@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,8 +27,10 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <stdlib.h>
 #include "base/singleton.h"
+
+#include <stdlib.h>
+
 #include "base/thread.h"
 #include "base/util.h"
 #include "testing/base/public/gunit.h"
@@ -40,9 +42,7 @@ static int g_counter = 0;
 
 class TestInstance {
  public:
-  TestInstance() {
-    ++g_counter;
-  }
+  TestInstance() { ++g_counter; }
 };
 
 class ThreadInstance {
@@ -50,27 +50,22 @@ class ThreadInstance {
   ThreadInstance() {
     // Wait two secs to test the singleton
     // can safely block the initialization procedure.
-    Util::Sleep(2000);   // wait 2sec
+    Util::Sleep(2000);  // wait 2sec
     ++g_counter;
   }
 };
 
 class ThreadTest : public Thread {
  public:
-  void Run() {
-    instance_ = Singleton<ThreadInstance>::get();
-  }
+  void Run() override { instance_ = Singleton<ThreadInstance>::get(); }
 
-  ThreadInstance *get() {
-    return instance_;
-  }
+  ThreadInstance *get() { return instance_; }
 
-  ThreadTest() : instance_(NULL) {}
+  ThreadTest() : instance_(nullptr) {}
 
  private:
   ThreadInstance *instance_;
 };
-}  // namespace
 
 // Cannot have a testcase for Singleton::SingletonFinalizer,
 // since it affects other tests using Singleton objects.
@@ -85,8 +80,8 @@ TEST(SingletonTest, BasicTest) {
 }
 
 TEST(SingletonTest, ThreadTest) {
-  // call Singelton::get() at the same time from
-  // different threds. Make sure that get() returns
+  // call Singleton::get() at the same time from
+  // different threads. Make sure that get() returns
   // the same instance
 
   g_counter = 0;
@@ -110,4 +105,36 @@ TEST(SingletonTest, ThreadTest) {
   EXPECT_EQ(test1.get(), test2.get());
   EXPECT_EQ(test2.get(), test3.get());
 }
+
+class ValueHolder {
+ public:
+  ValueHolder() = default;
+  ~ValueHolder() { *dtor_called_ = true; }
+
+  int value_ = 0;
+  bool *dtor_called_ = nullptr;
+};
+
+TEST(SingletonTest, Reset) {
+  bool dtor_called = false;
+  {
+    auto *ptr = Singleton<ValueHolder>::get();
+    ptr->value_ = 12345;
+    ptr->dtor_called_ = &dtor_called;
+  }
+  {
+    auto *ptr = Singleton<ValueHolder>::get();
+    EXPECT_EQ(12345, ptr->value_);
+    EXPECT_FALSE(dtor_called);
+  }
+  {
+    Singleton<ValueHolder>::Delete();
+    EXPECT_TRUE(dtor_called);
+    auto *ptr = Singleton<ValueHolder>::get();
+    // Reconstructed value, so the it's not equal to 12345.
+    EXPECT_EQ(0, ptr->value_);
+  }
+}
+
+}  // namespace
 }  // namespace mozc

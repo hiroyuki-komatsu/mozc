@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,12 +32,12 @@
 #include <memory>
 
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "base/scoped_handle.h"
 #include "base/system_util.h"
 #include "base/util.h"
-#include "renderer/renderer_client.h"
 #include "protocol/renderer_command.pb.h"
+#include "renderer/renderer_client.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace renderer {
@@ -50,12 +50,12 @@ class SenderThread;
 SenderThread *g_sender_thread = nullptr;
 
 // Used to lock |g_sender_thread|.
-Mutex *g_mutex = nullptr;
+ABSL_CONST_INIT absl::Mutex g_mutex(absl::kConstInit);
 
 // Represents the module handle of this module.
 volatile HMODULE g_module = nullptr;
 
-// True if the the DLL received DLL_PROCESS_DETACH notification.
+// True if the DLL received DLL_PROCESS_DETACH notification.
 volatile bool g_module_unloaded = false;
 
 // Represents the number of UI threads that are recognized by this module.
@@ -69,17 +69,16 @@ volatile DWORD g_tls_index = TLS_OUT_OF_INDEXES;
 class SenderThread {
  public:
   SenderThread(HANDLE command_event, HANDLE quit_event)
-    : command_event_(command_event),
-      quit_event_(quit_event) {
-  }
+      : command_event_(command_event), quit_event_(quit_event) {}
 
-  void RequestQuit() {
-    ::SetEvent(quit_event_.get());
-  }
+  SenderThread(const SenderThread &) = delete;
+  SenderThread &operator=(const SenderThread &) = delete;
+
+  void RequestQuit() { ::SetEvent(quit_event_.get()); }
 
   void UpdateCommand(const RendererCommand &new_command) {
-    scoped_lock lock(&mutex_);
-    renderer_command_.CopyFrom(new_command);
+    absl::MutexLock lock(&mutex_);
+    renderer_command_ = new_command;
     ::SetEvent(command_event_.get());
   }
 
@@ -103,13 +102,13 @@ class SenderThread {
     while (true) {
       const HANDLE handles[] = {quit_event_.get(), command_event_.get()};
       const DWORD wait_result = ::WaitForMultipleObjects(
-          arraysize(handles), handles, FALSE, INFINITE);
+          std::size(handles), handles, FALSE, INFINITE);
       const DWORD wait_error = ::GetLastError();
       if (g_module_unloaded) {
         break;
       }
-      const DWORD kQuitEventSignaled = WAIT_OBJECT_0;
-      const DWORD kRendererEventSignaled = WAIT_OBJECT_0 + 1;
+      constexpr DWORD kQuitEventSignaled = WAIT_OBJECT_0;
+      constexpr DWORD kRendererEventSignaled = WAIT_OBJECT_0 + 1;
       if (wait_result == kQuitEventSignaled) {
         // handles[0], that is, quit event is signaled.
         break;
@@ -121,7 +120,7 @@ class SenderThread {
       // handles[1], that is, renderer event is signaled.
       RendererCommand command;
       {
-        scoped_lock lock(&mutex_);
+        absl::MutexLock lock(&mutex_);
         command.Swap(&renderer_command_);
         ::ResetEvent(command_event_.get());
       }
@@ -135,15 +134,13 @@ class SenderThread {
   ScopedHandle command_event_;
   ScopedHandle quit_event_;
   RendererCommand renderer_command_;
-  Mutex mutex_;
-
-  DISALLOW_COPY_AND_ASSIGN(SenderThread);
+  absl::Mutex mutex_;
 };
 
 static DWORD WINAPI ThreadProc(void * /*unused*/) {
   SenderThread *thread = nullptr;
   {
-    scoped_lock lock(g_mutex);
+    absl::MutexLock lock(&g_mutex);
     thread = g_sender_thread;
   }
   if (thread != nullptr) {
@@ -160,8 +157,8 @@ SenderThread *CreateSenderThread() {
   // be OK because this code will be running as DLL and the CRT can manage
   // thread specific resources through attach/detach notification in DllMain.
   DWORD thread_id = 0;
-  ScopedHandle thread_handle(::CreateThread(
-      nullptr, 0, ThreadProc, nullptr, CREATE_SUSPENDED, &thread_id));
+  ScopedHandle thread_handle(::CreateThread(nullptr, 0, ThreadProc, nullptr,
+                                            CREATE_SUSPENDED, &thread_id));
   if (thread_handle.get() == nullptr) {
     // Failed to create the thread. Restore the reference count of the DLL.
     return nullptr;
@@ -191,8 +188,8 @@ SenderThread *CreateSenderThread() {
     return nullptr;
   }
 
-  std::unique_ptr<SenderThread> thread(new SenderThread(
-      command_event.take(), quit_event.take()));
+  std::unique_ptr<SenderThread> thread(
+      new SenderThread(command_event.take(), quit_event.take()));
 
   // Resume the thread.
   if (::ResumeThread(thread_handle.get()) == -1) {
@@ -211,8 +208,7 @@ bool CanIgnoreRequest(const RendererCommand &command) {
   if (g_tls_index == TLS_OUT_OF_INDEXES) {
     return true;
   }
-  if ((::TlsGetValue(g_tls_index) == nullptr) &&
-      !command.visible()) {
+  if ((::TlsGetValue(g_tls_index) == nullptr) && !command.visible()) {
     // The sender threaed is not initialized and |command| is to hide the
     // renderer. We are likely to be able to skip this request.
     return true;
@@ -233,7 +229,7 @@ bool EnsureUIThreadInitialized() {
     return true;
   }
   {
-    scoped_lock lock(g_mutex);
+    absl::MutexLock lock(&g_mutex);
     ++g_ui_thread_count;
     if (g_ui_thread_count == 1) {
       g_sender_thread = CreateSenderThread();
@@ -248,7 +244,6 @@ bool EnsureUIThreadInitialized() {
 
 void Win32RendererClient::OnModuleLoaded(HMODULE module_handle) {
   g_module = module_handle;
-  g_mutex = new Mutex();
   g_tls_index = ::TlsAlloc();
 }
 
@@ -256,7 +251,6 @@ void Win32RendererClient::OnModuleUnloaded() {
   if (g_tls_index != TLS_OUT_OF_INDEXES) {
     ::TlsFree(g_tls_index);
   }
-  delete g_mutex;
   g_module_unloaded = true;
   g_module = nullptr;
 }
@@ -273,7 +267,7 @@ void Win32RendererClient::OnUIThreadUninitialized() {
     return;
   }
   {
-    scoped_lock lock(g_mutex);
+    absl::MutexLock lock(&g_mutex);
     if (g_ui_thread_count > 0) {
       --g_ui_thread_count;
       if (g_ui_thread_count == 0 && g_sender_thread != nullptr) {
@@ -295,7 +289,7 @@ void Win32RendererClient::OnUpdated(const RendererCommand &command) {
   }
   SenderThread *thread = nullptr;
   {
-    scoped_lock lock(g_mutex);
+    absl::MutexLock lock(&g_mutex);
     thread = g_sender_thread;
   }
   if (thread != nullptr) {

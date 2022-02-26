@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,42 +32,44 @@
 #ifndef MOZC_COMPOSER_COMPOSER_H_
 #define MOZC_COMPOSER_COMPOSER_H_
 
-#include <memory>
+#include <cstdint>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/port.h"
 #include "base/protobuf/repeated_field.h"
+#include "composer/internal/composition.h"
+#include "composer/internal/composition_input.h"
 #include "composer/internal/transliterators.h"
 #include "composer/internal/typing_corrector.h"
+#include "composer/table.h"
 #include "composer/type_corrected_query.h"
 #include "protocol/commands.pb.h"
 // for FRIEND_TEST()
 #include "testing/base/public/gunit_prod.h"
 #include "transliteration/transliteration.h"
 
-
 namespace mozc {
 namespace composer {
 
-class CompositionInterface;
-class Table;
-
-typedef commands::KeyEvent::ProbableKeyEvent ProbableKeyEvent;
-typedef mozc::protobuf::RepeatedPtrField<ProbableKeyEvent> ProbableKeyEvents;
-
-class Composer {
+class Composer final {
  public:
   // Pseudo commands in composer.
   enum InternalCommand {
     REWIND,
+    STOP_KEY_TOGGLING,
   };
 
-  Composer(const Table *table,
-           const commands::Request *request,
+  Composer();
+  Composer(const Table *table, const commands::Request *request,
            const config::Config *config);
-  virtual ~Composer();
+
+  Composer(const Composer &);
+  Composer &operator=(const Composer &);
+
+  ~Composer();
 
   // Reset all composing data except table.
   void Reset();
@@ -108,23 +110,25 @@ class Composer {
   void SetOutputMode(transliteration::TransliterationType mode);
 
   // Returns preedit strings
-  void GetPreedit(string *left, string *focused, string *right) const;
+  void GetPreedit(std::string *left, std::string *focused,
+                  std::string *right) const;
 
   // Returns a preedit string with user's preferences.
-  void GetStringForPreedit(string *output) const;
+  void GetStringForPreedit(std::string *output) const;
 
   // Returns a submit string with user's preferences.  The difference
   // from the preedit string is the handling of the last 'n'.
-  void GetStringForSubmission(string *output) const;
+  void GetStringForSubmission(std::string *output) const;
 
   // Returns a conversion query normalized ascii characters in half width
-  void GetQueryForConversion(string *output) const;
+  void GetQueryForConversion(std::string *output) const;
 
   // Returns a prediction query trimmed the tail alphabet characters.
-  void GetQueryForPrediction(string *output) const;
+  void GetQueryForPrediction(std::string *output) const;
 
   // Returns a expanded prediction query.
-  void GetQueriesForPrediction(string *base, std::set<string> *expanded) const;
+  void GetQueriesForPrediction(std::string *base,
+                               std::set<std::string> *expanded) const;
 
   // Returns a type-corrected prediction queries.
   void GetTypeCorrectedQueriesForPrediction(
@@ -139,7 +143,7 @@ class Composer {
   // Delete multiple characters beginning at specified position.
   void DeleteRange(size_t pos, size_t length);
 
-  void InsertCharacter(const string &input);
+  void InsertCharacter(const std::string &key);
 
   // Set preedit text to composer.
   //
@@ -148,27 +152,24 @@ class Composer {
   // you should use SetPreeditTextForTestOnly().
   // With the current implementation, prediction queries can be transliterated
   // and you will not be able to get right candidates.
-  void InsertCharacterPreedit(const string &input);
+  void InsertCharacterPreedit(const std::string &input);
 
   // TEST ONLY: Set preedit text to composer.
   //
-  // The |input| will be used in as-is form for conversion/suggestion query
-  // and will not be transliterated.
+  // The |input| will be used in as-is form for GetStringForPreedit()
+  // and GetStringForSubmission().
+  // For GetQueryForConversion() and GetQueryForPrediction(), |input| will be
+  // used as normalized ascii characters in half width.
+  //
   // For example, when the |input| will be set as "mo", suggestion will be
   // triggered by "mo", rather than "も", or "ｍｏ", etc.
-  void SetPreeditTextForTestOnly(const string &input);
+  //
+  // If the input is ascii characters, input mode will be set as HALF_ASCII.
+  // This is useful to test the behavior of alphabet keyboard.
+  void SetPreeditTextForTestOnly(const std::string &input);
 
-  bool InsertCharacterKeyAndPreedit(const string &key, const string &preedit);
-  void InsertCharacterForProbableKeyEvents(
-      const string &input,
-      const ProbableKeyEvents &probable_key_events);
-  void InsertCharacterPreeditForProbableKeyEvents(
-      const string &input,
-      const ProbableKeyEvents &probable_key_events);
-  void InsertCharacterKeyAndPreeditForProbableKeyEvents(
-      const string &key,
-      const string &preedit,
-      const ProbableKeyEvents &probable_key_events);
+  bool InsertCharacterKeyAndPreedit(const std::string &key,
+                                    const std::string &preedit);
   bool InsertCharacterKeyEvent(const commands::KeyEvent &key);
   void InsertCommandCharacter(const InternalCommand internal_command);
   void Delete();
@@ -179,32 +180,30 @@ class Composer {
   void MoveCursorRight();
   void MoveCursorToBeginning();
   void MoveCursorToEnd();
-  void MoveCursorTo(uint32 new_position);
+  void MoveCursorTo(uint32_t new_position);
 
   // Returns raw input from a user.
   // The main purpose is Transliteration.
-  void GetRawString(string *raw_string) const;
+  void GetRawString(std::string *raw_string) const;
 
   // Returns substring of raw input.  The position and size is based on the
   // composed string.  For example, when [さ|sa][し|shi][み|mi] is the
   // composition, GetRawSubString(0, 2) returns "sashi".
-  void GetRawSubString(const size_t position,
-                       const size_t size,
-                       string *raw_sub_string) const;
+  void GetRawSubString(const size_t position, const size_t size,
+                       std::string *raw_sub_string) const;
 
   // Generate transliterations.
   void GetTransliterations(transliteration::Transliterations *t13ns) const;
 
   // Generate substrings of specified transliteration.
   void GetSubTransliteration(const transliteration::TransliterationType type,
-                             const size_t position,
-                             const size_t size,
-                             string *transliteration) const;
+                             const size_t position, const size_t size,
+                             std::string *transliteration) const;
 
   // Generate substrings of transliterations.
-  void GetSubTransliterations(size_t position,
-                              size_t size,
-                              transliteration::Transliterations *t13ns) const;
+  void GetSubTransliterations(
+      size_t position, size_t size,
+      transliteration::Transliterations *transliterations) const;
 
   // Check if the preedit is can be modified.
   bool EnableInsert() const;
@@ -228,50 +227,45 @@ class Composer {
   // characters are transformed true is returned.
   // For example, if the query is "ー１、０００。５", it should be
   // transformed to "−１，０００．５".  and true is returned.
-  static bool TransformCharactersForNumbers(string *query);
+  static bool TransformCharactersForNumbers(std::string *query);
 
   // Set new input flag.
   // By calling this method, next inserted character will introduce
   // new chunk if the character has NewChunk attribute.
   void SetNewInput();
 
-  void CopyFrom(const Composer &src);
+  // Returns true when the current character at cursor position is toggleable.
+  bool IsToggleable() const;
 
   bool is_new_input() const;
   size_t shifted_sequence_count() const;
-  const string &source_text() const;
-  string *mutable_source_text();
-  void set_source_text(const string &source_text);
+  const std::string &source_text() const;
+  std::string *mutable_source_text();
+  void set_source_text(const std::string &source_text);
   size_t max_length() const;
   void set_max_length(size_t length);
+
+  int timeout_threshold_msec() const;
+  void set_timeout_threshold_msec(int threshold_msec);
 
  private:
   FRIEND_TEST(ComposerTest, ApplyTemporaryInputMode);
 
-  bool InsertCharacterInternal(const string &input);
-  bool InsertCharacterKeyAndPreeditInternal(const string &key,
-                                            const string &preedit);
+  bool ProcessCompositionInput(const CompositionInput &input);
 
   // Change input mode temporarily accoding to the current context and
   // the given input character.
   // This function have a bug when key has characters input with Preedit.
   // Expected behavior: InsertPreedit("A") + InsertKey("a") -> "Aあ"
   // Actual behavior:   InsertPreedit("A") + InsertKey("a") -> "Aa"
-  void ApplyTemporaryInputMode(const string &key, bool caps_locked);
+  void ApplyTemporaryInputMode(const std::string &input, bool caps_locked);
 
   // Generate transliterated substrings.
-  void GetTransliteratedText(Transliterators::Transliterator transliterator,
-                             const size_t position,
-                             const size_t size,
-                             string *output) const;
+  void GetTransliteratedText(Transliterators::Transliterator t12r,
+                             const size_t position, const size_t size,
+                             std::string *result) const;
 
   size_t position_;
-  // Whether the next insertion is the beginning of typing after an
-  // editing command like SetInputMode or not.  Some conversion rules
-  // refer this state.  Assuming the input events are
-  // "abc<left-cursor>d", when "a" or "d" is typed, this value should
-  // be true.  When "b" or "c" is typed, the value should be false.
-  bool is_new_input_;
   transliteration::TransliterationType input_mode_;
   transliteration::TransliterationType output_mode_;
   // On reset, comeback_input_mode_ is used as the input mode.
@@ -280,20 +274,33 @@ class Composer {
   commands::Context::InputFieldType input_field_type_;
 
   size_t shifted_sequence_count_;
-  std::unique_ptr<CompositionInterface> composition_;
+  Composition composition_;
 
   TypingCorrector typing_corrector_;
 
   // The original text for the composition.  The value is usually
   // empty, and used for reverse conversion.
-  string source_text_;
+  std::string source_text_;
 
   size_t max_length_;
 
   const commands::Request *request_;
   const config::Config *config_;
 
-  DISALLOW_COPY_AND_ASSIGN(Composer);
+  // Timestamp of last modified.
+  int64_t timestamp_msec_ = 0;
+
+  // If the duration between key inputs is more than timeout_threadhols_msec_,
+  // the STOP_KEY_TOGGLING event is sent before the next key input.
+  // If the value is 0, STOP_KEY_TOGGLING is not sent.
+  int timeout_threshold_msec_ = 0;
+
+  // Whether the next insertion is the beginning of typing after an
+  // editing command like SetInputMode or not.  Some conversion rules
+  // refer this state.  Assuming the input events are
+  // "abc<left-cursor>d", when "a" or "d" is typed, this value should
+  // be true.  When "b" or "c" is typed, the value should be false.
+  bool is_new_input_;
 };
 
 }  // namespace composer

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,7 @@
 #ifndef MOZC_GUI_BASE_TABLE_UTIL_H_
 #define MOZC_GUI_BASE_TABLE_UTIL_H_
 
-#include <QtCore/QString>
+#include <QString>
 
 class QTableWidget;
 
@@ -41,8 +41,8 @@ class TableUtil {
  public:
   // Returns text data associate with the specified table item.
   // Returns an empty string if fails.
-  static QString SafeGetItemText(
-      const QTableWidget *table_widget, int row, int column);
+  static QString SafeGetItemText(const QTableWidget *table_widget, int row,
+                                 int column);
 
  private:
   TableUtil() {}

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,15 +29,16 @@
 
 #include "composer/internal/composition_input.h"
 
-#include "composer/internal/transliterators.h"
 #include "testing/base/public/gunit.h"
 
 namespace mozc {
+
+using ProbableKeyEvent = commands::KeyEvent::ProbableKeyEvent;
+using ProbableKeyEvents = protobuf::RepeatedPtrField<ProbableKeyEvent>;
+
 namespace composer {
 
 TEST(CompositionInputTest, BasicTest) {
-  const TransliteratorInterface *kT12r =
-    Transliterators::GetTransliterator(Transliterators::RAW_STRING);
   CompositionInput input;
 
   {  // Initial status.
@@ -45,41 +46,54 @@ TEST(CompositionInputTest, BasicTest) {
     EXPECT_TRUE(input.raw().empty());
     EXPECT_FALSE(input.has_conversion());
     EXPECT_TRUE(input.conversion().empty());
+    EXPECT_TRUE(input.probable_key_events().empty());
     EXPECT_FALSE(input.is_new_input());
-    EXPECT_TRUE(NULL == input.transliterator());
   }
 
   {  // Value setting
     input.set_raw("raw");
     input.set_conversion("conversion");
+
+    ProbableKeyEvents key_events;
+
+    ProbableKeyEvent key_event1;
+    key_event1.set_key_code('i');
+    key_event1.set_probability(0.6);
+    key_events.Add(std::move(key_event1));
+
+    ProbableKeyEvent key_event2;
+    key_event2.set_key_code('o');
+    key_event2.set_probability(0.4);
+    key_events.Add(std::move(key_event2));
+
+    input.set_probable_key_events(key_events);
     input.set_is_new_input(true);
-    input.set_transliterator(kT12r);
 
     EXPECT_FALSE(input.Empty());
     EXPECT_EQ("raw", input.raw());
     EXPECT_TRUE(input.has_conversion());
     EXPECT_EQ("conversion", input.conversion());
+    EXPECT_EQ(2, input.probable_key_events().size());
     EXPECT_TRUE(input.is_new_input());
-    EXPECT_TRUE(kT12r == input.transliterator());
   }
 
   CompositionInput input2;
-  {  // CopyFrom and Clear
-    input2.CopyFrom(input);
+  {  // Copy and Clear
+    input2 = input;
     input.Clear();
     EXPECT_TRUE(input.Empty());
     EXPECT_TRUE(input.raw().empty());
     EXPECT_FALSE(input.has_conversion());
     EXPECT_TRUE(input.conversion().empty());
+    EXPECT_TRUE(input.probable_key_events().empty());
     EXPECT_FALSE(input.is_new_input());
-    EXPECT_TRUE(NULL == input.transliterator());
 
     EXPECT_FALSE(input2.Empty());
     EXPECT_EQ("raw", input2.raw());
     EXPECT_TRUE(input2.has_conversion());
     EXPECT_EQ("conversion", input2.conversion());
+    EXPECT_EQ(2, input2.probable_key_events().size());
     EXPECT_TRUE(input2.is_new_input());
-    EXPECT_TRUE(kT12r == input2.transliterator());
   }
 
   {  // Empty conversion string is also a value value.

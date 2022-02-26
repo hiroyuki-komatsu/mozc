@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,95 +30,98 @@
 #ifndef MOZC_COMPOSER_INTERNAL_COMPOSITION_H_
 #define MOZC_COMPOSER_INTERNAL_COMPOSITION_H_
 
-#include "composer/composition_interface.h"
-
 #include <list>
+#include <memory>
 #include <set>
 #include <string>
 
 #include "base/port.h"
+#include "composer/internal/transliterators.h"
 
 namespace mozc {
 namespace composer {
 
 class CharChunk;
-typedef std::list<CharChunk*> CharChunkList;
+using CharChunkList = std::list<std::unique_ptr<CharChunk>>;
 
 class CompositionInput;
 class Table;
 
-class Composition : public CompositionInterface {
+enum TrimMode {
+  TRIM,  // "かn" => "か"
+  ASIS,  // "かn" => "かn"
+  FIX,   // "かn" => "かん"
+};
+
+class Composition final {
  public:
   explicit Composition(const Table *table);
-  virtual ~Composition();
 
-  virtual size_t DeleteAt(size_t position);
-  virtual size_t InsertAt(size_t position, const string &input);
-  virtual size_t InsertKeyAndPreeditAt(size_t position,
-                                       const string &key,
-                                       const string &preedit);
+  Composition(const Composition &);
+  Composition &operator=(const Composition &);
+
+  ~Composition();
+
+  size_t DeleteAt(size_t position);
+  size_t InsertAt(size_t position, const std::string &input);
+  size_t InsertKeyAndPreeditAt(size_t position, const std::string &key,
+                               const std::string &preedit);
   // Insert the given |input| to the composition at the given |position|
   // and return the new position.
-  virtual size_t InsertInput(size_t position, const CompositionInput &input);
+  size_t InsertInput(size_t position, const CompositionInput &input);
 
-  virtual void Erase();
+  void Erase();
 
   // Get the position on mode_to from position_from on mode_from.
-  virtual size_t ConvertPosition(
-      size_t position_from,
-      Transliterators::Transliterator transliterator_from,
-      Transliterators::Transliterator transliterator_to);
+  size_t ConvertPosition(
+      size_t position_from, Transliterators::Transliterator transliterator_from,
+      Transliterators::Transliterator transliterator_to) const;
 
   // TODO(komatsu): To be deleted.
-  virtual size_t SetDisplayMode(size_t position,
-                                Transliterators::Transliterator transliterator);
+  size_t SetDisplayMode(size_t position,
+                        Transliterators::Transliterator transliterator);
 
   // NOTE(komatsu) Kind of SetDisplayMode.
-  virtual void SetTransliterator(
-      size_t position_from,
-      size_t position_to,
-      Transliterators::Transliterator transliterator);
-  virtual Transliterators::Transliterator GetTransliterator(size_t position);
+  void SetTransliterator(size_t position_from, size_t position_to,
+                         Transliterators::Transliterator transliterator);
+  Transliterators::Transliterator GetTransliterator(size_t position) const;
 
-  virtual size_t GetLength() const;
-  virtual void GetString(string *composition) const;
-  virtual void GetStringWithTransliterator(
+  size_t GetLength() const;
+  void GetString(std::string *composition) const;
+  void GetStringWithTransliterator(
       Transliterators::Transliterator transliterator,
-      string *output) const;
-  virtual void GetStringWithTrimMode(TrimMode trim_mode, string* output) const;
+      std::string *output) const;
+  void GetStringWithTrimMode(TrimMode trim_mode, std::string *output) const;
   // Get string with consideration for ambiguity from pending input
-  virtual void GetExpandedStrings(string *base,
-                                  std::set<string> *expanded) const;
-  virtual void GetExpandedStringsWithTransliterator(
-      Transliterators::Transliterator transliterator,
-      string *base,
-      std::set<string> *expanded) const;
-  virtual void GetPreedit(
-      size_t position, string *left, string *focused, string *right) const;
+  void GetExpandedStrings(std::string *base,
+                          std::set<std::string> *expanded) const;
+  void GetExpandedStringsWithTransliterator(
+      Transliterators::Transliterator transliterator, std::string *base,
+      std::set<std::string> *expanded) const;
+  void GetPreedit(size_t position, std::string *left, std::string *focused,
+                  std::string *right) const;
 
-  virtual void SetInputMode(Transliterators::Transliterator transliterator);
+  void SetInputMode(Transliterators::Transliterator transliterator);
 
   // Return true if the composition is adviced to be committed immediately.
-  virtual bool ShouldCommit() const;
+  bool ShouldCommit() const;
 
-  // Get a clone.
-  // Clone is a thin wrapper of CloneImpl.
-  // CloneImpl is created to write test codes without dynamic_cast.
-  virtual CompositionInterface *Clone() const;
-  Composition *CloneImpl() const;
+  void SetTable(const Table *table);
 
-  virtual void SetTable(const Table *table);
+  bool IsToggleable(size_t position) const;
 
   // Following methods are declared as public for unit test.
-  void GetChunkAt(size_t position,
-                  Transliterators::Transliterator transliterator,
-                  CharChunkList::iterator *chunk_it,
-                  size_t *inner_position);
+  CharChunkList::iterator GetChunkAt(
+      size_t position, Transliterators::Transliterator transliterator,
+      size_t *inner_position);
+  CharChunkList::const_iterator GetChunkAt(
+      size_t position, Transliterators::Transliterator transliterator,
+      size_t *inner_position) const;
   size_t GetPosition(Transliterators::Transliterator transliterator,
-                     const CharChunkList::const_iterator &it) const;
+                     CharChunkList::const_iterator it) const;
 
-  CharChunkList::iterator GetInsertionChunk(CharChunkList::iterator *it);
-  CharChunkList::iterator InsertChunk(CharChunkList::iterator *left_it);
+  CharChunkList::iterator GetInsertionChunk(CharChunkList::iterator it);
+  CharChunkList::iterator InsertChunk(CharChunkList::const_iterator it);
 
   CharChunk *MaybeSplitChunkAt(size_t position, CharChunkList::iterator *it);
 
@@ -131,26 +134,17 @@ class Composition : public CompositionInterface {
   void CombinePendingChunks(CharChunkList::iterator it,
                             const CompositionInput &input);
   const CharChunkList &GetCharChunkList() const;
-  const Table *table() const {
-    return table_;
-  }
-  const CharChunkList &chunks() const {
-    return chunks_;
-  }
-  Transliterators::Transliterator input_t12r() const {
-    return input_t12r_;
-  }
+  const Table *table() const { return table_; }
+  const CharChunkList &chunks() const { return chunks_; }
+  Transliterators::Transliterator input_t12r() const { return input_t12r_; }
 
  private:
   void GetStringWithModes(Transliterators::Transliterator transliterator,
-                          TrimMode trim_mode,
-                          string *output) const;
+                          TrimMode trim_mode, std::string *composition) const;
 
   const Table *table_;
   CharChunkList chunks_;
   Transliterators::Transliterator input_t12r_;
-
-  DISALLOW_COPY_AND_ASSIGN(Composition);
 };
 
 }  // namespace composer

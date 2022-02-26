@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -47,10 +47,10 @@ namespace win32 {
 namespace {
 
 #if defined(GOOGLE_JAPANESE_INPUT_BUILD)
-const uint32 kMagicNumber = 0x4d6f7a63;  // 'Mozc'
-#else
-const uint32 kMagicNumber = 0x637a6f4d;  // 'cozM'
-#endif
+constexpr uint32 kMagicNumber = 0x4d6f7a63;  // 'Mozc'
+#else  // GOOGLE_JAPANESE_INPUT_BUILD
+constexpr uint32 kMagicNumber = 0x637a6f4d;  // 'cozM'
+#endif  // GOOGLE_JAPANESE_INPUT_BUILD
 
 static HIMCC InitializeHIMCC(HIMCC himcc, DWORD size) {
   if (himcc == nullptr) {
@@ -138,8 +138,7 @@ bool PrivateContextUtil::EnsurePrivateContextIsInitialized(
     return false;
   }
 
-  const HIMCC previous_private_data_handle =
-      *private_data_handle_pointer;
+  const HIMCC previous_private_data_handle = *private_data_handle_pointer;
   if (IsValidPrivateContext(previous_private_data_handle)) {
     // Already initialized.  Nothing to do.
     return true;
@@ -154,8 +153,8 @@ bool PrivateContextUtil::EnsurePrivateContextIsInitialized(
     return false;
   }
 
-  ScopedHIMCC<mozc::win32::PrivateContext>
-      private_context_allocator(new_private_data_handle);
+  ScopedHIMCC<mozc::win32::PrivateContext> private_context_allocator(
+      new_private_data_handle);
   private_context_allocator->Initialize();
   if (!mozc::RunLevel::IsValidClientRunLevel()) {
     private_context_allocator->ime_behavior->disabled = true;

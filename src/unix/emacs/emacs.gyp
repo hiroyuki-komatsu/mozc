@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,7 @@
         'mozc_emacs_helper.cc',
       ],
       'dependencies': [
+        '../../base/absl.gyp:absl_strings',
         '../../base/base.gyp:base',
         '../../config/config.gyp:config_handler',
         '../../ipc/ipc.gyp:ipc',
@@ -55,6 +56,7 @@
         'client_pool.cc',
       ],
       'dependencies': [
+        '../../base/absl.gyp:absl_strings',
         '../../base/base.gyp:base',
         '../../client/client.gyp:client',
         '../../composer/composer.gyp:key_parser',
@@ -70,6 +72,7 @@
         'mozc_emacs_helper_lib_test.cc',
       ],
       'dependencies': [
+        '../../base/absl.gyp:absl_strings',
         '../../testing/testing.gyp:gtest_main',
         'mozc_emacs_helper_lib',
       ],

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,7 @@
 
 #include "base/util.h"
 #include "testing/base/public/gunit.h"
+#include "absl/strings/str_format.h"
 
 // Import the generated version_def.h.
 #include "base/version_def.h"
@@ -46,8 +47,9 @@ TEST(VersionTest, VersionNumberTest) {
   const int minor = Version::GetMozcVersionMinor();
   const int build_number = Version::GetMozcVersionBuildNumber();
   const int revision = Version::GetMozcVersionRevision();
-  EXPECT_EQ(Version::GetMozcVersion(), Util::StringPrintf(
-      "%d.%d.%d.%d", major, minor, build_number, revision));
+  EXPECT_EQ(
+      Version::GetMozcVersion(),
+      absl::StrFormat("%d.%d.%d.%d", major, minor, build_number, revision));
 }
 
 TEST(VersionTest, CompareVersion) {

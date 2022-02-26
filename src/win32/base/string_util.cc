@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,36 +31,36 @@
 
 #include <memory>
 
+#include "base/japanese_util.h"
 #include "base/util.h"
 #include "protocol/commands.pb.h"
-
-using std::unique_ptr;
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace win32 {
 namespace {
 
-const size_t kMaxReadingChars = 512;
+constexpr size_t kMaxReadingChars = 512;
 
-void UTF8ToSJIS(StringPiece input, string *output) {
-  wstring utf16;
-  Util::UTF8ToWide(input, &utf16);
+void Utf8ToSjis(absl::string_view input, std::string *output) {
+  std::wstring utf16;
+  Util::Utf8ToWide(input, &utf16);
   if (utf16.empty()) {
     output->clear();
     return;
   }
 
-  const int kCodePageShiftJIS = 932;
+  constexpr int kCodePageShiftJIS = 932;
 
-  const int output_length_without_null = ::WideCharToMultiByte(
-      kCodePageShiftJIS, 0, utf16.data(), utf16.size(), nullptr, 0, nullptr,
-      nullptr);
+  const int output_length_without_null =
+      ::WideCharToMultiByte(kCodePageShiftJIS, 0, utf16.data(), utf16.size(),
+                            nullptr, 0, nullptr, nullptr);
   if (output_length_without_null == 0) {
     output->clear();
     return;
   }
 
-  unique_ptr<char[]> sjis(new char[output_length_without_null]);
+  std::unique_ptr<char[]> sjis(new char[output_length_without_null]);
   const int actual_output_length_without_null = ::WideCharToMultiByte(
       kCodePageShiftJIS, 0, utf16.data(), utf16.size(), sjis.get(),
       output_length_without_null, nullptr, nullptr);
@@ -74,18 +74,18 @@ void UTF8ToSJIS(StringPiece input, string *output) {
 
 }  // namespace
 
-wstring StringUtil::KeyToReading(StringPiece key) {
-  string katakana;
-  Util::HiraganaToKatakana(key, &katakana);
+std::wstring StringUtil::KeyToReading(absl::string_view key) {
+  std::string katakana;
+  japanese_util::HiraganaToKatakana(key, &katakana);
 
-  DWORD lcid = MAKELCID(MAKELANGID(LANG_JAPANESE, SUBLANG_DEFAULT),
-                        SORT_JAPANESE_XJIS);
-  string sjis;
-  UTF8ToSJIS(katakana, &sjis);
+  DWORD lcid =
+      MAKELCID(MAKELANGID(LANG_JAPANESE, SUBLANG_DEFAULT), SORT_JAPANESE_XJIS);
+  std::string sjis;
+  Utf8ToSjis(katakana, &sjis);
 
   // Convert "\x81\x65" (backquote in SJIFT-JIS) to ` by myself since
   // LCMapStringA converts it to ' for some reason.
-  string sjis2;
+  std::string sjis2;
   mozc::Util::StringReplace(sjis, "\x81\x65", "`", true, &sjis2);
 
   const size_t halfwidth_len_without_null = ::LCMapStringA(
@@ -98,42 +98,43 @@ wstring StringUtil::KeyToReading(StringPiece key) {
     return L"";
   }
 
-  unique_ptr<char[]> halfwidth_chars(new char[halfwidth_len_without_null]);
-  const size_t actual_halfwidth_len_without_null = ::LCMapStringA(
-      lcid, LCMAP_HALFWIDTH, sjis2.c_str(), sjis2.size(), halfwidth_chars.get(),
-      halfwidth_len_without_null);
+  std::unique_ptr<char[]> halfwidth_chars(new char[halfwidth_len_without_null]);
+  const size_t actual_halfwidth_len_without_null =
+      ::LCMapStringA(lcid, LCMAP_HALFWIDTH, sjis2.c_str(), sjis2.size(),
+                     halfwidth_chars.get(), halfwidth_len_without_null);
   if (halfwidth_len_without_null != actual_halfwidth_len_without_null) {
     return L"";
   }
   const UINT cp_sjis = 932;  // ANSI/OEM - Japanese, Shift-JIS
-  const int output_length_without_null = ::MultiByteToWideChar(
-      cp_sjis, 0, halfwidth_chars.get(), actual_halfwidth_len_without_null,
-      nullptr, 0);
+  const int output_length_without_null =
+      ::MultiByteToWideChar(cp_sjis, 0, halfwidth_chars.get(),
+                            actual_halfwidth_len_without_null, nullptr, 0);
   if (output_length_without_null == 0) {
     return L"";
   }
 
-  unique_ptr<wchar_t[]> wide_output(new wchar_t[output_length_without_null]);
+  std::unique_ptr<wchar_t[]> wide_output(
+      new wchar_t[output_length_without_null]);
   const int actual_output_length_without_null = ::MultiByteToWideChar(
       cp_sjis, 0, halfwidth_chars.get(), actual_halfwidth_len_without_null,
       wide_output.get(), output_length_without_null);
   if (output_length_without_null != actual_output_length_without_null) {
     return L"";
   }
-  return wstring(wide_output.get(), actual_output_length_without_null);
+  return std::wstring(wide_output.get(), actual_output_length_without_null);
 }
 
-string StringUtil::KeyToReadingA(StringPiece key) {
-  string ret;
-  mozc::Util::WideToUTF8(KeyToReading(key), &ret);
+std::string StringUtil::KeyToReadingA(absl::string_view key) {
+  std::string ret;
+  mozc::Util::WideToUtf8(KeyToReading(key), &ret);
   return ret;
 }
 
-wstring StringUtil::ComposePreeditText(const commands::Preedit &preedit) {
-  wstring value;
+std::wstring StringUtil::ComposePreeditText(const commands::Preedit &preedit) {
+  std::wstring value;
   for (int i = 0; i < preedit.segment_size(); ++i) {
-    wstring segment_value;
-    mozc::Util::UTF8ToWide(preedit.segment(i).value(), &segment_value);
+    std::wstring segment_value;
+    mozc::Util::Utf8ToWide(preedit.segment(i).value(), &segment_value);
     value.append(segment_value);
   }
   return value;

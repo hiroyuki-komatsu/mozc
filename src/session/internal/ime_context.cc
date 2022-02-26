@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -46,12 +46,10 @@ using commands::Request;
 ImeContext::ImeContext()
     : create_time_(0),
       last_command_time_(0),
-      key_event_transformer_(new KeyEventTransformer),
-      state_(NONE),
       request_(&Request::default_instance()),
       config_(&config::ConfigHandler::DefaultConfig()),
-      keymap_(config::ConfigHandler::GetDefaultKeyMap()) {
-}
+      state_(NONE),
+      keymap_(config::ConfigHandler::GetDefaultKeyMap()) {}
 ImeContext::~ImeContext() {}
 
 const composer::Composer &ImeContext::composer() const {
@@ -97,8 +95,7 @@ void ImeContext::SetConfig(const config::Config *config) {
   DCHECK(composer_.get());
   composer_->SetConfig(config_);
 
-  DCHECK(key_event_transformer_.get());
-  key_event_transformer_->ReloadConfig(*config_);
+  key_event_transformer_.ReloadConfig(*config_);
 
   keymap_ = config->session_keymap();
   keymap::KeyMapFactory::GetKeyMapManager(keymap_);
@@ -117,18 +114,18 @@ void ImeContext::CopyContext(const ImeContext &src, ImeContext *dest) {
   dest->set_create_time(src.create_time());
   dest->set_last_command_time(src.last_command_time());
 
-  dest->mutable_composer()->CopyFrom(src.composer());
+  *dest->mutable_composer() = src.composer();
   dest->converter_.reset(src.converter().Clone());
-  dest->key_event_transformer_->CopyFrom(*src.key_event_transformer_);
+  dest->key_event_transformer_ = src.key_event_transformer_;
 
   dest->set_state(src.state());
 
   dest->SetRequest(src.request_);
   dest->SetConfig(src.config_);
 
-  dest->mutable_client_capability()->CopyFrom(src.client_capability());
-  dest->mutable_application_info()->CopyFrom(src.application_info());
-  dest->mutable_output()->CopyFrom(src.output());
+  *dest->mutable_client_capability() = src.client_capability();
+  *dest->mutable_application_info() = src.application_info();
+  *dest->mutable_output() = src.output();
 }
 
 }  // namespace session

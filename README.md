@@ -1,7 +1,7 @@
 [Mozc - a Japanese Input Method Editor designed for multi-platform](https://github.com/google/mozc)
 ===================================
 
-Copyright 2010-2018, Google Inc.
+Copyright 2010-2021, Google Inc.
 
 Mozc is a Japanese Input Method Editor (IME) designed for multi-platform such as
 Android OS, Apple OS X, Chromium OS, GNU/Linux and Microsoft Windows.  This
@@ -11,7 +11,7 @@ OpenSource project originates from
 Build Status
 ------------
 
-|Android + OS X + Linux + NaCl |Windows |
+|Android + OS X + Linux |Windows |
 |:----------------------------:|:------:|
 [![Build Status](https://travis-ci.org/google/mozc.svg?branch=master)](https://travis-ci.org/google/mozc) |[![Build status](https://ci.appveyor.com/api/projects/status/1rvmtp7f80jv7ehf/branch/master?svg=true)](https://ci.appveyor.com/project/google/mozc/branch/master) |
 
@@ -31,7 +31,7 @@ Detailed differences between Google Japanese Input and Mozc are described in [Ab
 Build Instructions
 ------------------
 
-* [How to build Mozc in Docker](docs/build_mozc_in_docker.md): Android, NaCl, and Linux desktop builds.
+* [How to build Mozc in Docker](docs/build_mozc_in_docker.md): Android library and Linux desktop builds.
 * [How to build Mozc in OS X](docs/build_mozc_in_osx.md): OS X build.
 * [How to build Mozc in Windows](docs/build_mozc_in_windows.md): Windows build.
 
@@ -56,27 +56,23 @@ License
 
 All Mozc code written by Google is released under
 [The BSD 3-Clause License](http://opensource.org/licenses/BSD-3-Clause).
-For thrid party code under [src/third_party](src/third_party) directory,
+For third party code under [src/third_party](src/third_party) directory,
 see each sub directory to find the copyright notice.  Note also that
 outside [src/third_party](src/third_party) following directories contain
-thrid party code.
+third party code.
 
 ### [src/data/dictionary_oss/](src/data/dictionary_oss)
-
 Mixed.
 See [src/data/dictionary_oss/README.txt](src/data/dictionary_oss/README.txt)
 
 ### [src/data/test/dictionary/](src/data/test/dictionary)
-
 The same to [src/data/dictionary_oss/](src/data/dictionary_oss).
 See [src/data/dictionary_oss/README.txt](src/data/dictionary_oss/README.txt)
 
 ### [src/data/test/stress_test/](src/data/test/stress_test)
-
 Public Domain.  See the comment in
 [src/data/test/stress_test/sentences.txt](src/data/test/stress_test/sentences.txt)
 
 ### [src/data/unicode/](src/data/unicode)
-
 UNICODE, INC. LICENSE AGREEMENT.
 See each file header for details.

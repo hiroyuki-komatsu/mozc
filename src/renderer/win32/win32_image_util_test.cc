@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,12 +29,14 @@
 
 #include "renderer/win32/win32_image_util.h"
 
+// clang-format off
 #define _ATL_NO_AUTOMATIC_NAMESPACE
 #define _WTL_NO_AUTOMATIC_NAMESPACE
 #include <atlbase.h>
 #include <atlapp.h>
 #include <atlgdi.h>
 #include <atlmisc.h>
+// clang-format on
 
 #include <algorithm>
 #include <fstream>
@@ -48,11 +50,12 @@
 #include "base/util.h"
 #include "base/win_font_test_helper.h"
 #include "net/jsoncpp.h"
+#include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
 #include "testing/base/public/mozctest.h"
 
-using ::std::min;
 using ::std::max;
+using ::std::min;
 
 // gdiplus.h must be placed here because it internally depends on
 // global min/max functions.
@@ -63,7 +66,6 @@ using ::mozc::renderer::win32::internal::GaussianBlur;
 using ::mozc::renderer::win32::internal::SafeFrameBuffer;
 using ::mozc::renderer::win32::internal::SubdivisionalPixel;
 using ::mozc::renderer::win32::internal::TextLabel;
-using ::std::unique_ptr;
 
 using ::WTL::CBitmap;
 using ::WTL::CDC;
@@ -107,12 +109,12 @@ class BalloonImageTest : public ::testing::Test,
 
   static void BalloonImageTest::SaveTestImage(
       const TestableBalloonImage::BalloonImageInfo &info,
-      const wstring filename) {
+      const std::wstring filename) {
     CPoint tail_offset;
     CSize size;
-    vector<ARGBColor> buffer;
-    CBitmap dib = TestableBalloonImage::CreateInternal(
-        info, &tail_offset, &size, &buffer);
+    std::vector<ARGBColor> buffer;
+    CBitmap dib = TestableBalloonImage::CreateInternal(info, &tail_offset,
+                                                       &size, &buffer);
 
     Json::Value tail;
     BalloonInfoToJson(info, &tail);
@@ -130,8 +132,8 @@ class BalloonImageTest : public ::testing::Test,
 
     bitmap.Save(filename.c_str(), &clsid_png_);
 
-    string utf8_filename;
-    Util::WideToUTF8(filename + L".json", &utf8_filename);
+    std::string utf8_filename;
+    Util::WideToUtf8(filename + L".json", &utf8_filename);
     OutputFileStream os(utf8_filename.c_str());
     Json::StyledWriter writer;
     os << writer.write(tail);
@@ -163,8 +165,8 @@ class BalloonImageTest : public ::testing::Test,
     (*tail)["input"] = input;
   }
 
-  static void JsonToBalloonInfo(
-      const Json::Value &tail, TestableBalloonImage::BalloonImageInfo *info) {
+  static void JsonToBalloonInfo(const Json::Value &tail,
+                                TestableBalloonImage::BalloonImageInfo *info) {
     const Json::Value &input = tail["input"];
 
     *info = TestableBalloonImage::BalloonImageInfo();
@@ -191,7 +193,7 @@ class BalloonImageTest : public ::testing::Test,
   }
 
  private:
-  static bool GetEncoderClsid(const wstring format, CLSID *clsid) {
+  static bool GetEncoderClsid(const std::wstring format, CLSID *clsid) {
     UINT num_codecs = 0;
     UINT codecs_buffer_size = 0;
     Gdiplus::GetImageEncodersSize(&num_codecs, &codecs_buffer_size);
@@ -199,7 +201,7 @@ class BalloonImageTest : public ::testing::Test,
       return false;
     }
 
-    unique_ptr<uint8[]> codesc_buffer(new uint8[codecs_buffer_size]);
+    std::unique_ptr<uint8[]> codesc_buffer(new uint8[codecs_buffer_size]);
     Gdiplus::ImageCodecInfo *codecs =
         reinterpret_cast<Gdiplus::ImageCodecInfo *>(codesc_buffer.get());
 
@@ -226,20 +228,15 @@ class BalloonImageTest : public ::testing::Test,
     }
   }
 
-  static void UninitGdiplus() {
-    Gdiplus::GdiplusShutdown(gdiplus_token_);
-  }
+  static void UninitGdiplus() { Gdiplus::GdiplusShutdown(gdiplus_token_); }
 
   static int32 ColorToInteger(RGBColor color) {
     return static_cast<int32>(color.r) << 16 |
-           static_cast<int32>(color.g) << 8 |
-           static_cast<int32>(color.b);
+           static_cast<int32>(color.g) << 8 | static_cast<int32>(color.b);
   }
 
   static RGBColor IntegerToColor(int32 color) {
-    return RGBColor((color >> 16) & 0xff,
-                    (color >> 8) & 0xff,
-                    color & 0xff);
+    return RGBColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff);
   }
 
   static CLSID clsid_png_;
@@ -256,42 +253,41 @@ ULONG_PTR BalloonImageTest::gdiplus_token_;
 
 // Tests should be passed.
 const char *kRenderingResultList[] = {
-  "data/test/renderer/win32/balloon_blur_alpha_-1.png",
-  "data/test/renderer/win32/balloon_blur_alpha_0.png",
-  "data/test/renderer/win32/balloon_blur_alpha_10.png",
-  "data/test/renderer/win32/balloon_blur_color_32_64_128.png",
-  "data/test/renderer/win32/balloon_blur_offset_-20_-10.png",
-  "data/test/renderer/win32/balloon_blur_offset_0_0.png",
-  "data/test/renderer/win32/balloon_blur_offset_20_5.png",
-  "data/test/renderer/win32/balloon_blur_sigma_0.0.png",
-  "data/test/renderer/win32/balloon_blur_sigma_0.5.png",
-  "data/test/renderer/win32/balloon_blur_sigma_1.0.png",
-  "data/test/renderer/win32/balloon_blur_sigma_2.0.png",
-  "data/test/renderer/win32/balloon_frame_thickness_-1.png",
-  "data/test/renderer/win32/balloon_frame_thickness_0.png",
-  "data/test/renderer/win32/balloon_frame_thickness_1.5.png",
-  "data/test/renderer/win32/balloon_frame_thickness_3.png",
-  "data/test/renderer/win32/balloon_inside_color_32_64_128.png",
-  "data/test/renderer/win32/balloon_no_label.png",
-  "data/test/renderer/win32/balloon_tail_bottom.png",
-  "data/test/renderer/win32/balloon_tail_left.png",
-  "data/test/renderer/win32/balloon_tail_right.png",
-  "data/test/renderer/win32/balloon_tail_top.png",
-  "data/test/renderer/win32/balloon_tail_width_height_-10_-10.png",
-  "data/test/renderer/win32/balloon_tail_width_height_0_0.png",
-  "data/test/renderer/win32/balloon_tail_width_height_10_20.png",
-  "data/test/renderer/win32/balloon_width_height_40_30.png",
+    "data/test/renderer/win32/balloon_blur_alpha_-1.png",
+    "data/test/renderer/win32/balloon_blur_alpha_0.png",
+    "data/test/renderer/win32/balloon_blur_alpha_10.png",
+    "data/test/renderer/win32/balloon_blur_color_32_64_128.png",
+    "data/test/renderer/win32/balloon_blur_offset_-20_-10.png",
+    "data/test/renderer/win32/balloon_blur_offset_0_0.png",
+    "data/test/renderer/win32/balloon_blur_offset_20_5.png",
+    "data/test/renderer/win32/balloon_blur_sigma_0.0.png",
+    "data/test/renderer/win32/balloon_blur_sigma_0.5.png",
+    "data/test/renderer/win32/balloon_blur_sigma_1.0.png",
+    "data/test/renderer/win32/balloon_blur_sigma_2.0.png",
+    "data/test/renderer/win32/balloon_frame_thickness_-1.png",
+    "data/test/renderer/win32/balloon_frame_thickness_0.png",
+    "data/test/renderer/win32/balloon_frame_thickness_1.5.png",
+    "data/test/renderer/win32/balloon_frame_thickness_3.png",
+    "data/test/renderer/win32/balloon_inside_color_32_64_128.png",
+    "data/test/renderer/win32/balloon_no_label.png",
+    "data/test/renderer/win32/balloon_tail_bottom.png",
+    "data/test/renderer/win32/balloon_tail_left.png",
+    "data/test/renderer/win32/balloon_tail_right.png",
+    "data/test/renderer/win32/balloon_tail_top.png",
+    "data/test/renderer/win32/balloon_tail_width_height_-10_-10.png",
+    "data/test/renderer/win32/balloon_tail_width_height_0_0.png",
+    "data/test/renderer/win32/balloon_tail_width_height_10_20.png",
+    "data/test/renderer/win32/balloon_width_height_40_30.png",
 };
 
-INSTANTIATE_TEST_CASE_P(BalloonImageParameters,
-                        BalloonImageTest,
+INSTANTIATE_TEST_CASE_P(BalloonImageParameters, BalloonImageTest,
                         ::testing::ValuesIn(kRenderingResultList));
 
 TEST_P(BalloonImageTest, TestImpl) {
-  const string &expected_image_path =
+  const std::string &expected_image_path =
       mozc::testing::GetSourceFileOrDie({GetParam()});
-  const string json_path = expected_image_path + ".json";
-  ASSERT_TRUE(FileUtil::FileExists(json_path))
+  const std::string json_path = expected_image_path + ".json";
+  ASSERT_OK(FileUtil::FileExists(json_path))
       << "Manifest file is not found: " << json_path;
 
   Json::Value tail;
@@ -305,15 +301,15 @@ TEST_P(BalloonImageTest, TestImpl) {
 
   CPoint actual_tail_offset;
   CSize actual_size;
-  vector<ARGBColor> actual_buffer;
+  std::vector<ARGBColor> actual_buffer;
   CBitmap dib = TestableBalloonImage::CreateInternal(
       info, &actual_tail_offset, &actual_size, &actual_buffer);
 
   EXPECT_EQ(tail["output"]["tail_offset_x"].asInt(), actual_tail_offset.x);
   EXPECT_EQ(tail["output"]["tail_offset_y"].asInt(), actual_tail_offset.y);
 
-  wstring wide_path;
-  Util::UTF8ToWide(expected_image_path, &wide_path);
+  std::wstring wide_path;
+  Util::Utf8ToWide(expected_image_path, &wide_path);
 
   Gdiplus::Bitmap bitmap(wide_path.c_str());
 
@@ -402,8 +398,7 @@ TEST(GaussianBlurTest, NoBlurTest) {
   GaussianBlur blur(0.0);
 
   struct Source {
-    Source()
-        : call_count_(0) {}
+    Source() : call_count_(0) {}
     double operator()(int x, int y) const {
       EXPECT_EQ(0, x);
       EXPECT_EQ(0, y);
@@ -424,8 +419,7 @@ TEST(GaussianBlurTest, InvalidParamBlurTest) {
 
   GaussianBlur blur(-100.0);
   struct Source {
-    Source()
-        : call_count_(0) {}
+    Source() : call_count_(0) {}
     double operator()(int x, int y) const {
       EXPECT_EQ(0, x);
       EXPECT_EQ(0, y);
@@ -444,8 +438,7 @@ TEST(GaussianBlurTest, NormalBlurTest) {
   GaussianBlur blur(1.0);
   struct Source {
     explicit Source(int cutoff_length)
-        : call_count_(0),
-          cutoff_length_(cutoff_length) {}
+        : call_count_(0), cutoff_length_(cutoff_length) {}
     double operator()(int x, int y) const {
       EXPECT_GE(cutoff_length_, abs(x));
       EXPECT_GE(cutoff_length_, abs(y));
@@ -464,10 +457,10 @@ TEST(GaussianBlurTest, NormalBlurTest) {
 
 TEST(SafeFrameBufferTest, BasicTest) {
   const ARGBColor kTransparent(0, 0, 0, 0);
-  const int kLeft = -10;
-  const int kTop = -20;
-  const int kWidth = 50;
-  const int kHeight = 100;
+  constexpr int kLeft = -10;
+  constexpr int kTop = -20;
+  constexpr int kWidth = 50;
+  constexpr int kHeight = 100;
   SafeFrameBuffer buffer(Rect(kLeft, kTop, kWidth, kHeight));
 
   EXPECT_EQ(kTransparent, buffer.GetPixel(kLeft, kTop))
@@ -489,8 +482,8 @@ TEST(SafeFrameBufferTest, BasicTest) {
 }
 
 TEST(TextLabelTest, BoundingBoxTest) {
-  const TextLabel label(
-      -10.5, -5.1, 10.5, 5.0, "text", "font name", 10, RGBColor::kWhite);
+  const TextLabel label(-10.5, -5.1, 10.5, 5.0, "text", "font name", 10,
+                        RGBColor::kWhite);
   EXPECT_EQ(-11, label.bounding_rect().Left());
   EXPECT_EQ(-6, label.bounding_rect().Top());
   EXPECT_EQ(0, label.bounding_rect().Right());

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,49 +31,72 @@
 
 #include "base/file_util.h"
 #include "base/logging.h"
+#include "base/status.h"
 #include "base/system_util.h"
 #include "testing/base/public/googletest.h"
+#include "absl/flags/flag.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace testing {
 
-string GetSourcePath(const std::vector<StringPiece> &components) {
-  std::vector<StringPiece> abs_components = {
-    FLAGS_test_srcdir,
-  };
-  abs_components.insert(abs_components.end(),
-                        components.begin(), components.end());
+std::string GetSourcePath(const std::vector<absl::string_view> &components) {
+  const std::string test_srcdir = absl::GetFlag(FLAGS_test_srcdir);
+  std::vector<absl::string_view> abs_components = {test_srcdir};
+
+  const char *workspace = std::getenv("TEST_WORKSPACE");
+  if (workspace && workspace[0]) {
+    abs_components.push_back(workspace);
+  }
+
+  abs_components.insert(abs_components.end(), components.begin(),
+                        components.end());
   return FileUtil::JoinPath(abs_components);
 }
 
-string GetSourceFileOrDie(const std::vector<StringPiece> &components) {
-  const string path = GetSourcePath(components);
-  CHECK(FileUtil::FileExists(path)) << "File doesn't exist: " << path;
+absl::StatusOr<std::string> GetSourceFile(
+    const std::vector<absl::string_view> &components) {
+  std::string path = GetSourcePath(components);
+  if (absl::Status s = FileUtil::FileExists(path); !s.ok()) {
+    return s;
+  }
   return path;
 }
 
-string GetSourceDirOrDie(const std::vector<StringPiece> &components) {
-  const string path = GetSourcePath(components);
-  CHECK(FileUtil::DirectoryExists(path)) << "Directory doesn't exist: " << path;
+std::string GetSourceFileOrDie(
+    const std::vector<absl::string_view> &components) {
+  absl::StatusOr<std::string> abs_path = GetSourceFile(components);
+  CHECK_OK(abs_path);
+  return *std::move(abs_path);
+}
+
+std::string GetSourceDirOrDie(
+    const std::vector<absl::string_view> &components) {
+  const std::string path = GetSourcePath(components);
+  CHECK_OK(FileUtil::DirectoryExists(path))
+      << ": Directory doesn't exist: " << path;
   return path;
 }
 
-std::vector<string> GetSourceFilesInDirOrDie(
-    const std::vector<StringPiece> &dir_components,
-    const std::vector<StringPiece> &filenames) {
-  const string dir = GetSourceDirOrDie(dir_components);
-  std::vector<string> paths;
+std::vector<std::string> GetSourceFilesInDirOrDie(
+    const std::vector<absl::string_view> &dir_components,
+    const std::vector<absl::string_view> &filenames) {
+  const std::string dir = GetSourceDirOrDie(dir_components);
+  std::vector<std::string> paths;
   for (size_t i = 0; i < filenames.size(); ++i) {
     paths.push_back(FileUtil::JoinPath({dir, filenames[i]}));
-    CHECK(FileUtil::FileExists(paths.back()))
-        << "File doesn't exist: " << paths.back();
+    CHECK_OK(FileUtil::FileExists(paths.back()))
+        << ": File doesn't exist: " << paths.back();
   }
   return paths;
 }
 
 ScopedTmpUserProfileDirectory::ScopedTmpUserProfileDirectory()
     : original_dir_(SystemUtil::GetUserProfileDirectory()) {
-  SystemUtil::SetUserProfileDirectory(FLAGS_test_tmpdir);
+  SystemUtil::SetUserProfileDirectory(absl::GetFlag(FLAGS_test_tmpdir));
 }
 
 ScopedTmpUserProfileDirectory::~ScopedTmpUserProfileDirectory() {

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -38,9 +38,10 @@
 #include "converter/segments.h"
 #include "protocol/commands.pb.h"
 #include "request/conversion_request.h"
+#include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
-
-DECLARE_string(test_tmpdir);
+#include "absl/flags/flag.h"
+#include "absl/strings/match.h"
 
 namespace mozc {
 namespace {
@@ -52,17 +53,17 @@ const char *kDummyDataVersion = "dataversion";
 class VersionRewriterTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    SystemUtil::SetUserProfileDirectory(FLAGS_test_tmpdir);
+    SystemUtil::SetUserProfileDirectory(absl::GetFlag(FLAGS_test_tmpdir));
   }
 
-  static void AddSegment(const string &key, const string &value,
+  static void AddSegment(const std::string &key, const std::string &value,
                          Segments *segments) {
     Segment *segment = segments->push_back_segment();
     segment->set_key(key);
     AddCandidate(key, value, segment);
   }
 
-  static void AddCandidate(const string &key, const string &value,
+  static void AddCandidate(const std::string &key, const std::string &value,
                            Segment *segment) {
     Segment::Candidate *candidate = segment->add_candidate();
     candidate->Init();
@@ -71,11 +72,11 @@ class VersionRewriterTest : public ::testing::Test {
     candidate->content_key = key;
   }
 
-  static bool FindCandidateWithPrefix(const string &prefix,
+  static bool FindCandidateWithPrefix(const std::string &prefix,
                                       const Segments &segments) {
     for (size_t i = 0; i < segments.segments_size(); ++i) {
       for (size_t j = 0; j < segments.segment(i).candidates_size(); ++j) {
-        if (Util::StartsWith(segments.segment(i).candidate(j).value, prefix)) {
+        if (absl::StartsWith(segments.segment(i).candidate(j).value, prefix)) {
           return true;
         }
       }
@@ -111,11 +112,11 @@ TEST_F(VersionRewriterTest, MobileEnvironmentTest) {
 
 TEST_F(VersionRewriterTest, RewriteTest_Version) {
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
-  static const char kVersionPrefixExpected[] = "GoogleJapaneseInput-";
-  static const char kVersionPrefixUnexpected[] = "Mozc-";
-#else
-  static const char kVersionPrefixExpected[] = "Mozc-";
-  static const char kVersionPrefixUnexpected[] = "GoogleJapaneseInput-";
+  static constexpr char kVersionPrefixExpected[] = "GoogleJapaneseInput-";
+  static constexpr char kVersionPrefixUnexpected[] = "Mozc-";
+#else   // GOOGLE_JAPANESE_INPUT_BUILD
+  static constexpr char kVersionPrefixExpected[] = "Mozc-";
+  static constexpr char kVersionPrefixUnexpected[] = "GoogleJapaneseInput-";
 #endif  // GOOGLE_JAPANESE_INPUT_BUILD
 
   VersionRewriter version_rewriter(kDummyDataVersion);

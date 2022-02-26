@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,7 @@
 #include "base/win_util.h"
 #include "win32/base/accessible_object.h"
 #include "win32/base/focus_hierarchy_observer.h"
+#include "absl/strings/match.h"
 
 namespace mozc {
 namespace win32 {
@@ -61,11 +62,11 @@ bool g_exe_module_ver_initialized_ = false;
 BrowserInfo::BrowserType g_browser_type_ = BrowserInfo::kBrowserTypeUnknown;
 bool g_browser_type_initialized_ = false;
 
-wstring GetProcessModuleName() {
+std::wstring GetProcessModuleName() {
   if (g_exe_module_name_len_ == 0) {
     return L"";
   }
-  return wstring(g_exe_module_name_, g_exe_module_name_len_);
+  return std::wstring(g_exe_module_name_, g_exe_module_name_len_);
 }
 
 }  // namespace
@@ -74,20 +75,19 @@ wstring GetProcessModuleName() {
 BrowserInfo::BrowserType BrowserInfo::GetBrowerType() {
   if (!g_browser_type_initialized_) {
     bool loder_locked = false;
-    if (!WinUtil::IsDLLSynchronizationHeld(&loder_locked) ||
-        loder_locked) {
+    if (!WinUtil::IsDLLSynchronizationHeld(&loder_locked) || loder_locked) {
       return kBrowserTypeUnknown;
     }
-    string exe_path_utf8;
-    Util::WideToUTF8(GetProcessModuleName(), &exe_path_utf8);
+    std::string exe_path_utf8;
+    Util::WideToUtf8(GetProcessModuleName(), &exe_path_utf8);
     Util::LowerString(&exe_path_utf8);
-    if (Util::EndsWith(exe_path_utf8, "chrome.exe")) {
+    if (absl::EndsWith(exe_path_utf8, "chrome.exe")) {
       g_browser_type_ = kBrowserTypeChrome;
-    } else if (Util::EndsWith(exe_path_utf8, "firefox.exe")) {
+    } else if (absl::EndsWith(exe_path_utf8, "firefox.exe")) {
       g_browser_type_ = kBrowserTypeFirefox;
-    } else if (Util::EndsWith(exe_path_utf8, "iexplore.exe")) {
+    } else if (absl::EndsWith(exe_path_utf8, "iexplore.exe")) {
       g_browser_type_ = kBrowserTypeIE;
-    } else if (Util::EndsWith(exe_path_utf8, "opera.exe")) {
+    } else if (absl::EndsWith(exe_path_utf8, "opera.exe")) {
       g_browser_type_ = kBrowserTypeOpera;
     } else {
       g_browser_type_ = kBrowserTypeUnknown;
@@ -105,36 +105,36 @@ bool BrowserInfo::IsInIncognitoMode(
   }
 
   bool loder_locked = false;
-  if (!WinUtil::IsDLLSynchronizationHeld(&loder_locked) ||
-      loder_locked) {
+  if (!WinUtil::IsDLLSynchronizationHeld(&loder_locked) || loder_locked) {
     return false;
   }
 
-  const string root_window_name = focus_hierarchy_observer.GetRootWindowName();
+  const std::string root_window_name =
+      focus_hierarchy_observer.GetRootWindowName();
   if (root_window_name.empty()) {
     return false;
   }
 
-  const char *sufix_ja = nullptr;
-  const char *sufix_en = nullptr;
+  const char *suffix_ja = nullptr;
+  const char *suffix_en = nullptr;
   switch (GetBrowerType()) {
     case kBrowserTypeChrome:
-      sufix_ja = "（シークレット モード）";
-      sufix_en = "(Incognito)";
+      suffix_ja = "（シークレット モード）";
+      suffix_en = "(Incognito)";
       break;
     case kBrowserTypeFirefox:
-      sufix_ja = " (プライベートブラウジング)";
-      sufix_en = "(Private Browsing)";
+      suffix_ja = " (プライベートブラウジング)";
+      suffix_en = "(Private Browsing)";
       break;
     case kBrowserTypeIE:
-      sufix_ja = "[InPrivate]";
-      sufix_en = "[InPrivate]";
+      suffix_ja = "[InPrivate]";
+      suffix_en = "[InPrivate]";
       break;
   }
-  if (sufix_ja != nullptr && Util::EndsWith(root_window_name, sufix_ja)) {
+  if (suffix_ja != nullptr && absl::EndsWith(root_window_name, suffix_ja)) {
     return true;
   }
-  if (sufix_en != nullptr && Util::EndsWith(root_window_name, sufix_en)) {
+  if (suffix_en != nullptr && absl::EndsWith(root_window_name, suffix_en)) {
     return true;
   }
   return false;
@@ -148,8 +148,7 @@ bool BrowserInfo::IsOnChromeOmnibox(
   }
 
   bool loder_locked = false;
-  if (!WinUtil::IsDLLSynchronizationHeld(&loder_locked) ||
-      loder_locked) {
+  if (!WinUtil::IsDLLSynchronizationHeld(&loder_locked) || loder_locked) {
     return false;
   }
 
@@ -162,11 +161,11 @@ bool BrowserInfo::IsOnChromeOmnibox(
       current_ui_element.role != "ROLE_SYSTEM_TEXT") {
     return false;
   }
-  const char kOmniboxDescJa[] = "アドレス検索バー";
+  constexpr char kOmniboxDescJa[] = "アドレス検索バー";
   if (current_ui_element.name == kOmniboxDescJa) {
     return true;
   }
-  const char kOmniboxDescEn[] = "Address and search bar";
+  constexpr char kOmniboxDescEn[] = "Address and search bar";
   if (current_ui_element.name == kOmniboxDescEn) {
     return true;
   }
@@ -177,16 +176,15 @@ bool BrowserInfo::IsOnChromeOmnibox(
 void BrowserInfo::OnDllProcessAttach(HINSTANCE module_handle,
                                      bool static_loading) {
   const DWORD copied_len_without_null = ::GetModuleFileName(
-      nullptr, g_exe_module_name_, arraysize(g_exe_module_name_));
-  if ((copied_len_without_null + 1) < arraysize(g_exe_module_name_)) {
+      nullptr, g_exe_module_name_, std::size(g_exe_module_name_));
+  if ((copied_len_without_null + 1) < std::size(g_exe_module_name_)) {
     g_exe_module_name_len_ = copied_len_without_null;
   }
 }
 
 // static
 void BrowserInfo::OnDllProcessDetach(HINSTANCE module_handle,
-                                     bool process_shutdown) {
-}
+                                     bool process_shutdown) {}
 
 }  // namespace win32
 }  // namespace mozc

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@ bool CheckAddressSpace(const T *ptr) {
 #elif defined(_M_IX86)
   const DWORD addr = reinterpret_cast<DWORD>(ptr);
   DWORD addr_last = 0;
-#endif
+#endif  // _M_X64, _M_IX86
   if (!SafeAdd(addr, ptr->dwSize, addr_last)) {
     // buffer exceeds process address space.
     return false;
@@ -68,17 +68,16 @@ bool IsControlCode(wchar_t c) {
 }
 
 // TODO(yukawa): Move this to util.cc.
-char32 SurrogatePairToUCS4(wchar_t high, wchar_t low) {
-  return (((high - 0xD800) & 0x3FF) << 10) +
-         ((low - 0xDC00) & 0x3FF) + 0x10000;
+char32 SurrogatePairToUcs4(wchar_t high, wchar_t low) {
+  return (((high - 0xD800) & 0x3FF) << 10) + ((low - 0xDC00) & 0x3FF) + 0x10000;
 }
 }  // namespace
 
-bool ReconvertString::Compose(const wstring &preceding_text,
-                              const wstring &preceding_composition,
-                              const wstring &target,
-                              const wstring &following_composition,
-                              const wstring &following_text,
+bool ReconvertString::Compose(const std::wstring &preceding_text,
+                              const std::wstring &preceding_composition,
+                              const std::wstring &target,
+                              const std::wstring &following_composition,
+                              const std::wstring &following_text,
                               RECONVERTSTRING *reconvert_string) {
   if (reconvert_string == nullptr) {
     return false;
@@ -173,9 +172,9 @@ bool ReconvertString::Compose(const wstring &preceding_text,
     return false;
   }
 
-  wchar_t *string_buffer = reinterpret_cast<wchar_t *>(
-      reinterpret_cast<BYTE *>(reconvert_string) +
-      reconvert_string->dwStrOffset);
+  wchar_t *string_buffer =
+      reinterpret_cast<wchar_t *>(reinterpret_cast<BYTE *>(reconvert_string) +
+                                  reconvert_string->dwStrOffset);
 
   // concatenate |preceding_text|, |preceding_composition|, |target|,
   // |following_composition|, and |following_text| into |string_buffer|.
@@ -207,11 +206,11 @@ bool ReconvertString::Compose(const wstring &preceding_text,
 }
 
 bool ReconvertString::Decompose(const RECONVERTSTRING *reconvert_string,
-                                wstring *preceding_text,
-                                wstring *preceding_composition,
-                                wstring *target,
-                                wstring *following_composition,
-                                wstring *following_text) {
+                                std::wstring *preceding_text,
+                                std::wstring *preceding_composition,
+                                std::wstring *target,
+                                std::wstring *following_composition,
+                                std::wstring *following_text) {
   if (reconvert_string == nullptr) {
     return false;
   }
@@ -242,8 +241,7 @@ bool ReconvertString::Decompose(const RECONVERTSTRING *reconvert_string,
   DWORD buffer_size_in_byte = 0;
   {
     // This must be always S_OK because |dwStrOffset <= dwSize|.
-    if (!SafeSubtract(reconvert_string->dwSize,
-                      reconvert_string->dwStrOffset,
+    if (!SafeSubtract(reconvert_string->dwSize, reconvert_string->dwStrOffset,
                       buffer_size_in_byte)) {
       return false;
     }
@@ -251,8 +249,7 @@ bool ReconvertString::Decompose(const RECONVERTSTRING *reconvert_string,
 
   DWORD string_size_in_byte = 0;
   {
-    if (!SafeMultiply(reconvert_string->dwStrLen,
-                      sizeof(wchar_t),
+    if (!SafeMultiply(reconvert_string->dwStrLen, sizeof(wchar_t),
                       string_size_in_byte)) {
       return false;
     }
@@ -281,8 +278,7 @@ bool ReconvertString::Decompose(const RECONVERTSTRING *reconvert_string,
       reconvert_string->dwCompStrOffset / sizeof(wchar_t);
   DWORD composition_end_in_chars = 0;
   {
-    if (!SafeAdd(composition_begin_in_chars,
-                 reconvert_string->dwCompStrLen,
+    if (!SafeAdd(composition_begin_in_chars, reconvert_string->dwCompStrLen,
                  composition_end_in_chars)) {
       return false;
     }
@@ -296,8 +292,7 @@ bool ReconvertString::Decompose(const RECONVERTSTRING *reconvert_string,
       reconvert_string->dwTargetStrOffset / sizeof(wchar_t);
   DWORD target_end_in_chars = 0;
   {
-    if (!SafeAdd(target_begin_in_chars,
-                 reconvert_string->dwTargetStrLen,
+    if (!SafeAdd(target_begin_in_chars, reconvert_string->dwTargetStrLen,
                  target_end_in_chars)) {
       return false;
     }
@@ -312,29 +307,24 @@ bool ReconvertString::Decompose(const RECONVERTSTRING *reconvert_string,
   }
 
   if (preceding_text != nullptr) {
-    preceding_text->assign(
-        string_buffer,
-        string_buffer + composition_begin_in_chars);
+    preceding_text->assign(string_buffer,
+                           string_buffer + composition_begin_in_chars);
   }
   if (preceding_composition != nullptr) {
-    preceding_composition->assign(
-        string_buffer + composition_begin_in_chars,
-        string_buffer + target_begin_in_chars);
+    preceding_composition->assign(string_buffer + composition_begin_in_chars,
+                                  string_buffer + target_begin_in_chars);
   }
   if (target != nullptr) {
-    target->assign(
-        string_buffer + target_begin_in_chars,
-        string_buffer + target_end_in_chars);
+    target->assign(string_buffer + target_begin_in_chars,
+                   string_buffer + target_end_in_chars);
   }
   if (following_composition != nullptr) {
-    following_composition->assign(
-        string_buffer + target_end_in_chars,
-        string_buffer + composition_end_in_chars);
+    following_composition->assign(string_buffer + target_end_in_chars,
+                                  string_buffer + composition_end_in_chars);
   }
   if (following_text != nullptr) {
-    following_text->assign(
-        string_buffer + composition_end_in_chars,
-        string_buffer + reconvert_string->dwStrLen);
+    following_text->assign(string_buffer + composition_end_in_chars,
+                           string_buffer + reconvert_string->dwStrLen);
   }
 
   return true;
@@ -347,14 +337,14 @@ bool ReconvertString::Validate(const RECONVERTSTRING *reconvert_string) {
 
 bool ReconvertString::EnsureCompositionIsNotEmpty(
     RECONVERTSTRING *reconvert_string) {
-  wstring preceding_text;
-  wstring preceding_composition;
-  wstring target;
-  wstring following_composition;
-  wstring following_text;
-  if (!ReconvertString::Decompose(
-          reconvert_string, &preceding_text, &preceding_composition,
-          &target, &following_composition, &following_text)) {
+  std::wstring preceding_text;
+  std::wstring preceding_composition;
+  std::wstring target;
+  std::wstring following_composition;
+  std::wstring following_text;
+  if (!ReconvertString::Decompose(reconvert_string, &preceding_text,
+                                  &preceding_composition, &target,
+                                  &following_composition, &following_text)) {
     return false;
   }
 
@@ -396,12 +386,12 @@ bool ReconvertString::EnsureCompositionIsNotEmpty(
   size_t involved_preceding_len = 0;
 
   // Check if the cursor is splitting a surrogate pair.
-  if ((following_text.size() >= 1) && (preceding_text.size()) >=1 &&
+  if ((following_text.size() >= 1) && (preceding_text.size()) >= 1 &&
       IS_SURROGATE_PAIR(*preceding_text.rbegin(), *following_text.begin())) {
     ++involved_following_len;
     ++involved_preceding_len;
     const char32 unichar =
-        SurrogatePairToUCS4(*preceding_text.rbegin(), *following_text.begin());
+        SurrogatePairToUcs4(*preceding_text.rbegin(), *following_text.begin());
     script_type = Util::GetScriptType(unichar);
   }
 
@@ -415,10 +405,10 @@ bool ReconvertString::EnsureCompositionIsNotEmpty(
     // Check if this |unichar| is the high part of a surrogate-pair.
     if (IS_HIGH_SURROGATE(unichar) &&
         (involved_following_len + 1 < following_text.size()) &&
-        IS_LOW_SURROGATE(following_text[involved_following_len+1])) {
+        IS_LOW_SURROGATE(following_text[involved_following_len + 1])) {
       const char32 high_surrogate = unichar;
-      const char32 low_surrogate = following_text[involved_following_len+1];
-      unichar = SurrogatePairToUCS4(high_surrogate, low_surrogate);
+      const char32 low_surrogate = following_text[involved_following_len + 1];
+      unichar = SurrogatePairToUcs4(high_surrogate, low_surrogate);
       num_wchar = 2;
     }
     // Stop searching when any control code is found.
@@ -448,10 +438,10 @@ bool ReconvertString::EnsureCompositionIsNotEmpty(
     // Check if this |unichar| is the low part of a surrogate-pair.
     if (IS_LOW_SURROGATE(unichar) &&
         (involved_preceding_len + 1 < preceding_text.size()) &&
-        IS_HIGH_SURROGATE(preceding_text[index-1])) {
-      const char32 high_surrogate = preceding_text[index-1];
+        IS_HIGH_SURROGATE(preceding_text[index - 1])) {
+      const char32 high_surrogate = preceding_text[index - 1];
       const char32 low_surrogate = unichar;
-      unichar = SurrogatePairToUCS4(high_surrogate, low_surrogate);
+      unichar = SurrogatePairToUcs4(high_surrogate, low_surrogate);
       num_wchar = 2;
     }
     // Stop searching when any control code is found.

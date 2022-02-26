@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -51,6 +51,7 @@ The syntax of template is written in the template file.
 #   simplify the design. Currently I'd keep this design to reduce
 #   client side's change.
 
+from __future__ import absolute_import
 import datetime
 import logging
 import optparse
@@ -64,23 +65,22 @@ TARGET_PLATFORM_TO_DIGIT = {
     'Mac': '1',
     'Linux': '2',
     'Android': '3',
-    'NaCl': '4',
-    }
+    'ChromeOS': '4',
+    'iOS': '6',
+    'iOS_sim': '6',
+    'Wasm': '7',
+}
 
 VERSION_PROPERTIES = [
     'MAJOR',
     'MINOR',
     'BUILD',
     'REVISION',
-    'ANDROID_VERSION_CODE',
     'TARGET_PLATFORM',
+    'BUILD_OSS',
     'QT_VERSION',
-    'ANDROID_APPLICATION_ID',
-    'ANDROID_SERVICE_NAME',
-    'ANDROID_ARCH',
     'ENGINE_VERSION',
-    # 'DATA_VERSION' is not included as it's the property of data file to be
-    # independent of executables.
+    'DATA_VERSION',
     ]
 
 MOZC_EPOCH = datetime.date(2009, 5, 24)
@@ -94,7 +94,7 @@ def _GetRevisionForPlatform(revision, target_platform):
   last_digit = TARGET_PLATFORM_TO_DIGIT.get(target_platform, None)
   if last_digit is None:
     logging.critical('target_platform %s is invalid. Accetable ones are %s',
-                     target_platform, TARGET_PLATFORM_TO_DIGIT.keys())
+                     target_platform, list(TARGET_PLATFORM_TO_DIGIT.keys()))
     sys.exit(1)
 
   if not revision:
@@ -107,24 +107,22 @@ def _GetRevisionForPlatform(revision, target_platform):
   return revision
 
 
-def _ParseVersionTemplateFile(template_path, target_platform,
-                              android_application_id, android_arch,
-                              qt_version):
+def _ParseVersionTemplateFile(template_path, target_platform, version_override):
   """Parses a version definition file.
 
   Args:
     template_path: A filename which has the version definition.
     target_platform: The target platform on which the programs run.
-    android_application_id: Android application id.
-    android_arch: Android architecture (arm, x86, mips)
-    qt_version: '4' for Qt4, '5' for Qt5, and '' or None for no-Qt.
+    version_override: An optional string to override version number.
+      If it is a single number, it means a build number (e.g. "4500").
+      If it is a four numbers, it means a full version (e.g. "2.28.4500.0").
   Returns:
     A dictionary generated from the template file.
   """
   template_dict = {}
   with open(template_path) as template_file:
     for line in template_file:
-      matchobj = re.match(r'(\w+)=(.*)', line.strip())
+      matchobj = re.match(r'(\w+) *= *(\w*)', line.strip())
       if matchobj:
         var = matchobj.group(1)
         val = matchobj.group(2)
@@ -132,65 +130,26 @@ def _ParseVersionTemplateFile(template_path, target_platform,
           logging.warning(('Dupulicate key: "%s". Later definition "%s"'
                            'overrides earlier one "%s".'),
                           var, val, template_dict[var])
+        # If `val` is a variable (e.g. BUILD_OSS), replace it with the value.
+        if val in template_dict:
+          val = template_dict[val]
         template_dict[var] = val
 
   # Some properties need to be tweaked.
   template_dict['REVISION'] = _GetRevisionForPlatform(
       template_dict.get('REVISION', None), target_platform)
 
-  template_dict['ANDROID_VERSION_CODE'] = (
-      str(_GetAndroidVersionCode(int(template_dict['BUILD']), android_arch)))
-
   template_dict['TARGET_PLATFORM'] = target_platform
-  template_dict['QT_VERSION'] = qt_version
-  template_dict['ANDROID_APPLICATION_ID'] = android_application_id
-  template_dict['ANDROID_SERVICE_NAME'] = (
-      'org.mozc.android.inputmethod.japanese.MozcService')
-  template_dict['ANDROID_ARCH'] = android_arch
+  if version_override:
+    nums = version_override.split('.')
+    if len(nums) == 1:
+      template_dict['BUILD'] = nums[0]
+    if len(nums) == 4:
+      template_dict['MAJOR'] = nums[0]
+      template_dict['MINOR'] = nums[1]
+      template_dict['BUILD'] = nums[2]
+      template_dict['REVISION'] = nums[3]
   return template_dict
-
-
-def _GetAndroidVersionCode(base_version_code, arch):
-  """Gets version code based on base version code and architecture.
-
-  Args:
-    base_version_code: is typically equal to the field BUILD in mozc_version.txt
-    arch: Android's architecture (e.g., x86, arm, mips)
-
-  Returns:
-    version code (int)
-
-  Raises:
-    RuntimeError: arch is unexpected one or base_version_code is too big.
-
-  Version code format:
-   0006BBBBBA
-   A: ABI (0: Fat, 6: x86_64, 5:arm64, 4:mips64, 3: x86, 2: armeabi-v7a, 1:mips)
-   B: ANDROID_VERSION_CODE
-
-  Note:
-  - Prefix 6 is introduced because of historical reason.
-    Previously ANDROID_VERSION_CODE (B) was placed after ABI (A) but
-    it's found that swpping the order is reasonable.
-    Previously version code for x86 was always greater than that for armeabi.
-    Therefore version-check rule like "Version code of update must be greater
-    than that of previous" cannot be introduced.
-  """
-  arch_to_abi_code = {
-      'x86_64': 6,
-      'arm64': 5,
-      'mips64': 4,
-      'x86': 3,
-      'arm': 2,
-      'mips': 1,
-  }
-  abi_code = arch_to_abi_code.get(arch)
-  if abi_code is None:
-    raise RuntimeError('Unexpected architecture; %s' % arch)
-  if base_version_code >= 10000:
-    raise RuntimeError('Version code is greater than 10000. '
-                       'It is time to revisit version code scheme.')
-  return int('6%05d%d' % (base_version_code, abi_code))
 
 
 def _GetVersionInFormat(properties, version_format):
@@ -215,13 +174,27 @@ def _GetVersionInFormat(properties, version_format):
   return result
 
 
+def _GetChangelistNumber(build_override, build_changelist_file):
+  """Returns the changelist number from the value or the file path."""
+  if build_override:
+    return build_override
+
+  if not build_changelist_file:
+    return None
+
+  with open(build_changelist_file, 'r') as cl_file:
+    for line in cl_file:
+      if line.startswith('BUILD_CHANGELIST'):
+        return line.rstrip().split(' ')[1]
+
+  return None
+
+
 def GenerateVersionFileFromTemplate(template_path,
                                     output_path,
                                     version_format,
                                     target_platform,
-                                    android_application_id='',
-                                    android_arch='arm',
-                                    qt_version=''):
+                                    version_override=None):
   """Generates version file from template file and given parameters.
 
   Args:
@@ -229,16 +202,16 @@ def GenerateVersionFileFromTemplate(template_path,
     output_path: A path to generated version file.
       If already exists and the content will not be updated, nothing is done
       (the timestamp is not updated).
-    version_format: A string which contans version patterns.
+    version_format: A string which contains version patterns.
     target_platform: The target platform on which the programs run.
-    android_application_id: Android application id.
-    android_arch: Android architecture (arm, x86, mips)
-    qt_version: '4' for Qt4, '5' for Qt5, and '' or None for no-Qt.
+    version_override: An optional string to override BUILD number
+      in the template.
+      If it is a single number, it means a build number (e.g. "4500").
+      If it is a four numbers, it means a full version (e.g. "2.28.4500.0").
   """
 
   properties = _ParseVersionTemplateFile(template_path, target_platform,
-                                         android_application_id,
-                                         android_arch, qt_version)
+                                         version_override)
   version_definition = _GetVersionInFormat(properties, version_format)
   old_content = ''
   if os.path.exists(output_path):
@@ -255,7 +228,7 @@ def GenerateVersionFileFromTemplate(template_path,
 
 
 def GenerateVersionFile(version_template_path, version_path, target_platform,
-                        android_application_id, android_arch, qt_version):
+                        version_override=None):
   """Reads the version template file and stores it into version_path.
 
   This doesn't update the "version_path" if nothing will be changed to
@@ -265,32 +238,27 @@ def GenerateVersionFile(version_template_path, version_path, target_platform,
     version_template_path: a file name which contains the template of version.
     version_path: a file name to be stored the official version.
     target_platform: target platform name. c.f. --target_platform option
-    android_application_id: [Android Only] application id
-      (e.g. org.mozc.android).
-    android_arch: Android architecture (arm, x86, mips)
-    qt_version: '4' for Qt4, '5' for Qt5, and '' or None for no-Qt.
+    version_override: an optional string to override version number.
+      If it is a single number, it means a build number (e.g. "4500").
+      If it is a four numbers, it means a full version (e.g. "2.28.4500.0").
   """
   version_format = '\n'.join([
       'MAJOR=@MAJOR@',
       'MINOR=@MINOR@',
       'BUILD=@BUILD@',
       'REVISION=@REVISION@',
-      'ANDROID_VERSION_CODE=@ANDROID_VERSION_CODE@',
       'TARGET_PLATFORM=@TARGET_PLATFORM@',
+      'BUILD_OSS=@BUILD_OSS@',
       'QT_VERSION=@QT_VERSION@',
-      'ANDROID_APPLICATION_ID=@ANDROID_APPLICATION_ID@',
-      'ANDROID_SERVICE_NAME=@ANDROID_SERVICE_NAME@',
-      'ANDROID_ARCH=@ANDROID_ARCH@',
       'ENGINE_VERSION=@ENGINE_VERSION@',
+      'DATA_VERSION=@DATA_VERSION@',
   ]) + '\n'
   GenerateVersionFileFromTemplate(
       version_template_path,
       version_path,
       version_format,
       target_platform=target_platform,
-      android_application_id=android_application_id,
-      android_arch=android_arch,
-      qt_version=qt_version)
+      version_override=version_override)
 
 
 class MozcVersion(object):
@@ -343,15 +311,6 @@ class MozcVersion(object):
     """
     return self._properties.get('TARGET_PLATFORM', None)
 
-  def GetQtVersion(self):
-    """Returns the target Qt version.
-
-    Returns:
-      A string that indicates the Qt version.
-      '4' for Qt4, '5' for Qt5, and '' for no-Qt.
-    """
-    return self._properties.get('QT_VERSION', None)
-
   def GetVersionString(self):
     """Returns the normal version info string.
 
@@ -360,13 +319,22 @@ class MozcVersion(object):
     """
     return self.GetVersionInFormat('@MAJOR@.@MINOR@.@BUILD@.@REVISION@')
 
+  def GetShortVersionString(self, use_build_oss=False):
+    """Returns the short version info string.
+
+    Args:
+      use_build_oss: use BUILD_OSS if true.
+
+    Returns:
+      a string in format of "MAJOR.MINOR.BUILD"
+    """
+    if use_build_oss:
+      return self.GetVersionInFormat('@MAJOR@.@MINOR@.@BUILD_OSS@')
+    return self.GetVersionInFormat('@MAJOR@.@MINOR@.@BUILD@')
+
   def GetVersionInFormat(self, version_format):
     """Returns the version string based on the specified format."""
     return _GetVersionInFormat(self._properties, version_format)
-
-  def GetAndroidArch(self):
-    """Returns Android architecture."""
-    return self._properties.get('ANDROID_ARCH', None)
 
 
 def main():
@@ -381,28 +349,23 @@ def main():
                     help='Path to the output version file.')
   parser.add_option('--target_platform', dest='target_platform',
                     help='Target platform of the version info.')
-  parser.add_option('--android_application_id', dest='android_application_id',
-                    default='my.application.id',
-                    help='Specifies the application id (Android Only).')
-  parser.add_option('--android_arch', dest='android_arch',
-                    default='arm',
-                    help='Specifies Android architecture (arm, x86, mips) '
-                    '(Android Only)')
-  parser.add_option('--qtver', dest='qtver', choices=('4', '5', ''),
-                    default='', help='Specifies Qt version (desktop only)')
+  parser.add_option('--build_override', dest='build_override',
+                    help='Overrides BUILD number in the template.')
+  parser.add_option('--build_changelist_file', dest='build_changelist_file',
+                    help='Filepath containing the BUILD number.')
   (options, args) = parser.parse_args()
   assert not args, 'Unexpected arguments.'
   assert options.template_path, 'No --template_path was specified.'
   assert options.output, 'No --output was specified.'
   assert options.target_platform, 'No --target_platform was specified.'
 
+  cl_number = _GetChangelistNumber(options.build_override,
+                                   options.build_changelist_file)
   GenerateVersionFile(
       version_template_path=options.template_path,
       version_path=options.output,
       target_platform=options.target_platform,
-      android_application_id=options.android_application_id,
-      android_arch=options.android_arch,
-      qt_version=options.qtver)
+      version_override=cl_number)
 
 if __name__ == '__main__':
   main()

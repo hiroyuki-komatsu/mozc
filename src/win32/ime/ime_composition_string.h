@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,8 +30,10 @@
 #ifndef MOZC_WIN32_IME_IME_COMPOSITION_STRING_H_
 #define MOZC_WIN32_IME_IME_COMPOSITION_STRING_H_
 
+// clang-format off
 #include <windows.h>
 #include <ime.h>
+// clang-format on
 
 #include <vector>
 
@@ -53,7 +55,7 @@ struct CompositionString {
  public:
   bool Initialize();
   bool Update(const mozc::commands::Output &output,
-              vector<UIMessage> *messages);
+              std::vector<UIMessage> *messages);
 
   // Returns |focused_character_index_|, which represents the index of wide
   // character where suggest/predict/candidate window is aligned.
@@ -97,9 +99,9 @@ struct CompositionString {
   FRIEND_TEST(ImeCompositionStringTest,
               EndCompositionWhenCompositionBecomesEmpty);
   FRIEND_TEST(ImeCompositionStringTest,
-              EndCompositionWhenCompositionIsCommited);
+              EndCompositionWhenCompositionIsCommitted);
   FRIEND_TEST(ImeCompositionStringTest,
-              EndCompositionWhenCompositionIsCommitedWithPreedit);
+              EndCompositionWhenCompositionIsCommittedWithPreedit);
   FRIEND_TEST(ImeCompositionStringTest, SpaceKeyWhenIMEIsTurnedOn_Issue3200585);
   FRIEND_TEST(ImeCompositionStringTest, Suggest);
   FRIEND_TEST(ImeCompositionStringTest, Predict);

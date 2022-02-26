@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,7 @@ namespace mozc {
 
 class DataManagerInterface;
 
-class NumberRewriter : public RewriterInterface  {
+class NumberRewriter : public RewriterInterface {
  public:
   explicit NumberRewriter(const DataManagerInterface *data_manager);
   ~NumberRewriter() override;
@@ -51,7 +51,7 @@ class NumberRewriter : public RewriterInterface  {
 
  private:
   SerializedStringArray suffix_array_;
-  const dictionary::POSMatcher pos_matcher_;
+  const dictionary::PosMatcher pos_matcher_;
 
   DISALLOW_COPY_AND_ASSIGN(NumberRewriter);
 };

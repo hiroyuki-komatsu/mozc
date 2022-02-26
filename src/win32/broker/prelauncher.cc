@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -41,10 +41,8 @@ namespace mozc {
 namespace win32 {
 namespace {
 
-using std::unique_ptr;
-
-const int kErrorLevelSuccess = 0;
-const int kErrorLevelGeneralError = 1;
+constexpr int kErrorLevelSuccess = 0;
+constexpr int kErrorLevelGeneralError = 1;
 
 }  // namespace
 
@@ -68,14 +66,14 @@ int RunPrelaunchProcesses(int argc, char *argv[]) {
   }
 
   {
-    unique_ptr<client::ClientInterface> converter_client(
+    std::unique_ptr<client::ClientInterface> converter_client(
         client::ClientFactory::NewClient());
     converter_client->set_suppress_error_dialog(true);
     converter_client->EnsureConnection();
   }
 
   {
-    unique_ptr<renderer::RendererClient> renderer_client(
+    std::unique_ptr<renderer::RendererClient> renderer_client(
         new mozc::renderer::RendererClient);
     renderer_client->set_suppress_error_dialog(true);
     renderer_client->Activate();

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,8 +30,7 @@
 #ifndef MOZC_GUI_CONFIG_DIALOG_CHARACTER_FORM_EDITOR_H_
 #define MOZC_GUI_CONFIG_DIALOG_CHARACTER_FORM_EDITOR_H_
 
-#include <QtWidgets/QTableWidget>
-
+#include <QTableWidget>
 #include <memory>
 
 #include "base/port.h"
@@ -49,8 +48,8 @@ class ComboBoxDelegate;
 class CharacterFormEditor : public QTableWidget {
   Q_OBJECT
  public:
-  explicit CharacterFormEditor(QWidget *parent = NULL);
-  virtual ~CharacterFormEditor();
+  explicit CharacterFormEditor(QWidget *parent = nullptr);
+  ~CharacterFormEditor() override;
 
   void Load(const config::Config &config);
   void Save(config::Config *config);
@@ -64,6 +63,6 @@ class CharacterFormEditor : public QTableWidget {
 
 #if defined UI_CONFIG_DIALOG_H
 using mozc::gui::CharacterFormEditor;
-#endif
+#endif  // UI_CONFIG_DIALOG_H
 
 #endif  // MOZC_GUI_CONFIG_DIALOG_CHARACTER_FORM_EDITOR_H_

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,11 +29,12 @@
 
 #include "session/internal/key_event_transformer.h"
 
+#include <cstdint>
+
 #include "base/port.h"
 #include "base/singleton.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
-
 #include "testing/base/public/gunit.h"
 
 namespace mozc {
@@ -41,41 +42,35 @@ namespace session {
 namespace {
 
 ::testing::AssertionResult IsKeyEventTransformerEq(
-     const KeyEventTransformer &x, const KeyEventTransformer &y) {
-  {
-    if (x.table().size() != y.table().size()) {
-      return ::testing::AssertionFailure() << "Table size differs";
-    }
+    const KeyEventTransformer &x, const KeyEventTransformer &y) {
+  if (x.table().size() != y.table().size()) {
+    return ::testing::AssertionFailure() << "Table size differs";
+  }
 
-    KeyEventTransformer::Table::const_iterator x_iter = x.table().begin();
-    KeyEventTransformer::Table::const_iterator y_iter = y.table().begin();
-    while (x_iter != x.table().end() && y_iter != y.table().end()) {
-      if (x_iter->first != y_iter->first) {
-        return ::testing::AssertionFailure() << "Key mismatch: "
-                                             << x_iter->first << " vs "
-                                             << y_iter->first;
-      }
-      if (x_iter->second.DebugString() != y_iter->second.DebugString()) {
-        return ::testing::AssertionFailure()
-            << "Value mismatch for key = " << x_iter->first;
-      }
-      ++x_iter;
-      ++y_iter;
+  for (const auto &[key, event] : x.table()) {
+    const auto iter = y.table().find(key);
+    if (iter == y.table().end()) {
+      return ::testing::AssertionFailure()
+             << "Key doesn't exist in RHS: key = " << key;
+    }
+    if (event.DebugString() != iter->second.DebugString()) {
+      return ::testing::AssertionFailure()
+             << "Value mismatch for key = " << key;
     }
   }
 
   if (x.numpad_character_form() != y.numpad_character_form()) {
     return ::testing::AssertionFailure()
-        << "numpad_character_form is different: "
-        << x.numpad_character_form() << " vs " << y.numpad_character_form();
+           << "numpad_character_form is different: "
+           << x.numpad_character_form() << " vs " << y.numpad_character_form();
   }
 
   return ::testing::AssertionSuccess();
 }
 
 void TestNumpadTransformation(commands::KeyEvent::SpecialKey input,
-                              uint32 expected_key_code,
-                              const string &expected_key_string,
+                              uint32_t expected_key_code,
+                              const std::string &expected_key_string,
                               commands::KeyEvent::InputStyle expected_style) {
   KeyEventTransformer *table = Singleton<KeyEventTransformer>::get();
 
@@ -91,9 +86,9 @@ void TestNumpadTransformation(commands::KeyEvent::SpecialKey input,
   EXPECT_EQ(expected_style, key_event.input_style());
 }
 
-void TestKanaTransformation(const string &key_string,
-                            uint32 expected_key_code,
-                            const string &expected_key_string) {
+void TestKanaTransformation(const std::string &key_string,
+                            uint32_t expected_key_code,
+                            const std::string &expected_key_string) {
   KeyEventTransformer *table = Singleton<KeyEventTransformer>::get();
 
   commands::KeyEvent key_event;
@@ -299,15 +294,19 @@ TEST(KeyEventTransformerTest, Kana) {
   }
 }
 
-TEST(KeyEventTransformerTest, CopyFrom) {
-  KeyEventTransformer x, y;
+TEST(KeyEventTransformerTest, Copy) {
+  KeyEventTransformer x;
 
   config::Config config;
   config.set_punctuation_method(config::Config::COMMA_PERIOD);
   x.ReloadConfig(config);
-  EXPECT_FALSE(IsKeyEventTransformerEq(x, y));
 
-  y.CopyFrom(x);
+  const KeyEventTransformer y(x);
+  EXPECT_TRUE(IsKeyEventTransformerEq(x, y));
+
+  KeyEventTransformer z;
+  EXPECT_FALSE(IsKeyEventTransformerEq(x, z));
+  z = x;
   EXPECT_TRUE(IsKeyEventTransformerEq(x, y));
 }
 

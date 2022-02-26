@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,7 @@
 #include "rewriter/rewriter_interface.h"
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
+#include "absl/flags/flag.h"
 
 namespace mozc {
 namespace {
@@ -65,21 +66,18 @@ size_t CommandCandidatesSize(const Segment &segment) {
 
 class RewriterTest : public ::testing::Test {
  protected:
-  virtual void SetUp() {
-    SystemUtil::SetUserProfileDirectory(FLAGS_test_tmpdir);
-    converter_mock_.reset(new ConverterMock);
+  void SetUp() override {
+    SystemUtil::SetUserProfileDirectory(absl::GetFlag(FLAGS_test_tmpdir));
+    converter_mock_ = std::make_unique<ConverterMock>();
     const testing::MockDataManager data_manager;
-    pos_group_.reset(new PosGroup(data_manager.GetPosGroupData()));
+    pos_group_ = std::make_unique<PosGroup>(data_manager.GetPosGroupData());
     const DictionaryInterface *kNullDictionary = nullptr;
-    rewriter_.reset(new RewriterImpl(converter_mock_.get(),
-                                     &data_manager,
-                                     pos_group_.get(),
-                                     kNullDictionary));
+    rewriter_ =
+        std::make_unique<RewriterImpl>(converter_mock_.get(), &data_manager,
+                                       pos_group_.get(), kNullDictionary);
   }
 
-  const RewriterInterface *GetRewriter() const {
-    return rewriter_.get();
-  }
+  const RewriterInterface *GetRewriter() const { return rewriter_.get(); }
 
   std::unique_ptr<ConverterMock> converter_mock_;
   std::unique_ptr<const PosGroup> pos_group_;
@@ -120,9 +118,9 @@ TEST_F(RewriterTest, CommandRewriterAvailability) {
 }
 
 TEST_F(RewriterTest, EmoticonsAboveSymbols) {
-  const char kKey[] = "かおもじ";
-  const char kEmoticon[] = "^^;";
-  const char kSymbol[] = "☹";  // A platform-dependent symbol
+  constexpr char kKey[] = "かおもじ";
+  constexpr char kEmoticon[] = "^^;";
+  constexpr char kSymbol[] = "☹";  // A platform-dependent symbol
 
   const ConversionRequest request;
   Segments segments;

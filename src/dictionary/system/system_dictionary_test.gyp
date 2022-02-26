@@ -1,4 +1,4 @@
-# Copyright 2010-2018, Google Inc.
+# Copyright 2010-2021, Google Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@
         'codec_test.cc',
       ],
       'dependencies': [
+        '../../base/absl.gyp:absl_strings',
         '../../testing/testing.gyp:gtest_main',
         'system_dictionary.gyp:system_dictionary_codec',
       ],
@@ -64,6 +65,7 @@
         'system_dictionary_test.cc',
       ],
       'dependencies': [
+        '../../base/absl.gyp:absl_strings',
         '../../base/base.gyp:base_core',
         '../../config/config.gyp:config_handler',
         '../../data_manager/oss/oss_data_manager_test.gyp:install_oss_data_manager_test_data',

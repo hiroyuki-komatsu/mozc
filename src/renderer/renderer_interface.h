@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,12 @@
 #ifndef MOZC_RENDERER_RENDERER_INTERFACE_H_
 #define MOZC_RENDERER_RENDERER_INTERFACE_H_
 
+#include <functional>
+
 namespace mozc {
 
 namespace commands {
-class RendererCommand;   // protocol buffer
+class RendererCommand;  // protocol buffer
 }
 
 namespace client {
@@ -42,11 +44,24 @@ class SendCommandInterface;
 
 namespace renderer {
 
+using ReceiverLoopFunc = std::function<void(void)>;
+
 // An abstract interface class for renderer
 class RendererInterface {
  public:
   RendererInterface() {}
   virtual ~RendererInterface() {}
+
+  // Start the main loop of GUI took kit.
+  virtual int StartRendererLoop(int argc, char **argv) {
+    return 0;
+  }
+
+  // Set a loop function to receive RendererCommand from
+  // RendererServer::AsyncExecCommand, then call
+  // RendererServer::ExecCommandInternal. This function may be executed in
+  // a thread of the GUI system.
+  virtual void SetReceiverLoopFunction(ReceiverLoopFunc func) {}
 
   // Activate candidate window.
   // For instance, if the renderer is out-proc renderer,

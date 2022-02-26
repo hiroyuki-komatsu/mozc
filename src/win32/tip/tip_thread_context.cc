@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,13 +29,12 @@
 
 #include "win32/tip/tip_thread_context.h"
 
+#include <limits>
 #include <memory>
 
 #include "base/win_util.h"
 #include "win32/base/focus_hierarchy_observer.h"
 #include "win32/tip/tip_input_mode_manager.h"
-
-using std::unique_ptr;
 
 namespace mozc {
 namespace win32 {
@@ -53,16 +52,13 @@ TipInputModeManager::Config GetConfig() {
 
 class TipThreadContext::InternalState {
  public:
-  InternalState()
-      : input_mode_manager(GetConfig()),
-        focus_revision(0) {}
+  InternalState() : input_mode_manager(GetConfig()), focus_revision(0) {}
   TipInputModeManager input_mode_manager;
-  unique_ptr<FocusHierarchyObserver> focus_hierarchy_observer;
+  std::unique_ptr<FocusHierarchyObserver> focus_hierarchy_observer;
   int32 focus_revision;
 };
 
-TipThreadContext::TipThreadContext()
-    : state_(new InternalState) {}
+TipThreadContext::TipThreadContext() : state_(new InternalState) {}
 
 TipThreadContext::~TipThreadContext() {}
 
@@ -70,8 +66,8 @@ TipInputModeManager *TipThreadContext::GetInputModeManager() {
   return &state_->input_mode_manager;
 }
 
-const FocusHierarchyObserver *
-TipThreadContext::GetFocusHierarchyObserver() const {
+const FocusHierarchyObserver *TipThreadContext::GetFocusHierarchyObserver()
+    const {
   return state_->focus_hierarchy_observer.get();
 }
 
@@ -87,7 +83,7 @@ int32 TipThreadContext::GetFocusRevision() const {
 }
 
 void TipThreadContext::IncrementFocusRevision() {
-  if (state_->focus_revision < kint32max) {
+  if (state_->focus_revision < std::numeric_limits<int32>::max()) {
     state_->focus_revision++;
   } else {
     state_->focus_revision = 0;

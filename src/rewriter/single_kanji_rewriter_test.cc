@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -43,37 +43,37 @@
 #include "request/conversion_request.h"
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
+#include "absl/flags/flag.h"
+#include "absl/strings/str_format.h"
 
 namespace mozc {
 
-using dictionary::POSMatcher;
+using dictionary::PosMatcher;
 
 class SingleKanjiRewriterTest : public ::testing::Test {
  protected:
   SingleKanjiRewriterTest() {
-    data_manager_.reset(new testing::MockDataManager);
-    pos_matcher_.Set(data_manager_->GetPOSMatcherData());
+    data_manager_ = std::make_unique<testing::MockDataManager>();
+    pos_matcher_.Set(data_manager_->GetPosMatcherData());
   }
 
   ~SingleKanjiRewriterTest() override = default;
 
   void SetUp() override {
-    SystemUtil::SetUserProfileDirectory(FLAGS_test_tmpdir);
+    SystemUtil::SetUserProfileDirectory(absl::GetFlag(FLAGS_test_tmpdir));
   }
 
   SingleKanjiRewriter *CreateSingleKanjiRewriter() const {
     return new SingleKanjiRewriter(*data_manager_);
   }
 
-  const POSMatcher &pos_matcher() {
-    return pos_matcher_;
-  }
+  const PosMatcher &pos_matcher() { return pos_matcher_; }
 
   const ConversionRequest default_request_;
 
  protected:
   std::unique_ptr<testing::MockDataManager> data_manager_;
-  POSMatcher pos_matcher_;
+  PosMatcher pos_matcher_;
 };
 
 TEST_F(SingleKanjiRewriterTest, CapabilityTest) {
@@ -92,7 +92,7 @@ TEST_F(SingleKanjiRewriterTest, SetKeyTest) {
 
   Segments segments;
   Segment *segment = segments.add_segment();
-  const string kKey = "あ";
+  const std::string kKey = "あ";
   segment->set_key(kKey);
   Segment::Candidate *candidate = segment->add_candidate();
   // First candidate may be inserted by other rewriters.
@@ -191,7 +191,7 @@ TEST_F(SingleKanjiRewriterTest, InsertionPositionTest) {
     candidate->Init();
     candidate->key = segment->key();
     candidate->content_key = segment->key();
-    candidate->value = Util::StringPrintf("cand%d", i);
+    candidate->value = absl::StrFormat("cand%d", i);
     candidate->content_value = candidate->value;
   }
 
@@ -202,7 +202,7 @@ TEST_F(SingleKanjiRewriterTest, InsertionPositionTest) {
   for (int i = 0; i < 10; ++i) {
     // First 10 candidates have not changed.
     const Segment::Candidate &candidate = segment->candidate(i);
-    EXPECT_EQ(Util::StringPrintf("cand%d", i), candidate.value);
+    EXPECT_EQ(absl::StrFormat("cand%d", i), candidate.value);
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,17 +29,18 @@
 
 #include "session/session_watch_dog.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
-#include "base/port.h"
 #include "base/cpu_stats.h"
 #include "base/logging.h"
-#include "base/mutex.h"
+#include "base/port.h"
 #include "base/util.h"
 #include "client/client_mock.h"
-#include "testing/base/public/gunit.h"
 #include "testing/base/public/googletest.h"
+#include "testing/base/public/gunit.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace {
@@ -48,28 +49,26 @@ class TestCPUStats : public CPUStatsInterface {
  public:
   TestCPUStats() : cpu_loads_index_(0) {}
 
-  float GetSystemCPULoad() {
-    scoped_lock l(&mutex_);
+  float GetSystemCPULoad() override {
+    absl::MutexLock l(&mutex_);
     CHECK_LT(cpu_loads_index_, cpu_loads_.size());
     return cpu_loads_[cpu_loads_index_++];
   }
 
-  float GetCurrentProcessCPULoad() {
-    return 0.0;
-  }
+  float GetCurrentProcessCPULoad() override { return 0.0; }
 
-  size_t GetNumberOfProcessors() const {
+  size_t GetNumberOfProcessors() const override {
     return static_cast<size_t>(1);
   }
 
   void SetCPULoads(const std::vector<float> &cpu_loads) {
-    scoped_lock l(&mutex_);
+    absl::MutexLock l(&mutex_);
     cpu_loads_index_ = 0;
     cpu_loads_ = cpu_loads;
   }
 
  private:
-  Mutex mutex_;
+  absl::Mutex mutex_;
   std::vector<float> cpu_loads_;
   int cpu_loads_index_;
 };
@@ -85,7 +84,7 @@ class SessionWatchDogTest : public testing::Test {
 };
 
 TEST_F(SessionWatchDogTest, SessionWatchDogTest) {
-  static const int32 kInterval = 1;  // for every 1sec
+  static const int32_t kInterval = 1;  // for every 1sec
   mozc::SessionWatchDog watchdog(kInterval);
   EXPECT_FALSE(watchdog.IsRunning());  // not running
   EXPECT_EQ(kInterval, watchdog.interval());
@@ -124,7 +123,7 @@ TEST_F(SessionWatchDogTest, SessionWatchDogTest) {
 }
 
 TEST_F(SessionWatchDogTest, SessionWatchDogCPUStatsTest) {
-  static const int32 kInterval = 1;  // for every 1sec
+  static const int32_t kInterval = 1;  // for every 1sec
   mozc::SessionWatchDog watchdog(kInterval);
   EXPECT_FALSE(watchdog.IsRunning());  // not running
   EXPECT_EQ(kInterval, watchdog.interval());

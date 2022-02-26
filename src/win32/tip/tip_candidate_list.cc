@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,6 @@
 #include "win32/tip/tip_ref_count.h"
 
 using ::ATL::CComPtr;
-using ::std::unique_ptr;
 
 namespace mozc {
 namespace win32 {
@@ -53,10 +52,8 @@ namespace {
 
 class CandidateStringImpl : public ITfCandidateString {
  public:
-  CandidateStringImpl(ULONG index, const wstring &value)
-      : index_(index),
-        value_(value) {
-  }
+  CandidateStringImpl(ULONG index, const std::wstring &value)
+      : index_(index), value_(value) {}
 
   // The IUnknown interface methods.
   virtual HRESULT STDMETHODCALLTYPE QueryInterface(const IID &interface_id,
@@ -80,9 +77,7 @@ class CandidateStringImpl : public ITfCandidateString {
     return S_OK;
   }
 
-  virtual ULONG STDMETHODCALLTYPE AddRef() {
-    return ref_count_.AddRefImpl();
-  }
+  virtual ULONG STDMETHODCALLTYPE AddRef() { return ref_count_.AddRefImpl(); }
 
   virtual ULONG STDMETHODCALLTYPE Release() {
     const ULONG count = ref_count_.ReleaseImpl();
@@ -112,17 +107,15 @@ class CandidateStringImpl : public ITfCandidateString {
 
   TipRefCount ref_count_;
   const ULONG index_;
-  const wstring value_;
+  const std::wstring value_;
 
   DISALLOW_COPY_AND_ASSIGN(CandidateStringImpl);
 };
 
 class EnumTfCandidatesImpl : public IEnumTfCandidates {
  public:
-  explicit EnumTfCandidatesImpl(const vector<wstring> &candidates)
-      : candidates_(candidates),
-        current_(0) {
-  }
+  explicit EnumTfCandidatesImpl(const std::vector<std::wstring> &candidates)
+      : candidates_(candidates), current_(0) {}
 
   // The IUnknown interface methods.
   virtual HRESULT STDMETHODCALLTYPE QueryInterface(const IID &interface_id,
@@ -146,9 +139,7 @@ class EnumTfCandidatesImpl : public IEnumTfCandidates {
     return S_OK;
   }
 
-  virtual ULONG STDMETHODCALLTYPE AddRef() {
-    return ref_count_.AddRefImpl();
-  }
+  virtual ULONG STDMETHODCALLTYPE AddRef() { return ref_count_.AddRefImpl(); }
 
   virtual ULONG STDMETHODCALLTYPE Release() {
     const ULONG count = ref_count_.ReleaseImpl();
@@ -185,8 +176,8 @@ class EnumTfCandidatesImpl : public IEnumTfCandidates {
         *fetched_count = i;
         return S_FALSE;
       }
-      candidate_string[i] = new CandidateStringImpl(current_,
-                                                    candidates_[current_]);
+      candidate_string[i] =
+          new CandidateStringImpl(current_, candidates_[current_]);
       candidate_string[i]->AddRef();
       ++current_;
     }
@@ -210,7 +201,7 @@ class EnumTfCandidatesImpl : public IEnumTfCandidates {
 
   TipRefCount ref_count_;
 
-  vector<wstring> candidates_;
+  std::vector<std::wstring> candidates_;
   size_t current_;
 
   DISALLOW_COPY_AND_ASSIGN(EnumTfCandidatesImpl);
@@ -218,11 +209,9 @@ class EnumTfCandidatesImpl : public IEnumTfCandidates {
 
 class CandidateListImpl : public ITfCandidateList {
  public:
-  CandidateListImpl(const vector<wstring> &candidates,
+  CandidateListImpl(const std::vector<std::wstring> &candidates,
                     TipCandidateListCallback *callback)
-      : candidates_(candidates),
-        callback_(callback) {
-  }
+      : candidates_(candidates), callback_(callback) {}
 
   // The IUnknown interface methods.
   virtual HRESULT STDMETHODCALLTYPE QueryInterface(const IID &interface_id,
@@ -246,9 +235,7 @@ class CandidateListImpl : public ITfCandidateList {
     return S_OK;
   }
 
-  virtual ULONG STDMETHODCALLTYPE AddRef() {
-    return ref_count_.AddRefImpl();
-  }
+  virtual ULONG STDMETHODCALLTYPE AddRef() { return ref_count_.AddRefImpl(); }
 
   virtual ULONG STDMETHODCALLTYPE Release() {
     const ULONG count = ref_count_.ReleaseImpl();
@@ -260,8 +247,8 @@ class CandidateListImpl : public ITfCandidateList {
 
  private:
   // The ITfCandidateList interface methods.
-  virtual HRESULT STDMETHODCALLTYPE EnumCandidates(
-      IEnumTfCandidates **enum_candidate) {
+  virtual HRESULT STDMETHODCALLTYPE
+  EnumCandidates(IEnumTfCandidates **enum_candidate) {
     if (enum_candidate == nullptr) {
       return E_INVALIDARG;
     }
@@ -270,9 +257,8 @@ class CandidateListImpl : public ITfCandidateList {
     return S_OK;
   }
 
-  virtual HRESULT STDMETHODCALLTYPE GetCandidate(
-      ULONG index,
-      ITfCandidateString **candidate_string) {
+  virtual HRESULT STDMETHODCALLTYPE
+  GetCandidate(ULONG index, ITfCandidateString **candidate_string) {
     if (candidate_string == nullptr) {
       return E_INVALIDARG;
     }
@@ -292,9 +278,8 @@ class CandidateListImpl : public ITfCandidateList {
     return S_OK;
   }
 
-  virtual HRESULT STDMETHODCALLTYPE SetResult(
-      ULONG index,
-      TfCandidateResult candidate_result) {
+  virtual HRESULT STDMETHODCALLTYPE
+  SetResult(ULONG index, TfCandidateResult candidate_result) {
     if (candidates_.size() <= index) {
       return E_INVALIDARG;
     }
@@ -306,20 +291,20 @@ class CandidateListImpl : public ITfCandidateList {
   }
 
   TipRefCount ref_count_;
-  vector<wstring> candidates_;
-  unique_ptr<TipCandidateListCallback> callback_;
+  std::vector<std::wstring> candidates_;
+  std::unique_ptr<TipCandidateListCallback> callback_;
 
   DISALLOW_COPY_AND_ASSIGN(CandidateListImpl);
 };
 
 }  // namespace
 
-TipCandidateListCallback::~TipCandidateListCallback() {
-}
+TipCandidateListCallback::~TipCandidateListCallback() {}
 
 // static
-ITfCandidateList *TipCandidateList::New(const vector<wstring> &candidates,
-                                        TipCandidateListCallback *callback) {
+ITfCandidateList *TipCandidateList::New(
+    const std::vector<std::wstring> &candidates,
+    TipCandidateListCallback *callback) {
   return new CandidateListImpl(candidates, callback);
 }
 

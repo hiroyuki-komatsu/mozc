@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,16 +31,14 @@
 
 #ifdef OS_WIN
 #include <Windows.h>
-#else
+#else  // OS_WIN
 #include <cstdlib>
 #endif  // OS_WIN
-
-#include "base/mutex.h"
 
 namespace mozc {
 namespace {
 
-const size_t kMaxFinalizersSize = 256;
+constexpr size_t kMaxFinalizersSize = 256;
 size_t g_finalizers_size = 0;
 
 SingletonFinalizer::FinalizerFunc g_finalizers[kMaxFinalizersSize];
@@ -56,13 +54,12 @@ SingletonFinalizer::FinalizerFunc g_finalizers[kMaxFinalizersSize];
 void ExitWithError() {
   // This logic is copied from logging.h
 #ifdef OS_WIN
-  ::RaiseException(::GetLastError(),
-                   EXCEPTION_NONCONTINUABLE,
-                   NULL, NULL);
-#else
+  ::RaiseException(::GetLastError(), EXCEPTION_NONCONTINUABLE, 0, nullptr);
+#else   // OS_WIN
   exit(-1);
-#endif
+#endif  // OS_WIN
 }
+
 }  // namespace
 
 void SingletonFinalizer::AddFinalizer(FinalizerFunc func) {
@@ -86,4 +83,5 @@ void SingletonFinalizer::Finalize() {
   }
   g_finalizers_size = 0;
 }
+
 }  // namespace mozc

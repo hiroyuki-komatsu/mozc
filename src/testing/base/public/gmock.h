@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,5 +31,19 @@
 #define MOZC_TESTING_BASE_PUBLIC_GMOCK_H_
 
 #include <gmock/gmock.h>
+
+#ifndef EXPECT_OK
+
+namespace mozc {
+
+MATCHER(IsOkStatus, negation ? "is not OK" : "is OK") { return arg.ok(); }
+
+}  // namespace mozc
+
+#define ASSERT_OK(expr) ASSERT_THAT(expr, ::mozc::IsOkStatus())
+#define EXPECT_OK(expr) EXPECT_THAT(expr, ::mozc::IsOkStatus())
+
+#endif  // EXPECT_OK
+
 
 #endif  // MOZC_TESTING_BASE_PUBLIC_GMOCK_H_

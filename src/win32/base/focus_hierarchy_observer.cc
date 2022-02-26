@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -51,45 +51,43 @@ using ::ATL::CComPtr;
 using ::ATL::CComQIPtr;
 using ::ATL::CComVariant;
 
-using ::std::unique_ptr;
-
-const size_t kMaxHierarchyLevel = 50;
+constexpr size_t kMaxHierarchyLevel = 50;
 
 DWORD g_tls_index = TLS_OUT_OF_INDEXES;
 HMODULE g_module_handle = nullptr;
 
-string UTF16ToUTF8(const wstring &str) {
-  string utf8;
-  Util::WideToUTF8(str, &utf8);
+std::string Utf16ToUtf8(const std::wstring &str) {
+  std::string utf8;
+  Util::WideToUtf8(str, &utf8);
   return utf8;
 }
 
-string GetWindowTestAsUTF8(HWND window_handle) {
+std::string GetWindowTestAsUTF8(HWND window_handle) {
   const int text_len = ::GetWindowTextLengthW(window_handle);
   if (text_len <= 0) {
     return "";
   }
   const int buffer_len = text_len + 1;
-  unique_ptr<wchar_t[]> buffer(new wchar_t[buffer_len]);
+  std::unique_ptr<wchar_t[]> buffer(new wchar_t[buffer_len]);
   const int copied_len_without_null =
       ::GetWindowText(window_handle, buffer.get(), buffer_len);
   if (copied_len_without_null <= 0 ||
       copied_len_without_null + 1 > buffer_len) {
     return "";
   }
-  return UTF16ToUTF8(wstring(buffer.get(), copied_len_without_null));
+  return Utf16ToUtf8(std::wstring(buffer.get(), copied_len_without_null));
 }
 
-string GetWindowClassNameAsUTF8(HWND window_handle) {
-  const int kBufferLen = 256 + 1;
-  unique_ptr<wchar_t[]> buffer(new wchar_t[kBufferLen]);
+std::string GetWindowClassNameAsUTF8(HWND window_handle) {
+  constexpr int kBufferLen = 256 + 1;
+  std::unique_ptr<wchar_t[]> buffer(new wchar_t[kBufferLen]);
   const int copied_len_without_null =
       ::GetClassNameW(window_handle, buffer.get(), kBufferLen);
   if (copied_len_without_null <= 0 ||
       copied_len_without_null + 1 > kBufferLen) {
     return "";
   }
-  return UTF16ToUTF8(wstring(buffer.get(), copied_len_without_null));
+  return Utf16ToUtf8(std::wstring(buffer.get(), copied_len_without_null));
 }
 
 DWORD GetProcessIdFromWindow(HWND window_handle) {
@@ -102,7 +100,7 @@ DWORD GetProcessIdFromWindow(HWND window_handle) {
 
 void FillWindowInfo(
     HWND window_handle,
-    vector<FocusHierarchyObserver::WindowInfo> *window_hierarchy) {
+    std::vector<FocusHierarchyObserver::WindowInfo> *window_hierarchy) {
   if (window_handle == nullptr) {
     // error
     window_hierarchy->clear();
@@ -136,10 +134,8 @@ void FillWindowInfo(
   DCHECK(false) << "must not reach here.";
 }
 
-void FillAccessibleInfo(
-    AccessibleObject accessible,
-    HWND focused_window_handle,
-    vector<AccessibleObjectInfo> *hierarchy) {
+void FillAccessibleInfo(AccessibleObject accessible, HWND focused_window_handle,
+                        std::vector<AccessibleObjectInfo> *hierarchy) {
   if (!accessible.IsValid()) {
     return;
   }
@@ -168,15 +164,13 @@ void FillAccessibleInfo(
 
 class ThreadLocalInfo {
  public:
-  vector<AccessibleObjectInfo> ui_hierarchy() const {
+  std::vector<AccessibleObjectInfo> ui_hierarchy() const {
     return ui_hierarchy_;
   }
-  vector<FocusHierarchyObserver::WindowInfo> window_hierarchy() const {
+  std::vector<FocusHierarchyObserver::WindowInfo> window_hierarchy() const {
     return window_hierarchy_;
   }
-  string root_window_name() const {
-    return root_window_name_;
-  }
+  std::string root_window_name() const { return root_window_name_; }
 
   void SyncFocusHierarchy() {
     const HWND focused_window = ::GetFocus();
@@ -194,9 +188,7 @@ class ThreadLocalInfo {
     OnInitialize(focused_window, accesible);
   }
 
-  void AddRef() {
-    ++ref_count_;
-  }
+  void AddRef() { ++ref_count_; }
 
   void Release() {
     --ref_count_;
@@ -223,8 +215,7 @@ class ThreadLocalInfo {
 
  private:
   explicit ThreadLocalInfo(HWINEVENTHOOK hook_handle)
-      : ref_count_(0),
-        hook_handle_(hook_handle) {
+      : ref_count_(0), hook_handle_(hook_handle) {
     ::TlsSetValue(g_tls_index, this);
   }
 
@@ -242,9 +233,8 @@ class ThreadLocalInfo {
     }
 
     auto hook_handle = ::SetWinEventHook(
-        EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, g_module_handle,
-        WinEventProc, ::GetCurrentProcessId(), ::GetCurrentThreadId(),
-        WINEVENT_INCONTEXT);
+        EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, g_module_handle, WinEventProc,
+        ::GetCurrentProcessId(), ::GetCurrentThreadId(), WINEVENT_INCONTEXT);
 
     if (hook_handle == nullptr) {
       return nullptr;
@@ -253,12 +243,9 @@ class ThreadLocalInfo {
     return new ThreadLocalInfo(hook_handle);
   }
 
-  static void CALLBACK WinEventProc(HWINEVENTHOOK hook_handle,
-                                    DWORD event,
-                                    HWND window_handle,
-                                    LONG object_id,
-                                    LONG child_id,
-                                    DWORD event_thread,
+  static void CALLBACK WinEventProc(HWINEVENTHOOK hook_handle, DWORD event,
+                                    HWND window_handle, LONG object_id,
+                                    LONG child_id, DWORD event_thread,
                                     DWORD event_time) {
     if (g_module_handle == nullptr) {
       return;
@@ -326,14 +313,12 @@ class ThreadLocalInfo {
 
   int ref_count_;
   HWINEVENTHOOK hook_handle_;
-  vector<AccessibleObjectInfo> ui_hierarchy_;
-  vector<FocusHierarchyObserver::WindowInfo> window_hierarchy_;
-  string root_window_name_;
+  std::vector<AccessibleObjectInfo> ui_hierarchy_;
+  std::vector<FocusHierarchyObserver::WindowInfo> window_hierarchy_;
+  std::string root_window_name_;
 };
 
-bool TlsAvailable() {
-  return g_tls_index != TLS_OUT_OF_INDEXES;
-}
+bool TlsAvailable() { return g_tls_index != TLS_OUT_OF_INDEXES; }
 
 class FocusHierarchyObserverImpl : public FocusHierarchyObserver {
  public:
@@ -347,8 +332,7 @@ class FocusHierarchyObserverImpl : public FocusHierarchyObserver {
   }
 
  private:
-  FocusHierarchyObserverImpl() {
-  }
+  FocusHierarchyObserverImpl() {}
 
   virtual ~FocusHierarchyObserverImpl() {
     auto *self = ThreadLocalInfo::Self();
@@ -368,21 +352,21 @@ class FocusHierarchyObserverImpl : public FocusHierarchyObserver {
   virtual bool IsAbailable() const {
     return ThreadLocalInfo::Self() != nullptr;
   }
-  virtual vector<AccessibleObjectInfo> GetUIHierarchy() const {
+  virtual std::vector<AccessibleObjectInfo> GetUIHierarchy() const {
     auto *self = ThreadLocalInfo::Self();
     if (self == nullptr) {
-      return vector<AccessibleObjectInfo>();
+      return std::vector<AccessibleObjectInfo>();
     }
     return self->ui_hierarchy();
   }
-  virtual vector<WindowInfo> GetWindowHierarchy() const {
+  virtual std::vector<WindowInfo> GetWindowHierarchy() const {
     auto *self = ThreadLocalInfo::Self();
     if (self == nullptr) {
-      return vector<FocusHierarchyObserver::WindowInfo>();
+      return std::vector<FocusHierarchyObserver::WindowInfo>();
     }
     return self->window_hierarchy();
   }
-  virtual string GetRootWindowName() const {
+  virtual std::string GetRootWindowName() const {
     auto *self = ThreadLocalInfo::Self();
     if (self == nullptr) {
       return "";
@@ -396,41 +380,31 @@ class FocusHierarchyObserverImpl : public FocusHierarchyObserver {
 
 class FocusHierarchyObserverNullImpl : public FocusHierarchyObserver {
  public:
-  FocusHierarchyObserverNullImpl() {
-  }
-  virtual ~FocusHierarchyObserverNullImpl() {
-  }
+  FocusHierarchyObserverNullImpl() {}
+  virtual ~FocusHierarchyObserverNullImpl() {}
 
  private:
   // FocusHierarchyObserver overrides:
-  virtual void SyncFocusHierarchy() {
+  virtual void SyncFocusHierarchy() {}
+  virtual bool IsAbailable() const { return false; }
+  virtual std::vector<AccessibleObjectInfo> GetUIHierarchy() const {
+    return std::vector<AccessibleObjectInfo>();
   }
-  virtual bool IsAbailable() const {
-    return false;
+  virtual std::vector<WindowInfo> GetWindowHierarchy() const {
+    return std::vector<WindowInfo>();
   }
-  virtual vector<AccessibleObjectInfo> GetUIHierarchy() const {
-    return vector<AccessibleObjectInfo>();
-  }
-  virtual vector<WindowInfo> GetWindowHierarchy() const {
-    return vector<WindowInfo>();
-  }
-  virtual string GetRootWindowName() const {
-    return "";
-  }
+  virtual std::string GetRootWindowName() const { return ""; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(FocusHierarchyObserverNullImpl);
 };
 
-}   // namespace
+}  // namespace
 
-FocusHierarchyObserver::~FocusHierarchyObserver() {
-}
+FocusHierarchyObserver::~FocusHierarchyObserver() {}
 
 FocusHierarchyObserver::WindowInfo::WindowInfo()
-    : window_handle(nullptr),
-      process_id(0) {
-}
+    : window_handle(nullptr), process_id(0) {}
 
 // static
 void FocusHierarchyObserver::OnDllProcessAttach(HINSTANCE module_handle,

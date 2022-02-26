@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,17 +32,17 @@
 
 #if defined(OS_WIN)
 #include <windows.h>
-#elif defined(OS_NACL)
-#include <ppapi/c/pp_file_info.h>
-#else  // OS_WIN or OS_NACL
+#else  // OS_WIN
 #include <sys/types.h>
-#endif
+#endif  // OS_WIN
 
 #include <string>
 #include <vector>
 
 #include "base/port.h"
-#include "base/string_piece.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 
 // Ad-hoc workaround against macro problem on Windows.
 // On Windows, following macros, defined when you include <Windows.h>,
@@ -63,79 +63,158 @@ namespace mozc {
 
 #if defined(OS_WIN)
 using FileTimeStamp = uint64;
-#elif defined(OS_NACL)
-using FileTimeStamp = PP_Time;
-#else
+#else   // OS_WIN
 using FileTimeStamp = time_t;
-#endif  // OS_WIN or OS_NACL
+#endif  // OS_WIN
+
+class FileUtilInterface {
+ public:
+  virtual ~FileUtilInterface() = default;
+
+  virtual absl::Status CreateDirectory(const std::string &path) const = 0;
+  virtual absl::Status RemoveDirectory(const std::string &dirname) const = 0;
+  virtual absl::Status Unlink(const std::string &filename) const = 0;
+  virtual absl::Status FileExists(const std::string &filename) const = 0;
+  virtual absl::Status DirectoryExists(const std::string &dirname) const = 0;
+  virtual absl::Status CopyFile(const std::string &from,
+                                const std::string &to) const = 0;
+  virtual absl::StatusOr<bool> IsEqualFile(
+      const std::string &filename1, const std::string &filename2) const = 0;
+  virtual absl::StatusOr<bool> IsEquivalent(
+      const std::string &filename1, const std::string &filename2) const = 0;
+  virtual absl::Status AtomicRename(const std::string &from,
+                                    const std::string &to) const = 0;
+  virtual absl::Status CreateHardLink(const std::string &from,
+                                      const std::string &to) = 0;
+  virtual absl::StatusOr<FileTimeStamp> GetModificationTime(
+      const std::string &filename) const = 0;
+
+ protected:
+  FileUtilInterface() = default;
+};
 
 class FileUtil {
  public:
+  FileUtil() = delete;
+  ~FileUtil() = delete;
+
   // Creates a directory. Does not create directories in the way to the path.
-  static bool CreateDirectory(const string &path);
+  static absl::Status CreateDirectory(const std::string &path);
 
   // Removes an empty directory.
-  static bool RemoveDirectory(const string &dirname);
+  static absl::Status RemoveDirectory(const std::string &dirname);
+  static absl::Status RemoveDirectoryIfExists(const std::string &dirname);
 
-  // Removes a file.
-  static bool Unlink(const string &filename);
+  // Removes a file. The second version returns OK when `filename` doesn't
+  // exist. The third version logs error message on failure (i.e., it ignores
+  // any error and is not recommended).
+  static absl::Status Unlink(const std::string &filename);
+  static absl::Status UnlinkIfExists(const std::string &filename);
+  static void UnlinkOrLogError(const std::string &filename);
 
   // Returns true if a file or a directory with the name exists.
-  static bool FileExists(const string &filename);
+  static absl::Status FileExists(const std::string &filename);
 
   // Returns true if the directory exists.
-  static bool DirectoryExists(const string &filename);
+  static absl::Status DirectoryExists(const std::string &dirname);
 
 #ifdef OS_WIN
   // Adds file attributes to the file to hide it.
   // FILE_ATTRIBUTE_NORMAL will be removed.
-  static bool HideFile(const string &filename);
-  static bool HideFileWithExtraAttributes(const string &filename,
+  static bool HideFile(const std::string &filename);
+  static bool HideFileWithExtraAttributes(const std::string &filename,
                                           DWORD extra_attributes);
 #endif  // OS_WIN
 
   // Copies a file to another file, using mmap internally.
   // The destination file will be overwritten if exists.
   // Returns true if the file is copied successfully.
-  static bool CopyFile(const string &from, const string &to);
+  static absl::Status CopyFile(const std::string &from, const std::string &to);
 
   // Compares the contents of two given files. Ignores the difference between
   // their path strings.
   // Returns true if both files have same contents.
-  static bool IsEqualFile(const string &filename1, const string &filename2);
+  static absl::StatusOr<bool> IsEqualFile(const std::string &filename1,
+                                          const std::string &filename2);
+
+  // Compares the two filenames point to the same file. Symbolic/hard links are
+  // considered. This is a wrapper of std::filesystem::equivalent.
+  // IsEqualFile reads the contents of the files, but IsEquivalent does not.
+  // Returns an error, if either of files doesn't exist.
+  static absl::StatusOr<bool> IsEquivalent(const std::string &filename1,
+                                           const std::string &filename2);
 
   // Moves/Renames a file atomically.
-  // Returns true if the file is renamed successfully.
-  static bool AtomicRename(const string &from, const string &to);
+  // Returns OK if the file is renamed successfully.
+  static absl::Status AtomicRename(const std::string &from,
+                                   const std::string &to);
+
+  // Creates a hard link. This returns false if the filesystem does not support
+  // hard link or the target file already exists.
+  // This is a wrapper of std::filesystem::create_hard_link.
+  static absl::Status CreateHardLink(const std::string &from,
+                                     const std::string &to);
 
   // Joins the give path components using the OS-specific path delimiter.
-  static string JoinPath(const std::vector<StringPiece> &components);
-  static void JoinPath(const std::vector<StringPiece> &components,
-                       string *output);
+  static std::string JoinPath(const std::vector<absl::string_view> &components);
+  static void JoinPath(const std::vector<absl::string_view> &components,
+                       std::string *output);
 
   // Joins the given two path components using the OS-specific path delimiter.
-  static string JoinPath(const string &path1, const string &path2) {
+  static std::string JoinPath(const std::string &path1,
+                              const std::string &path2) {
     return JoinPath({path1, path2});
   }
-  static void JoinPath(const string &path1, const string &path2,
-                       string *output) {
+  static void JoinPath(const std::string &path1, const std::string &path2,
+                       std::string *output) {
     JoinPath({path1, path2}, output);
   }
 
-  static string Basename(const string &filename);
-  static string Dirname(const string &filename);
+  static std::string Basename(const std::string &filename);
+  static std::string Dirname(const std::string &filename);
 
   // Returns the normalized path by replacing '/' with '\\' on Windows.
   // Does nothing on other platforms.
-  static string NormalizeDirectorySeparator(const string &path);
+  static std::string NormalizeDirectorySeparator(const std::string &path);
 
   // Returns the modification time in `modified_at`.
   // Returns false if something went wrong.
-  static bool GetModificationTime(const string &filename,
-                                  FileTimeStamp *modified_at);
+  static absl::StatusOr<FileTimeStamp> GetModificationTime(
+      const std::string &filename);
+
+  // Reads the contents of the file `filename` into `output`.
+  static absl::Status GetContents(
+      const std::string &filename, std::string *output,
+      std::ios_base::openmode mode = std::ios::binary);
+
+  // Reads the contents of the file `filename` and returns it.
+  static absl::StatusOr<std::string> GetContents(
+      const std::string &filename,
+      std::ios_base::openmode mode = std::ios::binary);
+
+  // Writes the data provided in `content` to the file `filename`, overwriting
+  // any existing content.
+  static absl::Status SetContents(
+      const std::string &filename, absl::string_view content,
+      std::ios_base::openmode mode = std::ios::binary);
+
+  // Sets a mock for unittest.
+  static void SetMockForUnitTest(FileUtilInterface *mock);
+};
+
+// RAII wrapper for a file. Unlinks the file when this instance goes out of
+// scope.
+class FileUnlinker final {
+ public:
+  explicit FileUnlinker(const std::string &filename) : filename_(filename) {}
+
+  FileUnlinker(const FileUnlinker &) = delete;
+  FileUnlinker &operator=(const FileUnlinker &) = delete;
+
+  ~FileUnlinker() { FileUtil::UnlinkOrLogError(filename_); }
 
  private:
-  DISALLOW_IMPLICIT_CONSTRUCTORS(FileUtil);
+  const std::string filename_;
 };
 
 }  // namespace mozc

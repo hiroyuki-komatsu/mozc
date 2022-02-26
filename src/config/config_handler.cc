@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -38,25 +38,24 @@
 #include "base/clock.h"
 #include "base/config_file_stream.h"
 #include "base/logging.h"
-#include "base/mutex.h"
 #include "base/port.h"
 #include "base/singleton.h"
 #include "base/system_util.h"
 #include "base/version.h"
 #include "protocol/config.pb.h"
+#include "absl/synchronization/mutex.h"
 
 namespace mozc {
 namespace config {
 namespace {
 
-const char kFileNamePrefix[] = "user://config";
+constexpr char kFileNamePrefix[] = "user://config";
 
 void AddCharacterFormRule(const char *group,
                           const Config::CharacterForm preedit_form,
                           const Config::CharacterForm conversion_form,
                           Config *config) {
-  Config::CharacterFormRule *rule =
-      config->add_character_form_rules();
+  Config::CharacterFormRule *rule = config->add_character_form_rules();
   rule->set_group(group);
   rule->set_preedit_character_form(preedit_form);
   rule->set_conversion_character_form(conversion_form);
@@ -92,22 +91,23 @@ class ConfigHandlerImpl {
   bool SetConfig(const Config &config);
   void SetImposedConfig(const Config &config);
   bool Reload();
-  void SetConfigFileName(const string &filename);
-  string GetConfigFileName();
+  void SetConfigFileName(const std::string &filename);
+  std::string GetConfigFileName();
 
  private:
   // copy config to config_ and do some
   // platform dependent hooks/rewrites
   bool SetConfigInternal(const Config &config);
   void UpdateMergedConfig();
+  bool ReloadUnlocked();
 
-  string filename_;
+  std::string filename_;
   Config stored_config_;
   Config imposed_config_;
   // equals to config_.MergeFrom(imposed_config_)
   Config merged_config_;
   Config default_config_;
-  mutable Mutex mutex_;
+  mutable absl::Mutex mutex_;
 };
 
 ConfigHandlerImpl *GetConfigHandlerImpl() {
@@ -116,8 +116,8 @@ ConfigHandlerImpl *GetConfigHandlerImpl() {
 
 // return current Config
 bool ConfigHandlerImpl::GetConfig(Config *config) const {
-  scoped_lock lock(&mutex_);
-  config->CopyFrom(merged_config_);
+  absl::MutexLock lock(&mutex_);
+  *config = merged_config_;
   return true;
 }
 
@@ -127,23 +127,23 @@ const Config &ConfigHandlerImpl::DefaultConfig() const {
 
 // return stored Config
 bool ConfigHandlerImpl::GetStoredConfig(Config *config) const {
-  scoped_lock lock(&mutex_);
-  config->CopyFrom(stored_config_);
+  absl::MutexLock lock(&mutex_);
+  *config = stored_config_;
   return true;
 }
 
-// set config and rewirte internal data
+// set config and rewrite internal data
 bool ConfigHandlerImpl::SetConfigInternal(const Config &config) {
-  stored_config_.CopyFrom(config);
+  stored_config_ = config;
 
-#ifdef NO_LOGGING
+#ifdef MOZC_NO_LOGGING
   // Delete the optional field from the config.
   stored_config_.clear_verbose_level();
   // Fall back if the default value is not the expected value.
   if (stored_config_.verbose_level() != 0) {
     stored_config_.set_verbose_level(0);
   }
-#endif
+#endif  // MOZC_NO_LOGGING
 
   Logging::SetConfigVerboseLevel(stored_config_.verbose_level());
 
@@ -167,14 +167,14 @@ bool ConfigHandlerImpl::SetConfigInternal(const Config &config) {
 }
 
 void ConfigHandlerImpl::UpdateMergedConfig() {
-  merged_config_.CopyFrom(stored_config_);
+  merged_config_ = stored_config_;
   merged_config_.MergeFrom(imposed_config_);
 }
 
 bool ConfigHandlerImpl::SetConfig(const Config &config) {
-  scoped_lock lock(&mutex_);
+  absl::MutexLock lock(&mutex_);
   Config output_config;
-  output_config.CopyFrom(config);
+  output_config = config;
 
   ConfigHandler::SetMetaData(&output_config);
 
@@ -182,7 +182,7 @@ bool ConfigHandlerImpl::SetConfig(const Config &config) {
   ConfigFileStream::AtomicUpdate(filename_, output_config.SerializeAsString());
 
 #ifdef DEBUG
-  string debug_content(
+  std::string debug_content(
       "# This is a text-based config file for debugging.\n"
       "# Nothing happens when you edit this file manually.\n");
   debug_content += output_config.DebugString();
@@ -193,12 +193,12 @@ bool ConfigHandlerImpl::SetConfig(const Config &config) {
 }
 
 void ConfigHandlerImpl::SetImposedConfig(const Config &config) {
-  scoped_lock lock(&mutex_);
+  absl::MutexLock lock(&mutex_);
   VLOG(1) << "Setting new overriding config";
-  imposed_config_.CopyFrom(config);
+  imposed_config_ = config;
 
 #ifdef DEBUG
-  string debug_content(
+  std::string debug_content(
       "# This is a text-based config file for debugging.\n"
       "# Nothing happens when you edit this file manually.\n");
   debug_content += config.DebugString();
@@ -209,18 +209,22 @@ void ConfigHandlerImpl::SetImposedConfig(const Config &config) {
 
 // Reload from file
 bool ConfigHandlerImpl::Reload() {
-  scoped_lock lock(&mutex_);
+  absl::MutexLock lock(&mutex_);
+  return ReloadUnlocked();
+}
+
+bool ConfigHandlerImpl::ReloadUnlocked() {
   VLOG(1) << "Reloading config file: " << filename_;
   std::unique_ptr<std::istream> is(ConfigFileStream::OpenReadBinary(filename_));
   Config input_proto;
   bool ret_code = true;
 
-  if (is.get() == NULL) {
+  if (is == nullptr) {
     LOG(ERROR) << filename_ << " is not found";
     ret_code = false;
   } else if (!input_proto.ParseFromIstream(is.get())) {
     LOG(ERROR) << filename_ << " is broken";
-    input_proto.Clear();   // revert to default setting
+    input_proto.Clear();  // revert to default setting
     ret_code = false;
   }
 
@@ -230,15 +234,15 @@ bool ConfigHandlerImpl::Reload() {
   return ret_code;
 }
 
-void ConfigHandlerImpl::SetConfigFileName(const string &filename) {
-  scoped_lock lock(&mutex_);
+void ConfigHandlerImpl::SetConfigFileName(const std::string &filename) {
+  absl::MutexLock lock(&mutex_);
   VLOG(1) << "set new config file name: " << filename;
   filename_ = filename;
-  Reload();
+  ReloadUnlocked();
 }
 
-string ConfigHandlerImpl::GetConfigFileName() {
-  scoped_lock lock(&mutex_);
+std::string ConfigHandlerImpl::GetConfigFileName() {
+  absl::MutexLock lock(&mutex_);
   return filename_;
 }
 }  // namespace
@@ -276,11 +280,9 @@ void ConfigHandler::GetDefaultConfig(Config *config) {
   AddCharacterFormRule("(){}[]", kFullWidth, kLastForm, config);
   AddCharacterFormRule(".,", kFullWidth, kLastForm, config);
   // "。、",
-  AddCharacterFormRule("。、", kFullWidth, kFullWidth,
-                       config);
+  AddCharacterFormRule("。、", kFullWidth, kFullWidth, config);
   // "・「」"
-  AddCharacterFormRule("・「」",
-                       kFullWidth, kFullWidth, config);
+  AddCharacterFormRule("・「」", kFullWidth, kFullWidth, config);
   AddCharacterFormRule("\"'", kFullWidth, kLastForm, config);
   AddCharacterFormRule(":;", kFullWidth, kLastForm, config);
   AddCharacterFormRule("#%&@$^_|`\\", kFullWidth, kLastForm, config);
@@ -298,20 +300,18 @@ void ConfigHandler::GetDefaultConfig(Config *config) {
 }
 
 // static
-const Config& ConfigHandler::DefaultConfig() {
+const Config &ConfigHandler::DefaultConfig() {
   return GetConfigHandlerImpl()->DefaultConfig();
 }
 
 // Reload from file
-bool ConfigHandler::Reload() {
-  return GetConfigHandlerImpl()->Reload();
-}
+bool ConfigHandler::Reload() { return GetConfigHandlerImpl()->Reload(); }
 
-void ConfigHandler::SetConfigFileName(const string &filename) {
+void ConfigHandler::SetConfigFileName(const std::string &filename) {
   GetConfigHandlerImpl()->SetConfigFileName(filename);
 }
 
-string ConfigHandler::GetConfigFileName() {
+std::string ConfigHandler::GetConfigFileName() {
   return GetConfigHandlerImpl()->GetConfigFileName();
 }
 
@@ -325,13 +325,13 @@ void ConfigHandler::SetMetaData(Config *config) {
 }
 
 Config::SessionKeymap ConfigHandler::GetDefaultKeyMap() {
-#if defined(OS_MACOSX)
+#if defined(__APPLE__)
   return config::Config::KOTOERI;
-#elif defined(OS_NACL)  // OS_MACOSX
+#elif defined(OS_CHROMEOS)  // __APPLE__
   return config::Config::CHROMEOS;
-#else  // OS_MACOSX or OS_NACL
+#else   // __APPLE__ or OS_CHROMEOS
   return config::Config::MSIME;
-#endif  // OS_MACOSX or OS_NACL
+#endif  // __APPLE__ or OS_CHROMEOS
 }
 
 }  // namespace config

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,32 +30,33 @@
 #include "base/serialized_string_array.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
 
 #include "base/port.h"
-#include "base/string_piece.h"
 #include "testing/base/public/gunit.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace {
 
 class SerializedStringArrayTest : public ::testing::Test {
  protected:
-  StringPiece AlignString(const char *s, size_t len) {
-    return AlignString(string(s, len));
+  absl::string_view AlignString(const char *s, size_t len) {
+    return AlignString(std::string(s, len));
   }
 
-  StringPiece AlignString(const string &s) {
-    buf_.reset(new uint32[(s.size() + 3) / 4]);
-    return StringPiece(
+  absl::string_view AlignString(const std::string &s) {
+    buf_.reset(new uint32_t[(s.size() + 3) / 4]);
+    return absl::string_view(
         static_cast<const char *>(memcpy(buf_.get(), s.data(), s.size())),
         s.size());
   }
 
  private:
-  std::unique_ptr<uint32[]> buf_;
+  std::unique_ptr<uint32_t[]> buf_;
 };
 
 TEST_F(SerializedStringArrayTest, DefaultConstructor) {
@@ -65,7 +66,7 @@ TEST_F(SerializedStringArrayTest, DefaultConstructor) {
 }
 
 TEST_F(SerializedStringArrayTest, EmptyArray) {
-  const StringPiece data = AlignString("\x00\x00\x00\x00", 4);
+  const absl::string_view data = AlignString("\x00\x00\x00\x00", 4);
   ASSERT_TRUE(SerializedStringArray::VerifyData(data));
 
   SerializedStringArray a;
@@ -74,7 +75,7 @@ TEST_F(SerializedStringArrayTest, EmptyArray) {
   EXPECT_EQ(0, a.size());
 }
 
-const char kTestData[] =
+constexpr char kTestData[] =
     "\x03\x00\x00\x00"                  // Array size = 3
     "\x1c\x00\x00\x00\x05\x00\x00\x00"  // (28, 5)
     "\x22\x00\x00\x00\x04\x00\x00\x00"  // (34, 4)
@@ -84,16 +85,16 @@ const char kTestData[] =
     "google\0";                         // offset = 39, len = 6
 
 TEST_F(SerializedStringArrayTest, SerializeToBuffer) {
-  std::unique_ptr<uint32[]> buf;
-  const StringPiece actual = SerializedStringArray::SerializeToBuffer(
+  std::unique_ptr<uint32_t[]> buf;
+  const absl::string_view actual = SerializedStringArray::SerializeToBuffer(
       {"Hello", "Mozc", "google"}, &buf);
-  const StringPiece expected(kTestData, arraysize(kTestData) - 1);
+  const absl::string_view expected(kTestData, std::size(kTestData) - 1);
   EXPECT_EQ(expected, actual);
 }
 
 TEST_F(SerializedStringArrayTest, Basic) {
-  const StringPiece data =
-      AlignString(string(kTestData, arraysize(kTestData) - 1));
+  const absl::string_view data =
+      AlignString(std::string(kTestData, std::size(kTestData) - 1));
 
   ASSERT_TRUE(SerializedStringArray::VerifyData(data));
 
@@ -117,8 +118,8 @@ TEST_F(SerializedStringArrayTest, Basic) {
 }
 
 TEST_F(SerializedStringArrayTest, Iterator) {
-  const StringPiece data =
-      AlignString(string(kTestData, arraysize(kTestData) - 1));
+  const absl::string_view data =
+      AlignString(std::string(kTestData, std::size(kTestData) - 1));
 
   ASSERT_TRUE(SerializedStringArray::VerifyData(data));
 

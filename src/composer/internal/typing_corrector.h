@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,42 +36,37 @@
 
 #include "base/port.h"
 #include "base/protobuf/repeated_field.h"
-#include "base/string_piece.h"
+#include "composer/table.h"
+#include "composer/type_corrected_query.h"
+#include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
-
-namespace commands {
-class KeyEvent;
-class KeyEvent_ProbableKeyEvent;
-}  // namespace commands
-
 namespace composer {
 
-class Table;
-struct TypeCorrectedQuery;
+using ProbableKeyEvent = commands::KeyEvent_ProbableKeyEvent;
+using ProbableKeyEvents = mozc::protobuf::RepeatedPtrField<ProbableKeyEvent>;
 
-typedef commands::KeyEvent_ProbableKeyEvent ProbableKeyEvent;
-typedef mozc::protobuf::RepeatedPtrField<ProbableKeyEvent> ProbableKeyEvents;
-
-class TypingCorrector {
+class TypingCorrector final {
  public:
   // Keeps up to |max_correction_query_candidates| corrections at each
   // insertion.
   // Returns up to |max_correction_query_results| results from
   // GetQueriesForPrediction.
-  TypingCorrector(const Table *table,
-                  size_t max_correction_query_candidates,
+  TypingCorrector(const Table *table, size_t max_correction_query_candidates,
                   size_t max_correction_query_results);
-  ~TypingCorrector();
+
+  // Copyable.
+  TypingCorrector(const TypingCorrector &x) = default;
+  TypingCorrector &operator=(const TypingCorrector &x) = default;
+
+  ~TypingCorrector() = default;
 
   // Sets a romaji table.
   void SetTable(const Table *table);
 
   void SetConfig(const config::Config *config);
-
-  // Resets this instance as a copy of |src|.
-  void CopyFrom(const TypingCorrector &src);
 
   // Returns true if there is typing correction available.
   bool IsAvailable() const;
@@ -87,7 +82,7 @@ class TypingCorrector {
   // If |probable_key_events| is non-empty, |key| is ignored.
   // If |probable_key_events| is empty, |key| is used instead assuming that
   // the probability is 1.0.
-  void InsertCharacter(const StringPiece key,
+  void InsertCharacter(const absl::string_view key,
                        const ProbableKeyEvents &probable_key_events);
 
   // Extracts type-corrected queries for prediction.
@@ -97,7 +92,7 @@ class TypingCorrector {
   friend class TypingCorrectorTest;
 
   // Represents one type-correction: key sequence and its penalty (cost).
-  typedef std::pair<string, int> KeyAndPenalty;
+  using KeyAndPenalty = std::pair<std::string, int>;
 
   // Less-than comparator for KeyAndPenalty. Since this functor accesses
   // KeyAndPenalty, we need to define it in private member.
@@ -108,10 +103,8 @@ class TypingCorrector {
   size_t max_correction_query_candidates_;
   size_t max_correction_query_results_;
   const config::Config *config_;
-  string raw_key_;
+  std::string raw_key_;
   std::vector<KeyAndPenalty> top_n_;
-
-  DISALLOW_COPY_AND_ASSIGN(TypingCorrector);
 };
 
 }  // namespace composer

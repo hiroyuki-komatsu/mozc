@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,8 @@
 
 #include "rewriter/rewriter.h"
 
-#include "base/flags.h"
+#include <memory>
+
 #include "base/logging.h"
 #include "converter/converter_interface.h"
 #include "data_manager/data_manager_interface.h"
@@ -63,11 +64,12 @@
 #include "rewriter/variants_rewriter.h"
 #include "rewriter/version_rewriter.h"
 #include "rewriter/zipcode_rewriter.h"
+#include "absl/flags/flag.h"
 #ifndef NO_USAGE_REWRITER
 #include "rewriter/usage_rewriter.h"
 #endif  // NO_USAGE_REWRITER
 
-DEFINE_bool(use_history_rewriter, true, "Use history rewriter or not.");
+ABSL_FLAG(bool, use_history_rewriter, true, "Use history rewriter or not.");
 
 namespace mozc {
 namespace {
@@ -81,50 +83,54 @@ RewriterImpl::RewriterImpl(const ConverterInterface *parent_converter,
                            const DataManagerInterface *data_manager,
                            const PosGroup *pos_group,
                            const DictionaryInterface *dictionary)
-    : pos_matcher_(data_manager->GetPOSMatcherData()) {
+    : pos_matcher_(data_manager->GetPosMatcherData()) {
   DCHECK(parent_converter);
   DCHECK(data_manager);
   DCHECK(pos_group);
   // |dictionary| can be NULL
 
-  AddRewriter(new UserDictionaryRewriter);
-  AddRewriter(new FocusCandidateRewriter(data_manager));
-  AddRewriter(new LanguageAwareRewriter(pos_matcher_, dictionary));
-  AddRewriter(new TransliterationRewriter(pos_matcher_));
-  AddRewriter(new EnglishVariantsRewriter);
-  AddRewriter(new NumberRewriter(data_manager));
-  AddRewriter(new CollocationRewriter(data_manager));
-  AddRewriter(new SingleKanjiRewriter(*data_manager));
-  AddRewriter(new EmojiRewriter(*data_manager));
-  AddRewriter(EmoticonRewriter::CreateFromDataManager(*data_manager).release());
-  AddRewriter(new CalculatorRewriter(parent_converter));
-  AddRewriter(new SymbolRewriter(parent_converter, data_manager));
-  AddRewriter(new UnicodeRewriter(parent_converter));
-  AddRewriter(new VariantsRewriter(pos_matcher_));
-  AddRewriter(new ZipcodeRewriter(&pos_matcher_));
-  AddRewriter(new DiceRewriter);
+  AddRewriter(std::make_unique<UserDictionaryRewriter>());
+  AddRewriter(std::make_unique<FocusCandidateRewriter>(data_manager));
+  AddRewriter(
+      std::make_unique<LanguageAwareRewriter>(pos_matcher_, dictionary));
+  AddRewriter(std::make_unique<TransliterationRewriter>(pos_matcher_));
+  AddRewriter(std::make_unique<EnglishVariantsRewriter>());
+  AddRewriter(std::make_unique<NumberRewriter>(data_manager));
+  AddRewriter(std::make_unique<CollocationRewriter>(data_manager));
+  AddRewriter(std::make_unique<SingleKanjiRewriter>(*data_manager));
+  AddRewriter(std::make_unique<EmojiRewriter>(*data_manager));
+  AddRewriter(EmoticonRewriter::CreateFromDataManager(*data_manager));
+  AddRewriter(std::make_unique<CalculatorRewriter>(parent_converter));
+  AddRewriter(std::make_unique<SymbolRewriter>(parent_converter, data_manager));
+  AddRewriter(std::make_unique<UnicodeRewriter>(parent_converter));
+  AddRewriter(std::make_unique<VariantsRewriter>(pos_matcher_));
+  AddRewriter(std::make_unique<ZipcodeRewriter>(&pos_matcher_));
+  AddRewriter(std::make_unique<DiceRewriter>());
 
-  if (FLAGS_use_history_rewriter) {
-    AddRewriter(new UserBoundaryHistoryRewriter(parent_converter));
-    AddRewriter(new UserSegmentHistoryRewriter(&pos_matcher_, pos_group));
+  if (absl::GetFlag(FLAGS_use_history_rewriter)) {
+    AddRewriter(
+        std::make_unique<UserBoundaryHistoryRewriter>(parent_converter));
+    AddRewriter(
+        std::make_unique<UserSegmentHistoryRewriter>(&pos_matcher_, pos_group));
   }
 
-  AddRewriter(new DateRewriter);
-  AddRewriter(new FortuneRewriter);
-#ifndef OS_ANDROID
-  // CommandRewriter is not tested well on Android.
+  AddRewriter(std::make_unique<DateRewriter>(dictionary));
+  AddRewriter(std::make_unique<FortuneRewriter>());
+#if !(defined(OS_ANDROID) || defined(OS_IOS))
+  // CommandRewriter is not tested well on Android or iOS.
   // So we temporarily disable it.
   // TODO(yukawa, team): Enable CommandRewriter on Android if necessary.
-  AddRewriter(new CommandRewriter);
-#endif  // !OS_ANDROID
+  AddRewriter(std::make_unique<CommandRewriter>());
+#endif  // !(OS_ANDROID || OS_IOS)
 #ifndef NO_USAGE_REWRITER
-  AddRewriter(new UsageRewriter(data_manager, dictionary));
+  AddRewriter(std::make_unique<UsageRewriter>(data_manager, dictionary));
 #endif  // NO_USAGE_REWRITER
-  AddRewriter(new VersionRewriter(data_manager->GetDataVersion()));
+  AddRewriter(
+      std::make_unique<VersionRewriter>(data_manager->GetDataVersion()));
   AddRewriter(CorrectionRewriter::CreateCorrectionRewriter(data_manager));
-  AddRewriter(new KatakanaPromotionRewriter);
-  AddRewriter(new NormalizationRewriter);
-  AddRewriter(new RemoveRedundantCandidateRewriter);
+  AddRewriter(std::make_unique<KatakanaPromotionRewriter>());
+  AddRewriter(std::make_unique<NormalizationRewriter>());
+  AddRewriter(std::make_unique<RemoveRedundantCandidateRewriter>());
 }
 
 }  // namespace mozc

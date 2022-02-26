@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,6 @@
 class GoogleJapaneseInputServerTest : public testing::Test {
  protected:
   void SetUp() {
-    pool_ = [[NSAutoreleasePool alloc] init];
     // Although GoogleJapaneseInputServer is a subclass of IMKServer,
     // it does not use initWithName:... method to instantiate the
     // object because we don't test those IMKServer functionality
@@ -44,17 +43,11 @@ class GoogleJapaneseInputServerTest : public testing::Test {
     server_ = [[GoogleJapaneseInputServer alloc] init];
   }
 
-  void TearDown() {
-    [pool_ drain];
-    [server_ release];
-  }
-
  protected:
-  NSAutoreleasePool *pool_;
   GoogleJapaneseInputServer *server_;
 };
 
-@interface MockController : NSObject<ControllerCallback> {
+@interface MockController : NSObject <ControllerCallback> {
   int numSendData_;
   mozc::commands::SessionCommand *expectedCommand_;
   int numOutputResult_;
@@ -76,21 +69,21 @@ class GoogleJapaneseInputServerTest : public testing::Test {
 @synthesize expectedData = expectedData_;
 
 - (void)sendCommand:(mozc::commands::SessionCommand &)command {
-  ASSERT_NE((void*)0, expectedCommand_);
+  ASSERT_NE((void *)0, expectedCommand_);
   EXPECT_EQ(expectedCommand_->DebugString(), command.DebugString());
   ++numSendData_;
 }
 
 - (void)outputResult:(mozc::commands::Output *)data {
-  ASSERT_NE((void*)0, data);
-  ASSERT_NE((void*)0, expectedData_);
+  ASSERT_NE((void *)0, data);
+  ASSERT_NE((void *)0, expectedData_);
   EXPECT_EQ(expectedData_->DebugString(), data->DebugString());
   ++numOutputResult_;
 }
 @end
 
 TEST_F(GoogleJapaneseInputServerTest, sendData) {
-  MockController *controller = [[[MockController alloc] init] autorelease];
+  MockController *controller = [[MockController alloc] init];
   [server_ setCurrentController:controller];
 
   mozc::commands::SessionCommand command;
@@ -99,14 +92,13 @@ TEST_F(GoogleJapaneseInputServerTest, sendData) {
   command.set_id(0);
   controller.expectedCommand = &command;
 
-  string commandData = command.SerializeAsString();
-  [server_ sendData:[NSData dataWithBytes:commandData.data()
-                                   length:commandData.size()]];
+  std::string commandData = command.SerializeAsString();
+  [server_ sendData:[NSData dataWithBytes:commandData.data() length:commandData.size()]];
   EXPECT_EQ(1, controller.numSendData);
 }
 
 TEST_F(GoogleJapaneseInputServerTest, outputResult) {
-  MockController *controller = [[[MockController alloc] init] autorelease];
+  MockController *controller = [[MockController alloc] init];
   [server_ setCurrentController:controller];
 
   mozc::commands::Output output;
@@ -116,8 +108,7 @@ TEST_F(GoogleJapaneseInputServerTest, outputResult) {
   output.mutable_result()->set_value("baz");
   controller.expectedData = &output;
 
-  string outputData = output.SerializeAsString();
-  [server_ outputResult:[NSData dataWithBytes:outputData.data()
-                                       length:outputData.size()]];
+  std::string outputData = output.SerializeAsString();
+  [server_ outputResult:[NSData dataWithBytes:outputData.data() length:outputData.size()]];
   EXPECT_EQ(1, controller.numOutputResult);
 }

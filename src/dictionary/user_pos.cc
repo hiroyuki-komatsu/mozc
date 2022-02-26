@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,36 +30,42 @@
 #include "dictionary/user_pos.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <memory>
 #include <set>
+#include <string>
 
 #include "base/logging.h"
-#include "base/util.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 
 namespace mozc {
 namespace dictionary {
 
-UserPOS::UserPOS(StringPiece token_array_data, StringPiece string_array_data)
+UserPos::UserPos(absl::string_view token_array_data,
+                 absl::string_view string_array_data)
     : token_array_data_(token_array_data) {
   DCHECK_EQ(token_array_data.size() % 8, 0);
   DCHECK(SerializedStringArray::VerifyData(string_array_data));
   string_array_.Set(string_array_data);
 }
 
-UserPOS::~UserPOS() = default;
+UserPos::~UserPos() = default;
 
-void UserPOS::GetPOSList(std::vector<string> *pos_list) const {
+void UserPos::GetPosList(std::vector<std::string> *pos_list) const {
   pos_list->clear();
-  std::set<uint16> seen;
+  std::set<uint16_t> seen;
   for (auto iter = begin(); iter != end(); ++iter) {
     if (!seen.insert(iter.pos_index()).second) {
       continue;
     }
-    const StringPiece pos = string_array_[iter.pos_index()];
+    const absl::string_view pos = string_array_[iter.pos_index()];
     pos_list->emplace_back(pos.data(), pos.size());
   }
 }
 
-bool UserPOS::IsValidPOS(const string &pos) const {
+bool UserPos::IsValidPos(absl::string_view pos) const {
   const auto iter =
       std::lower_bound(string_array_.begin(), string_array_.end(), pos);
   if (iter == string_array_.end()) {
@@ -68,7 +74,7 @@ bool UserPOS::IsValidPOS(const string &pos) const {
   return std::binary_search(begin(), end(), iter.index());
 }
 
-bool UserPOS::GetPOSIDs(const string &pos, uint16 *id) const {
+bool UserPos::GetPosIds(absl::string_view pos, uint16_t *id) const {
   const auto str_iter =
       std::lower_bound(string_array_.begin(), string_array_.end(), pos);
   if (str_iter == string_array_.end() || *str_iter != pos) {
@@ -82,8 +88,9 @@ bool UserPOS::GetPOSIDs(const string &pos, uint16 *id) const {
   return true;
 }
 
-bool UserPOS::GetTokens(const string &key, const string &value,
-                        const string &pos, std::vector<Token> *tokens) const {
+bool UserPos::GetTokens(absl::string_view key, absl::string_view value,
+                        absl::string_view pos, absl::string_view locale,
+                        std::vector<Token> *tokens) const {
   if (key.empty() || value.empty() || pos.empty() || tokens == nullptr) {
     return false;
   }
@@ -104,51 +111,58 @@ bool UserPOS::GetTokens(const string &key, const string &value,
   tokens->resize(size);
 
   // TODO(taku)  Change the cost by seeing cost_type
-  const int16 kDefaultCost = 5000;
+  const bool is_non_ja_locale =
+      !locale.empty() && !absl::StartsWith(locale, "ja");
 
-  // Set smaller cost for "短縮よみ" in order to make
-  // the rank of the word higher than others.
-  const int16 kIsolatedWordCost = 200;
-  const char kIsolatedWordPOS[] = "短縮よみ";
+  constexpr char kIsolatedWordPos[] = "短縮よみ";
+  constexpr char kSuggestionOnlyPos[] = "サジェストのみ";
+
+  uint16_t attributes = 0;
+  if (pos == kIsolatedWordPos) {
+    attributes = UserPos::Token::ISOLATED_WORD;
+  } else if (pos == kSuggestionOnlyPos) {
+    attributes = UserPos::Token::SUGGESTION_ONLY;
+  }
+  if (is_non_ja_locale) {
+    attributes |= UserPos::Token::NON_JA_LOCALE;
+  }
 
   if (size == 1) {  // no conjugation
     const auto &token_iter = range.first;
-    (*tokens)[0].key = key;
-    (*tokens)[0].value = value;
+    (*tokens)[0].key = std::string(key);
+    (*tokens)[0].value = std::string(value);
     (*tokens)[0].id = token_iter.conjugation_id();
-    if (pos == kIsolatedWordPOS) {
-      (*tokens)[0].cost = kIsolatedWordCost;
-    } else {
-      (*tokens)[0].cost = kDefaultCost;
-    }
+    (*tokens)[0].attributes = attributes;
   } else {
     const auto &base_form_token_iter = range.first;
     // expand all other forms
-    string key_stem = key;
-    string value_stem = value;
+    std::string key_stem = std::string(key);
+    std::string value_stem = std::string(value);
     // assume that conjugation_form[0] contains the suffix of "base form".
-    const StringPiece base_key_suffix =
+    const absl::string_view base_key_suffix =
         string_array_[base_form_token_iter.key_suffix_index()];
-    const StringPiece base_value_suffix =
+    const absl::string_view base_value_suffix =
         string_array_[base_form_token_iter.value_suffix_index()];
 
     if (base_key_suffix.size() < key.size() &&
         base_value_suffix.size() < value.size() &&
-        Util::EndsWith(key, base_key_suffix) &&
-        Util::EndsWith(value, base_value_suffix)) {
-      key_stem.assign(key, 0, key.size() - base_key_suffix.size());
-      value_stem.assign(value, 0, value.size() - base_value_suffix.size());
+        absl::EndsWith(key, base_key_suffix) &&
+        absl::EndsWith(value, base_value_suffix)) {
+      key_stem.assign(key.data(), key.size() - base_key_suffix.size());
+      value_stem.assign(value.data(), value.size() - base_value_suffix.size());
     }
     for (size_t i = 0; i < size; ++i, ++range.first) {
       const auto &token_iter = range.first;
-      const StringPiece key_suffix =
+      const absl::string_view key_suffix =
           string_array_[token_iter.key_suffix_index()];
-      const StringPiece value_suffix =
+      const absl::string_view value_suffix =
           string_array_[token_iter.value_suffix_index()];
-      Util::ConcatStrings(key_stem, key_suffix, &(*tokens)[i].key);
-      Util::ConcatStrings(value_stem, value_suffix, &(*tokens)[i].value);
+      (*tokens)[i].key.clear();
+      (*tokens)[i].value.clear();
+      absl::StrAppend(&(*tokens)[i].key, key_stem, key_suffix);
+      absl::StrAppend(&(*tokens)[i].value, value_stem, value_suffix);
       (*tokens)[i].id = token_iter.conjugation_id();
-      (*tokens)[i].cost = kDefaultCost;
+      (*tokens)[i].attributes = attributes;
     }
     DCHECK(range.first == range.second);
   }
@@ -156,10 +170,11 @@ bool UserPOS::GetTokens(const string &key, const string &value,
   return true;
 }
 
-UserPOS *UserPOS::CreateFromDataManager(const DataManagerInterface &manager) {
-  StringPiece token_array_data, string_array_data;
-  manager.GetUserPOSData(&token_array_data, &string_array_data);
-  return new UserPOS(token_array_data, string_array_data);
+std::unique_ptr<UserPos> UserPos::CreateFromDataManager(
+    const DataManagerInterface &manager) {
+  absl::string_view token_array_data, string_array_data;
+  manager.GetUserPosData(&token_array_data, &string_array_data);
+  return std::make_unique<UserPos>(token_array_data, string_array_data);
 }
 
 }  // namespace dictionary

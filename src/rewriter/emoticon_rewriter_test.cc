@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -45,11 +45,12 @@
 #include "testing/base/public/googletest.h"
 #include "testing/base/public/gunit.h"
 #include "testing/base/public/mozctest.h"
+#include "absl/strings/match.h"
 
 namespace mozc {
 namespace {
 
-void AddSegment(const string &key, const string &value,
+void AddSegment(const std::string &key, const std::string &value,
                 Segments *segments) {
   segments->Clear();
   Segment *seg = segments->push_back_segment();
@@ -65,7 +66,7 @@ bool HasEmoticon(const Segments &segments) {
   CHECK_EQ(segments.segments_size(), 1);
   for (size_t i = 0; i < segments.segment(0).candidates_size(); ++i) {
     const Segment::Candidate &candidate = segments.segment(0).candidate(i);
-    if (Util::StartsWith(candidate.description, "顔文字")) {
+    if (absl::StartsWith(candidate.description, "顔文字")) {
       return true;
     }
   }

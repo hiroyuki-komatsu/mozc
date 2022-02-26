@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,6 @@
 #include "base/logging.h"
 #include "base/mac_process.h"
 #include "base/mac_util.h"
-#include "base/mutex.h"
 #include "base/process.h"
 #include "base/util.h"
 #include "client/client.h"
@@ -69,19 +68,17 @@ using mozc::commands::SessionCommand;
 using mozc::config::Config;
 using mozc::config::ImeSwitchUtil;
 using mozc::kProductNameInEnglish;
-using mozc::once_t;
-using mozc::CallOnce;
 using mozc::MacProcess;
 
 namespace {
 // set of bundle IDs of applications on which Mozc should not open urls.
-const set<string> *gNoOpenLinkApps = nullptr;
+const std::set<std::string> *gNoOpenLinkApps = nullptr;
 // The mapping from the CompositionMode enum to the actual id string
 // of composition modes.
-const map<CompositionMode, NSString *> *gModeIdMap = nullptr;
-const set<string> *gNoSelectedRangeApps = nullptr;
-const set<string> *gNoDisplayModeSwitchApps = nullptr;
-const set<string> *gNoSurroundingTextApps = nullptr;
+const std::map<CompositionMode, NSString *> *gModeIdMap = nullptr;
+const std::set<std::string> *gNoSelectedRangeApps = nullptr;
+const std::set<std::string> *gNoDisplayModeSwitchApps = nullptr;
+const std::set<std::string> *gNoSurroundingTextApps = nullptr;
 
 // TODO(horo): This value should be get from system configuration.
 //  DoubleClickInterval can be get from NSEvent (MacOSX ver >= 10.6)
@@ -92,9 +89,9 @@ const int kMaxSurroundingLength = 20;
 // surrounding text takes too much time. So we set this limitation.
 const int kGetSurroundingTextClientLengthLimit = 1000;
 
-NSString *GetLabelForSuffix(const string &suffix) {
-  string label = mozc::MacUtil::GetLabelForSuffix(suffix);
-  return [[NSString stringWithUTF8String:label.c_str()] retain];
+NSString *GetLabelForSuffix(const std::string &suffix) {
+  std::string label = mozc::MacUtil::GetLabelForSuffix(suffix);
+  return [NSString stringWithUTF8String:label.c_str()];
 }
 
 CompositionMode GetCompositionMode(NSString *modeID) {
@@ -144,13 +141,11 @@ CompositionMode GetCompositionMode(NSString *modeID) {
   return mozc::commands::DIRECT;
 }
 
-bool IsBannedApplication(const set<string>* bundleIdSet,
-                         const string& bundleId) {
+bool IsBannedApplication(const std::set<std::string> *bundleIdSet, const std::string &bundleId) {
   return bundleIdSet == nullptr || bundleId.empty() ||
-      bundleIdSet->find(bundleId) != bundleIdSet->end();
+         bundleIdSet->find(bundleId) != bundleIdSet->end();
 }
 }  // namespace
-
 
 @implementation GoogleJapaneseInputController
 #pragma mark accessors for testing
@@ -175,20 +170,17 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   candidateController_ = newRenderer;
 }
 
-
 #pragma mark object init/dealloc
 // Initializer designated in IMKInputController. see:
 // http://developer.apple.com/documentation/Cocoa/Reference/IMKInputController_Class/
 
-- (id)initWithServer:(IMKServer *)server
-            delegate:(id)delegate
-              client:(id)inputClient {
+- (id)initWithServer:(IMKServer *)server delegate:(id)delegate client:(id)inputClient {
   self = [super initWithServer:server delegate:delegate client:inputClient];
   if (!self) {
     return self;
   }
   keyCodeMap_ = [[KeyCodeMap alloc] init];
-  clientBundle_ = new(nothrow) string;
+  clientBundle_ = new (std::nothrow) std::string;
   replacementRange_ = NSMakeRange(NSNotFound, 0);
   originalString_ = [[NSMutableString alloc] init];
   composedString_ = [[NSMutableAttributedString alloc] init];
@@ -197,8 +189,8 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   checkInputMode_ = YES;
   suppressSuggestion_ = NO;
   yenSignCharacter_ = mozc::config::Config::YEN_SIGN;
-  candidateController_ = new(nothrow) mozc::renderer::RendererClient;
-  rendererCommand_ = new(nothrow)RendererCommand;
+  candidateController_ = new (std::nothrow) mozc::renderer::RendererClient;
+  rendererCommand_ = new (std::nothrow) RendererCommand;
   mozcClient_ = mozc::client::ClientFactory::NewClient();
   imkServer_ = reinterpret_cast<id<ServerCallback> >(server);
   imkClientForTest_ = nil;
@@ -207,13 +199,12 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 
   // We don't check the return value of NSBundle because it fails during tests.
   [NSBundle loadNibNamed:@"Config" owner:self];
-  if (!originalString_ || !composedString_ || !candidateController_ ||
-      !rendererCommand_ || !mozcClient_ || !clientBundle_) {
-    [self release];
+  if (!originalString_ || !composedString_ || !candidateController_ || !rendererCommand_ ||
+      !mozcClient_ || !clientBundle_) {
     self = nil;
   } else {
-    DLOG(INFO) << [[NSString stringWithFormat:@"initWithServer: %@ %@ %@",
-                             server, delegate, inputClient] UTF8String];
+    DLOG(INFO) << [[NSString
+        stringWithFormat:@"initWithServer: %@ %@ %@", server, delegate, inputClient] UTF8String];
     if (!candidateController_->Activate()) {
       LOG(ERROR) << "Cannot activate renderer";
       delete candidateController_;
@@ -234,16 +225,15 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 }
 
 - (void)dealloc {
-  [keyCodeMap_ release];
-  [originalString_ release];
-  [composedString_ release];
-  [imkClientForTest_ release];
+  keyCodeMap_ = nil;
+  originalString_ = nil;
+  composedString_ = nil;
+  imkClientForTest_ = nil;
   delete clientBundle_;
   delete candidateController_;
   delete mozcClient_;
   delete rendererCommand_;
   DLOG(INFO) << "dealloc server";
-  [super dealloc];
 }
 
 - (id)client {
@@ -253,32 +243,31 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   return [super client];
 }
 
-- (NSMenu*)menu {
+- (NSMenu *)menu {
   return menu_;
 }
 
 + (void)initializeConstants {
-  set<string> *noOpenlinkApps = new(nothrow) set<string>;
+  std::set<std::string> *noOpenlinkApps = new (std::nothrow) std::set<std::string>;
   if (noOpenlinkApps) {
     // should not open links during screensaver.
     noOpenlinkApps->insert("com.apple.securityagent");
     gNoOpenLinkApps = noOpenlinkApps;
   }
 
-  map<CompositionMode, NSString *> *newMap =
-      new(nothrow) map<CompositionMode, NSString *>;
+  std::map<CompositionMode, NSString *> *newMap =
+      new (std::nothrow) std::map<CompositionMode, NSString *>;
   if (newMap) {
     (*newMap)[mozc::commands::DIRECT] = GetLabelForSuffix("Roman");
     (*newMap)[mozc::commands::HIRAGANA] = GetLabelForSuffix("base");
     (*newMap)[mozc::commands::FULL_KATAKANA] = GetLabelForSuffix("Katakana");
     (*newMap)[mozc::commands::HALF_ASCII] = GetLabelForSuffix("Roman");
     (*newMap)[mozc::commands::FULL_ASCII] = GetLabelForSuffix("FullWidthRoman");
-    (*newMap)[mozc::commands::HALF_KATAKANA] =
-        GetLabelForSuffix("FullWidthRoman");
+    (*newMap)[mozc::commands::HALF_KATAKANA] = GetLabelForSuffix("FullWidthRoman");
     gModeIdMap = newMap;
   }
 
-  set<string> *noSelectedRangeApps = new(nothrow) set<string>;
+  std::set<std::string> *noSelectedRangeApps = new (std::nothrow) std::set<std::string>;
   if (noSelectedRangeApps) {
     // Do not call selectedRange: method for the following
     // applications because it could lead to application crash.
@@ -295,13 +284,13 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   // mode.  When the first composition character is alphanumeric (such
   // like pressing Shift-A at first), that character is directly
   // inserted into application instead of composition starting "A".
-  set<string> *noDisplayModeSwitchApps = new(nothrow) set<string>;
+  std::set<std::string> *noDisplayModeSwitchApps = new (std::nothrow) std::set<std::string>;
   if (noDisplayModeSwitchApps) {
     noDisplayModeSwitchApps->insert("com.microsoft.Word");
     gNoDisplayModeSwitchApps = noDisplayModeSwitchApps;
   }
 
-  set<string> *noSurroundingTextApps = new(nothrow) set<string>;
+  std::set<std::string> *noSurroundingTextApps = new (std::nothrow) std::set<std::string>;
   if (noSurroundingTextApps) {
     // Disables the surrounding text feature for the following application
     // because calling attributedSubstringFromRange to it is very heavy.
@@ -318,6 +307,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 
 - (void)activateServer:(id)sender {
   [super activateServer:sender];
+  [self setupClientBundle:sender];
   checkInputMode_ = YES;
   if (rendererCommand_->visible() && candidateController_) {
     candidateController_->ExecCommand(*rendererCommand_);
@@ -325,9 +315,8 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   [self handleConfig];
   [imkServer_ setCurrentController:self];
 
-  string window_name, window_owner;
-  if (mozc::MacUtil::GetFrontmostWindowNameAndOwner(&window_name,
-                                                    &window_owner)) {
+  std::string window_name, window_owner;
+  if (mozc::MacUtil::GetFrontmostWindowNameAndOwner(&window_name, &window_owner)) {
     DLOG(INFO) << "frontmost window name: \"" << window_name << "\" "
                << "owner: \"" << window_owner << "\"";
     if (mozc::MacUtil::IsSuppressSuggestionWindow(window_name, window_owner)) {
@@ -337,8 +326,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
     }
   }
 
-  DLOG(INFO) << kProductNameInEnglish << " client (" << self
-             << "): activated for " << sender;
+  DLOG(INFO) << kProductNameInEnglish << " client (" << self << "): activated for " << sender;
   DLOG(INFO) << "sender bundleID: " << *clientBundle_;
 }
 
@@ -350,8 +338,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   if (candidateController_) {
     candidateController_->ExecCommand(clearCommand);
   }
-  DLOG(INFO) << kProductNameInEnglish << " client (" << self
-             << "): deactivated";
+  DLOG(INFO) << kProductNameInEnglish << " client (" << self << "): deactivated";
   DLOG(INFO) << "sender bundleID: " << *clientBundle_;
   [super deactivateServer:sender];
 }
@@ -359,7 +346,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 - (NSUInteger)recognizedEvents:(id)sender {
   // Because we want to handle single Shift key pressing later, now I
   // turned on NSFlagsChanged also.
-  return NSKeyDownMask | NSFlagsChangedMask;
+  return NSEventMaskKeyDown | NSEventMaskFlagsChanged;
 }
 
 // This method is called when a user changes the input mode.
@@ -374,7 +361,6 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   [self handleConfig];
   [super setValue:value forTag:tag client:sender];
 }
-
 
 #pragma mark internal methods
 
@@ -480,7 +466,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
     return;
   }
 
-  map<CompositionMode, NSString *>::const_iterator it = gModeIdMap->find(mode_);
+  std::map<CompositionMode, NSString *>::const_iterator it = gModeIdMap->find(mode_);
   if (it == gModeIdMap->end()) {
     LOG(ERROR) << "mode: " << mode_ << " is invalid";
     return;
@@ -494,8 +480,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
     return;
   }
 
-  [sender insertText:[NSString stringWithUTF8String:text]
-    replacementRange:replacementRange_];
+  [sender insertText:[NSString stringWithUTF8String:text] replacementRange:replacementRange_];
   replacementRange_ = NSMakeRange(NSNotFound, 0);
 }
 
@@ -503,13 +488,11 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   ::setenv(mozc::kWordRegisterEnvironmentName, "", 1);
   if (!IsBannedApplication(gNoSelectedRangeApps, *clientBundle_)) {
     NSRange selectedRange = [client selectedRange];
-    if (selectedRange.location != NSNotFound &&
-        selectedRange.length != NSNotFound &&
+    if (selectedRange.location != NSNotFound && selectedRange.length != NSNotFound &&
         selectedRange.length > 0) {
-      NSString *text =
-        [[client attributedSubstringFromRange:selectedRange] string];
+      NSString *text = [[client attributedSubstringFromRange:selectedRange] string];
       if (text != nil) {
-        :: setenv(mozc::kWordRegisterEnvironmentName, [text UTF8String], 1);
+        ::setenv(mozc::kWordRegisterEnvironmentName, [text UTF8String], 1);
       }
     }
   }
@@ -522,8 +505,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   }
 
   NSRange selectedRange = [sender selectedRange];
-  if (selectedRange.location == NSNotFound ||
-      selectedRange.length == NSNotFound) {
+  if (selectedRange.location == NSNotFound || selectedRange.length == NSNotFound) {
     // the application does not support reconversion.
     return;
   }
@@ -560,8 +542,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   }
 
   NSRange selectedRange = [sender selectedRange];
-  if (selectedRange.location == NSNotFound ||
-      selectedRange.length == NSNotFound ||
+  if (selectedRange.location == NSNotFound || selectedRange.length == NSNotFound ||
       // Some applications such like iTunes does not return NSNotFound
       // range but (0, 0).  However, the range starting with negative
       // location has to be invalid, then we can reject such apps.
@@ -598,15 +579,11 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 
   // Handles deletion range.  We do not even handle it for some
   // applications to prevent application crashes.
-  if (output->has_deletion_range() &&
-      !IsBannedApplication(gNoSelectedRangeApps, *clientBundle_)) {
-    if ([composedString_ length] == 0 &&
-        replacementRange_.location == NSNotFound) {
+  if (output->has_deletion_range() && !IsBannedApplication(gNoSelectedRangeApps, *clientBundle_)) {
+    if ([composedString_ length] == 0 && replacementRange_.location == NSNotFound) {
       NSRange selectedRange = [sender selectedRange];
-      const mozc::commands::DeletionRange &deletion_range =
-          output->deletion_range();
-      if (selectedRange.location != NSNotFound ||
-          selectedRange.length != NSNotFound ||
+      const mozc::commands::DeletionRange &deletion_range = output->deletion_range();
+      if (selectedRange.location != NSNotFound || selectedRange.length != NSNotFound ||
           selectedRange.location + deletion_range.offset() > 0) {
         // The offset is a negative value.  See protocol/commands.proto for
         // the details.
@@ -661,8 +638,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 
   // Handle callbacks.
   if (output->has_callback() && output->callback().has_session_command()) {
-    const SessionCommand &callback_command =
-        output->callback().session_command();
+    const SessionCommand &callback_command = output->callback().session_command();
     if (callback_command.type() == SessionCommand::CONVERT_REVERSE) {
       [self invokeReconvert:&callback_command client:sender];
     } else if (callback_command.type() == SessionCommand::UNDO) {
@@ -677,7 +653,6 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 }
 
 #pragma mark Mozc Server methods
-
 
 #pragma mark IMKServerInput Protocol
 // Currently GoogleJapaneseInputController uses handleEvent:client:
@@ -697,32 +672,25 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 - (void)updateComposedString:(const Preedit *)preedit {
   // If the last and the current composed string length is 0,
   // we don't call updateComposition.
-  if (([composedString_ length] == 0) &&
-      ((preedit == nullptr || preedit->segment_size() == 0))) {
+  if (([composedString_ length] == 0) && ((preedit == nullptr || preedit->segment_size() == 0))) {
     return;
   }
 
-  [composedString_
-    deleteCharactersInRange:NSMakeRange(0, [composedString_ length])];
+  [composedString_ deleteCharactersInRange:NSMakeRange(0, [composedString_ length])];
   cursorPosition_ = -1;
   if (preedit != nullptr) {
     cursorPosition_ = preedit->cursor();
     for (size_t i = 0; i < preedit->segment_size(); ++i) {
-      NSDictionary *highlightAttributes =
-          [self markForStyle:kTSMHiliteSelectedConvertedText
-                     atRange:NSMakeRange(NSNotFound, 0)];
-      NSDictionary *underlineAttributes =
-          [self markForStyle:kTSMHiliteConvertedText
-                     atRange:NSMakeRange(NSNotFound, 0)];
-      const Preedit::Segment& seg = preedit->segment(i);
-      NSDictionary *attr = (seg.annotation() == Preedit::Segment::HIGHLIGHT)?
-          highlightAttributes : underlineAttributes;
-      NSString *seg_string =
-          [NSString stringWithUTF8String:seg.value().c_str()];
+      NSDictionary *highlightAttributes = [self markForStyle:kTSMHiliteSelectedConvertedText
+                                                     atRange:NSMakeRange(NSNotFound, 0)];
+      NSDictionary *underlineAttributes = [self markForStyle:kTSMHiliteConvertedText
+                                                     atRange:NSMakeRange(NSNotFound, 0)];
+      const Preedit::Segment &seg = preedit->segment(i);
+      NSDictionary *attr = (seg.annotation() == Preedit::Segment::HIGHLIGHT) ? highlightAttributes
+                                                                             : underlineAttributes;
+      NSString *seg_string = [NSString stringWithUTF8String:seg.value().c_str()];
       NSAttributedString *seg_attributed_string =
-          [[[NSAttributedString alloc]
-             initWithString:seg_string attributes:attr]
-            autorelease];
+          [[NSAttributedString alloc] initWithString:seg_string attributes:attr];
       [composedString_ appendAttributedString:seg_attributed_string];
     }
   }
@@ -766,9 +734,9 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 // |selecrionRange| method is defined at IMKInputController class and
 // means the position of cursor actually.
 - (NSRange)selectionRange {
-  return (cursorPosition_ == -1) ?
-      [super selectionRange] : // default behavior defined at super class
-      NSMakeRange(cursorPosition_, 0);
+  return (cursorPosition_ == -1)
+             ? [super selectionRange]  // default behavior defined at super class
+             : NSMakeRange(cursorPosition_, 0);
 }
 
 - (void)delayedUpdateCandidates {
@@ -787,19 +755,13 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
     // Some applications throws error when we call attributesForCharacterIndex.
     DLOG(INFO) << "attributesForCharacterIndex: " << position;
     @try {
-      [[self client] attributesForCharacterIndex:position
-                             lineHeightRectangle:&preeditRect];
+      [[self client] attributesForCharacterIndex:position lineHeightRectangle:&preeditRect];
+    } @catch (NSException *exception) {
+      LOG(ERROR) << "Exception from [" << *clientBundle_ << "] " << [[exception name] UTF8String]
+                 << "," << [[exception reason] UTF8String];
     }
-    @catch (NSException *exception) {
-      LOG(ERROR) << "Exception from [" << *clientBundle_ << "] "
-                 << [[exception name] UTF8String] << ","
-                 << [[exception reason] UTF8String];
-    }
-    DLOG(INFO) << "  preeditRect: (("
-               << preeditRect.origin.x << ", "
-               << preeditRect.origin.y << "), ("
-               << preeditRect.size.width << ", "
-               << preeditRect.size.height << "))";
+    DLOG(INFO) << "  preeditRect: ((" << preeditRect.origin.x << ", " << preeditRect.origin.y
+               << "), (" << preeditRect.size.width << ", " << preeditRect.size.height << "))";
     NSScreen *baseScreen = nil;
     NSRect baseFrame = NSZeroRect;
     for (baseScreen in [NSScreen screens]) {
@@ -809,18 +771,15 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
       }
     }
     int baseHeight = baseFrame.size.height;
-    rendererCommand_->mutable_preedit_rectangle()->set_left(
-        preeditRect.origin.x);
-    rendererCommand_->mutable_preedit_rectangle()->set_top(
-        baseHeight - preeditRect.origin.y - preeditRect.size.height);
-    rendererCommand_->mutable_preedit_rectangle()->set_right(
-        preeditRect.origin.x + preeditRect.size.width);
-    rendererCommand_->mutable_preedit_rectangle()->set_bottom(
-        baseHeight - preeditRect.origin.y);
+    rendererCommand_->mutable_preedit_rectangle()->set_left(preeditRect.origin.x);
+    rendererCommand_->mutable_preedit_rectangle()->set_top(baseHeight - preeditRect.origin.y -
+                                                           preeditRect.size.height);
+    rendererCommand_->mutable_preedit_rectangle()->set_right(preeditRect.origin.x +
+                                                             preeditRect.size.width);
+    rendererCommand_->mutable_preedit_rectangle()->set_bottom(baseHeight - preeditRect.origin.y);
   }
 
-  rendererCommand_->set_visible(
-    rendererCommand_->output().candidates().candidate_size() > 0);
+  rendererCommand_->set_visible(rendererCommand_->output().candidates().candidate_size() > 0);
   if (candidateController_) {
     candidateController_->ExecCommand(*rendererCommand_);
   }
@@ -838,9 +797,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   // Runs delayedUpdateCandidates in the next event loop.
   // This is because some applications like Google Docs with Chrome returns
   // incorrect cursor position if we call attributesForCharacterIndex here.
-  [self performSelector:@selector(delayedUpdateCandidates)
-             withObject:nil
-             afterDelay:0];
+  [self performSelector:@selector(delayedUpdateCandidates) withObject:nil afterDelay:0];
 }
 
 - (void)openLink:(NSURL *)url {
@@ -855,26 +812,22 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   [[NSWorkspace sharedWorkspace] openURL:url];
 }
 
-- (BOOL)fillSurroundingContext:(mozc::commands::Context *)context
-                        client:(id<IMKTextInput>)client {
+- (BOOL)fillSurroundingContext:(mozc::commands::Context *)context client:(id<IMKTextInput>)client {
   NSInteger totalLength = [client length];
   if (totalLength == 0 || totalLength == NSNotFound ||
       totalLength > kGetSurroundingTextClientLengthLimit) {
     return false;
   }
   NSRange selectedRange = [client selectedRange];
-  if (selectedRange.location == NSNotFound ||
-      selectedRange.length == NSNotFound) {
+  if (selectedRange.location == NSNotFound || selectedRange.length == NSNotFound) {
     return false;
   }
   NSRange precedingRange = NSMakeRange(0, selectedRange.location);
   if (selectedRange.location > kMaxSurroundingLength) {
     precedingRange =
-        NSMakeRange(selectedRange.location - kMaxSurroundingLength,
-                    kMaxSurroundingLength);
+        NSMakeRange(selectedRange.location - kMaxSurroundingLength, kMaxSurroundingLength);
   }
-  NSString *precedingString =
-    [[client attributedSubstringFromRange:precedingRange] string];
+  NSString *precedingString = [[client attributedSubstringFromRange:precedingRange] string];
   if (precedingString) {
     context->set_preceding_text([precedingString UTF8String]);
     DLOG(INFO) << "preceding_text: \"" << context->preceding_text() << "\"";
@@ -883,23 +836,24 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)sender {
-  if ([event type] == NSCursorUpdate) {
+  if ([event type] == NSEventTypeCursorUpdate) {
     [self updateComposition];
     return NO;
   }
-  if ([event type] != NSKeyDown && [event type] != NSFlagsChanged) {
+  if ([event type] != NSEventTypeKeyDown && [event type] != NSEventTypeFlagsChanged) {
     return NO;
   }
 
   // Handle KANA key and EISU key.  We explicitly handles this here
   // for mode switch because some text area such like iPhoto person
   // name editor does not call setValue:forTag:client: method.
-  // see: http://www.google.com/support/forum/p/ime/thread?tid=3aafb74ff71a1a69&hl=ja&fid=3aafb74ff71a1a690004aa3383bc9f5d
-  if ([event type] == NSKeyDown) {
+  // see:
+  // http://www.google.com/support/forum/p/ime/thread?tid=3aafb74ff71a1a69&hl=ja&fid=3aafb74ff71a1a690004aa3383bc9f5d
+  if ([event type] == NSEventTypeKeyDown) {
     NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
     const NSTimeInterval elapsedTime = currentTime - lastKeyDownTime_;
-    const bool isDoubleTap = ([event keyCode] == lastKeyCode_) &&
-                             (elapsedTime < kDoubleTapInterval);
+    const bool isDoubleTap =
+        ([event keyCode] == lastKeyCode_) && (elapsedTime < kDoubleTapInterval);
     lastKeyDownTime_ = currentTime;
     lastKeyCode_ = [event keyCode];
 
@@ -922,8 +876,8 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
         command.set_type(SessionCommand::COMMIT_RAW_TEXT);
         [self sendCommand:command];
       }
-      CompositionMode new_mode = ([composedString_ length] == 0) ?
-          mozc::commands::DIRECT : mozc::commands::HALF_ASCII;
+      CompositionMode new_mode =
+          ([composedString_ length] == 0) ? mozc::commands::DIRECT : mozc::commands::HALF_ASCII;
       [self switchMode:new_mode client:sender];
       [self switchDisplayMode];
     }
@@ -938,8 +892,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 
   // Get the Mozc key event
   KeyEvent keyEvent;
-  if (![keyCodeMap_ getMozcKeyCodeFromKeyEvent:event
-                    toMozcKeyEvent:&keyEvent]) {
+  if (![keyCodeMap_ getMozcKeyCodeFromKeyEvent:event toMozcKeyEvent:&keyEvent]) {
     // Modifier flags change (not submitted to the server yet), or
     // unsupported key pressed.
     return NO;
@@ -947,13 +900,11 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 
   // If the key event is turn on event, the key event has to be sent
   // to the server anyway.
-  if (mode_ == mozc::commands::DIRECT &&
-      !ImeSwitchUtil::IsDirectModeCommand(keyEvent)) {
+  if (mode_ == mozc::commands::DIRECT && !ImeSwitchUtil::IsDirectModeCommand(keyEvent)) {
     // Yen sign special hack: although the current mode is DIRECT,
     // backslash is sent instead of yen sign for JIS yen key with no
     // modifiers.  This behavior is based on the configuration.
-    if ([event keyCode] == kVK_JIS_Yen &&
-        [event modifierFlags] == 0 &&
+    if ([event keyCode] == kVK_JIS_Yen && [event modifierFlags] == 0 &&
         yenSignCharacter_ == mozc::config::Config::BACKSLASH) {
       [self commitText:"\\" client:sender];
       return YES;
@@ -975,8 +926,7 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
   }
   keyEvent.set_mode(mode_);
 
-  if ([composedString_ length] == 0 &&
-      !IsBannedApplication(gNoSelectedRangeApps, *clientBundle_) &&
+  if ([composedString_ length] == 0 && !IsBannedApplication(gNoSelectedRangeApps, *clientBundle_) &&
       !IsBannedApplication(gNoSurroundingTextApps, *clientBundle_)) {
     [self fillSurroundingContext:&context client:sender];
   }
@@ -1014,14 +964,6 @@ bool IsBannedApplication(const set<string>* bundleIdSet,
 
 - (IBAction)registerWordClicked:(id)sender {
   [self launchWordRegisterTool:[self client]];
-}
-
-- (IBAction)characterPaletteClicked:(id)sender {
-  MacProcess::LaunchMozcTool("character_palette");
-}
-
-- (IBAction)handWritingClicked:(id)sender {
-  MacProcess::LaunchMozcTool("hand_writing");
 }
 
 - (IBAction)aboutDialogClicked:(id)sender {

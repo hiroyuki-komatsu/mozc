@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -50,21 +50,21 @@ namespace win32 {
 namespace {
 using ATL::CRegKey;
 
-const wchar_t kClientStateKey[] = L"Software\\Google\\Update\\ClientState\\"
-                                  L"{DDCCD2A9-025E-4142-BCEB-F467B88CF830}";
+const wchar_t kClientStateKey[] =
+    L"Software\\Google\\Update\\ClientState\\"
+    L"{DDCCD2A9-025E-4142-BCEB-F467B88CF830}";
 const wchar_t kChannelKeyName[] = L"ap";
 
 LONG OpenClientStateKey(CRegKey *key, REGSAM base_sam) {
-  const REGSAM sam_desired = base_sam |
-      (SystemUtil::IsWindowsX64() ? KEY_WOW64_32KEY : 0);
-  return key->Create(HKEY_LOCAL_MACHINE, kClientStateKey,
-                     REG_NONE, REG_OPTION_NON_VOLATILE,
-                     sam_desired);
+  const REGSAM sam_desired =
+      base_sam | (SystemUtil::IsWindowsX64() ? KEY_WOW64_32KEY : 0);
+  return key->Create(HKEY_LOCAL_MACHINE, kClientStateKey, REG_NONE,
+                     REG_OPTION_NON_VOLATILE, sam_desired);
 }
 }  // namespace
 
 // Writes a REG_SZ channel name into "ap" in Mozc's client state key.
-bool OmahaUtil::WriteChannel(const wstring &value) {
+bool OmahaUtil::WriteChannel(const std::wstring &value) {
   CRegKey key;
   LONG result = OpenClientStateKey(&key, KEY_READ | KEY_WRITE);
   if (ERROR_SUCCESS != result) {
@@ -78,19 +78,19 @@ bool OmahaUtil::WriteChannel(const wstring &value) {
 }
 
 // Reads a REG_SZ channel name from "ap" in Mozc's client state key.
-wstring OmahaUtil::ReadChannel() {
+std::wstring OmahaUtil::ReadChannel() {
   CRegKey key;
   LONG result = OpenClientStateKey(&key, KEY_READ);
   if (ERROR_SUCCESS != result) {
     return L"";
   }
   wchar_t buf[512];
-  ULONG buf_size = arraysize(buf);
+  ULONG buf_size = std::size(buf);
   result = key.QueryStringValue(kChannelKeyName, buf, &buf_size);
   if (ERROR_SUCCESS != result) {
     return L"";
   }
-  return wstring(buf);
+  return std::wstring(buf);
 }
 
 bool OmahaUtil::ClearOmahaError() {
@@ -110,8 +110,8 @@ bool OmahaUtil::ClearOmahaError() {
   return true;
 }
 
-bool OmahaUtil::WriteOmahaError(const wstring &ui_message,
-                                const wstring &header) {
+bool OmahaUtil::WriteOmahaError(const std::wstring &ui_message,
+                                const std::wstring &header) {
   CRegKey key;
   LONG result = OpenClientStateKey(&key, KEY_READ | KEY_WRITE);
   if (ERROR_SUCCESS != result) {
@@ -123,8 +123,8 @@ bool OmahaUtil::WriteOmahaError(const wstring &ui_message,
   }
 
   // Leaves Mozc version in addition to UI message for customer support.
-  const wstring &message = header.length() > 0 ? header + L"\r\n" + ui_message
-                                               : ui_message;
+  const std::wstring &message =
+      header.length() > 0 ? header + L"\r\n" + ui_message : ui_message;
 
   // This message will be displayed by Omaha meta installer in the error
   // dialog.

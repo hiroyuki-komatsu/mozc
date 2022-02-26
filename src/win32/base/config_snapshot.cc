@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@ namespace {
 using ::mozc::client::ClientInterface;
 using ::mozc::config::Config;
 
-const size_t kMaxDirectModeKeys = 128;
+constexpr size_t kMaxDirectModeKeys = 128;
 
 struct StaticConfigSnapshot {
   bool use_kana_input;
@@ -85,7 +85,7 @@ StaticConfigSnapshot GetConfigSnapshotForNonSandboxedProcess() {
   const auto &direct_mode_keys =
       KeyInfoUtil::ExtractSortedDirectModeKeys(config);
   const size_t size_to_be_copied =
-      min(direct_mode_keys.size(), kMaxDirectModeKeys);
+      std::min(direct_mode_keys.size(), kMaxDirectModeKeys);
   snapshot.num_direct_mode_keys = size_to_be_copied;
   for (size_t i = 0; i < size_to_be_copied; ++i) {
     snapshot.direct_mode_keys[i] = direct_mode_keys[i];

@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -39,24 +39,17 @@
 namespace mozc {
 namespace renderer {
 namespace mac {
-bool MacServerSendCommand::SendCommand(
-    const mozc::commands::SessionCommand &command,
-    mozc::commands::Output *output) {
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+bool MacServerSendCommand::SendCommand(const mozc::commands::SessionCommand &command,
+                                       mozc::commands::Output *output) {
   NSConnection *connection =
-      [NSConnection
-        connectionWithRegisteredName:@ kProductPrefix "_Renderer_Connection"
-                                host:nil];
-  const string command_string = command.SerializeAsString();
-  NSData *sending_data = [NSData dataWithBytes:command_string.data()
-                                        length:command_string.size()];
+      [NSConnection connectionWithRegisteredName:@kProductPrefix "_Renderer_Connection" host:nil];
+  const std::string command_string = command.SerializeAsString();
+  NSData *sending_data = [NSData dataWithBytes:command_string.data() length:command_string.size()];
   id peer = [connection rootProxy];
   [peer setProtocolForProxy:@protocol(ServerCallback)];
   [peer sendData:sending_data];
-  [pool drain];
   return true;
 }
 }  // namespace mozc::renderer::mac
 }  // namespace mozc::renderer
 }  // namespace mozc
-

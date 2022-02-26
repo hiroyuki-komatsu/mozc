@@ -1,4 +1,4 @@
-// Copyright 2010-2018, Google Inc.
+// Copyright 2010-2021, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
 #include "rewriter/normalization_rewriter.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/logging.h"
@@ -41,42 +42,31 @@
 namespace mozc {
 namespace {
 
-enum CandidateType {
-  CANDIDATE,
-  TRANSLITERATION
-};
-
 bool NormalizeCandidate(Segment::Candidate *candidate,
-                        CandidateType type) {
+                        TextNormalizer::Flag flag) {
   DCHECK(candidate);
   if (candidate->attributes & Segment::Candidate::USER_DICTIONARY) {
     return false;
   }
 
-  string value, content_value;
-  switch (type) {
-    case CANDIDATE:  // Go through to TRANSLITERATION
-    case TRANSLITERATION:
-      TextNormalizer::NormalizeText(candidate->value, &value);
-      TextNormalizer::NormalizeText(candidate->content_value, &content_value);
-      break;
-    default:
-      LOG(ERROR) << "unkown type";
-      return false;
+  const std::string value =
+      TextNormalizer::NormalizeTextWithFlag(candidate->value, flag);
+  const std::string content_value =
+      TextNormalizer::NormalizeTextWithFlag(candidate->content_value, flag);
+
+  if (content_value == candidate->content_value && value == candidate->value) {
+    // No update.
+    return false;
   }
 
-  const bool modified = (content_value != candidate->content_value ||
-                         value != candidate->value);
-  candidate->value = value;
-  candidate->content_value = content_value;
+  candidate->value = std::move(value);
+  candidate->content_value = std::move(content_value);
+  // Clear the description which might be wrong.
+  candidate->description.clear();
 
-  return modified;
+  return true;
 }
 }  // namespace
-
-NormalizationRewriter::NormalizationRewriter() {}
-
-NormalizationRewriter::~NormalizationRewriter() {}
 
 int NormalizationRewriter::capability(const ConversionRequest &request) const {
   return RewriterInterface::ALL;
@@ -94,16 +84,16 @@ bool NormalizationRewriter::Rewrite(const ConversionRequest &request,
     // Meta candidate
     for (size_t j = 0; j < segment->meta_candidates_size(); ++j) {
       Segment::Candidate *candidate =
-          segment->mutable_candidate(-static_cast<int>(j)-1);
+          segment->mutable_candidate(-static_cast<int>(j) - 1);
       DCHECK(candidate);
-      modified |= NormalizeCandidate(candidate, TRANSLITERATION);
+      modified |= NormalizeCandidate(candidate, flag_);
     }
 
     // Regular candidate.
     for (size_t j = 0; j < segment->candidates_size(); ++j) {
       Segment::Candidate *candidate = segment->mutable_candidate(j);
       DCHECK(candidate);
-      modified |= NormalizeCandidate(candidate, CANDIDATE);
+      modified |= NormalizeCandidate(candidate, flag_);
     }
   }
 
