@@ -11,8 +11,8 @@ concurrency:
 
 jobs:
   build:
-    # https://github.com/actions/virtual-environments/blob/main/images/win/Windows2019-Readme.md
-    runs-on: windows-2019
+    # https://github.com/actions/virtual-environments/blob/main/images/win/Windows2016-Readme.md
+    runs-on: windows-2016
     timeout-minutes: 60
 
     steps:
@@ -39,7 +39,6 @@ jobs:
         shell: cmd
         working-directory: .\src
         run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsamd64_x86.bat"
-          set GYP_MSVS_OVERRIDE_PATH="C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise"
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsamd64_x86.bat"
           python build_mozc.py gyp --noqt
           python build_mozc.py build package
