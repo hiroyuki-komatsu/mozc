@@ -1,5 +1,5 @@
-name: CI for macOS
-# https://github.com/google/mozc/blob/master/docs/build_mozc_in_osx.md
+name: CI for WIndows
+# https://github.com/google/mozc/blob/master/docs/build_mozc_in_windows.md
 
 # Run on push.
 on: push
@@ -11,8 +11,8 @@ concurrency:
 
 jobs:
   build:
-    # https://github.com/actions/virtual-environments/blob/main/images/macos/macos-11-Readme.md
-    runs-on: macos-11
+    # https://github.com/actions/virtual-environments/blob/main/images/win/Windows2019-Readme.md
+    runs-on: windows-2019
     timeout-minutes: 60
 
     steps:
@@ -26,9 +26,13 @@ jobs:
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           echo "$PWD/depot_tools" >> $GITHUB_PATH
+          gclient
+          gclient
+          cd gyp
+          git apply ..\..\gyp\gyp.patch
 
       - name: build
         working-directory: ./src
         run: |
-          python3 ./build_mozc.py gyp --noqt
-          python3 ./build_mozc.py build mac/mac.gyp:GoogleJapaneseInput
+          python build_mozc.py gyp --noqt
+          python build_mozc.py build package

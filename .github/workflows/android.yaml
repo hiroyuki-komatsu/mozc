@@ -1,4 +1,5 @@
 name: CI for Android
+# https://github.com/google/mozc/blob/master/docs/build_mozc_in_docker.md
 
 # Run on push.
 on: push
