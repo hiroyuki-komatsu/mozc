@@ -22,20 +22,22 @@ jobs:
           submodules: 'recursive'
 
       - name: setup
-        working-directory: ./src/third_party
+        shell: cmd
+        working-directory: .\src\third_party
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          echo "${pwd}\depot_tools" >> $env:GITHUB_PATH
-          echo "${pwd}\depot_tools"
-          cat $env:GITHUB_PATH
-          ls "${pwd}\depot_tools"
+          echo "%cd%\depot_tools" >> $GITHUB_PATH
+          echo "%cd%\depot_tools"
+          cat $GITHUB_PATH
+          ls "%cd%\depot_tools"
           gclient
           gclient
           cd gyp
           git apply ..\..\gyp\gyp.patch
 
       - name: build
-        working-directory: ./src
+        shell: cmd
+        working-directory: .\src
         run: |
           python build_mozc.py gyp --noqt
           python build_mozc.py build package
