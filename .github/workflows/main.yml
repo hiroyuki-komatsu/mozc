@@ -30,11 +30,11 @@ jobs:
       # Runs a set of commands using the runners shell
       - name: build
         run: |
-          sudo apt update
-          sudo apt install -y libc++-dev libc++abi-dev python3-dev python-six python3-six pkg-config git curl bzip2 unzip make ninja-build
-          sudo apt install -y libibus-1.0-dev libglib2.0-dev qtbase5-dev libgtk2.0-dev libxcb-xfixes0-dev libjsoncpp-dev
-          sudo apt install -y curl gnupg libncurses5
-          sudo apt install -y libuim-dev fcitx-libs-dev libfcitx5config-dev libfcitx5utils-dev libfcitx5core-dev fcitx5-modules-dev
+          sudo apt-get update
+          sudo apt-get install -y libc++-dev libc++abi-dev python3-dev python-six python3-six pkg-config git curl bzip2 unzip make ninja-build
+          sudo apt-get install -y libibus-1.0-dev libglib2.0-dev qtbase5-dev libgtk2.0-dev libxcb-xfixes0-dev libjsoncpp-dev
+          sudo apt-get install -y curl gnupg libncurses5
+          sudo apt-get install -y libuim-dev fcitx-libs-dev libfcitx5config-dev libfcitx5utils-dev libfcitx5core-dev fcitx5-modules-dev
           sudo wget https://storage.googleapis.com/bazel-apt/pool/jdk1.8/b/bazel/bazel_5.0.0_amd64.deb
           sudo dpkg -i bazel_5.0.0_amd64.deb
           cd ./src
