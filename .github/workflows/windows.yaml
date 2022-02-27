@@ -39,6 +39,8 @@ jobs:
           gclient
           cd gyp
           git apply ..\..\gyp\gyp.patch
+          cd ..\abseil-cpp
+          git apply ..\..\build_tools\absl.patch
 
       - name: build
         shell: cmd
