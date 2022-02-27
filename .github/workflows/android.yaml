@@ -21,10 +21,6 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: setup
-        run: |
-          sudo apt-get install -y libibus-1.0-dev qtbase5-dev libxcb-xfixes0-dev
-
       - name: build
         working-directory: ./src
         run: |
