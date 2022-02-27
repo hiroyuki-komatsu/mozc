@@ -25,7 +25,7 @@ jobs:
         working-directory: ./src/third_party
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          echo "${pwd}\depot_tools" >> $GITHUB_PATH
+          echo "${pwd}\depot_tools" >> $env:GITHUB_PATH
           gclient
           gclient
           cd gyp
