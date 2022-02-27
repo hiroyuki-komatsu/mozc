@@ -17,7 +17,9 @@ jobs:
 
     steps:
       - name: config
-        run: git config --global core.autocrlf false
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
 
       - name: checkout
         uses: actions/checkout@v2
@@ -44,4 +46,4 @@ jobs:
         run: |
           call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsamd64_x86.bat"
           python build_mozc.py gyp --noqt
-          python build_mozc.py build package
+          python build_mozc.py build -c Release package
