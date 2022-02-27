@@ -331,6 +331,7 @@
           '/Zc:strictStrings',
           '/utf-8',
           '/std:c++17',
+          '/U __cpp_inline_variables',
         ],
       },
       'VCLinkerTool': {
