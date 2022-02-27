@@ -39,5 +39,6 @@ jobs:
         shell: cmd
         working-directory: .\src
         run: |
+          "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvarsamd64_x86.bat"
           python build_mozc.py gyp --noqt
           python build_mozc.py build package
