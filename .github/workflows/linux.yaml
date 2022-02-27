@@ -1,4 +1,4 @@
-name: CI on Ubuntu 20.04
+name: CI for Linux
 
 # Run on push.
 on: push
@@ -10,8 +10,9 @@ concurrency:
 
 jobs:
   build:
+    # https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2004-Readme.md
     runs-on: ubuntu-20.04
-    timeout-minutes: 120
+    timeout-minutes: 60
 
     steps:
       - name: checkout
@@ -21,9 +22,7 @@ jobs:
 
       - name: setup
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libc++-dev libc++abi-dev python3-dev python-six python3-six pkg-config git curl bzip2 unzip make ninja-build
-          sudo apt-get install -y libibus-1.0-dev libglib2.0-dev qtbase5-dev libgtk2.0-dev libxcb-xfixes0-dev libjsoncpp-dev
+          sudo apt-get install -y libibus-1.0-dev qtbase5-dev libxcb-xfixes0-dev
 
       - name: build
         working-directory: ./src

@@ -1,0 +1,33 @@
+name: CI for macOS
+
+# Run on push.
+on: push
+
+# Prevent previous workflows from running.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # https://github.com/actions/virtual-environments/blob/main/images/macos/macos-11-Readme.md
+    runs-on: macos-11
+    timeout-minutes: 60
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      - name: setup
+        working-directory: ./src/third_party
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          export PATH="$PATH":"$PWD/depot_tools";
+
+      - name: build
+        working-directory: ./src
+        run: |
+          python3 ./build_mozc.py gyp --noqt
+          python3 ./build_mozc.py build mac/mac.gyp:GoogleJapaneseInput
