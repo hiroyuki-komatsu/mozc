@@ -17,6 +17,7 @@ jobs:
 
     steps:
       - name: checkout
+        run: git config --global core.autocrlf false
         uses: actions/checkout@v2
         with:
           submodules: 'recursive'
