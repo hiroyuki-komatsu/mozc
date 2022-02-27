@@ -16,8 +16,10 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: checkout
+      - name: config
         run: git config --global core.autocrlf false
+
+      - name: checkout
         uses: actions/checkout@v2
         with:
           submodules: 'recursive'
