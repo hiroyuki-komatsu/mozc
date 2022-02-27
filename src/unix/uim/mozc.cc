@@ -173,21 +173,21 @@ insert_cursor(uim_lisp segs, const commands::Preedit::Segment &segment, int attr
 {
   size_t len = segment.value_length();
 
-  absl::string_view former = Util::Utf8SubString(segment.value(), 0, pos);
-  absl::string_view latter = Util::Utf8SubString(segment.value(), pos, len);
+  auto former = std::string(Util::Utf8SubString(segment.value(), 0, pos));
+  auto latter = std::string(Util::Utf8SubString(segment.value(), pos, len));
 
   uim_lisp seg_f, seg_c, seg_l;
   if (pos == 0) {
     seg_f = uim_scm_null(); /* not used */
     seg_c = CONS(MAKE_INT(UPreeditAttr_Cursor), MAKE_STR(""));
-    seg_l = CONS(MAKE_INT(attr), MAKE_STR(std::string(latter).c_str()));
+    seg_l = CONS(MAKE_INT(attr), MAKE_STR(latter.c_str()));
 
     segs = CONS(seg_c, segs);
     segs = CONS(seg_l, segs);
   } else {
-    seg_f = CONS(MAKE_INT(attr), MAKE_STR(std::string(former).c_str()));
+    seg_f = CONS(MAKE_INT(attr), MAKE_STR(former.c_str()));
     seg_c = CONS(MAKE_INT(UPreeditAttr_Cursor), MAKE_STR(""));
-    seg_l = CONS(MAKE_INT(attr), MAKE_STR(std::string(latter).c_str()));
+    seg_l = CONS(MAKE_INT(attr), MAKE_STR(latter.c_str()));
 
     segs = CONS(seg_f, segs);
     segs = CONS(seg_c, segs);
