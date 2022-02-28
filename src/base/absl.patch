@@ -11,3 +11,4 @@ index 19b076e..0201004 100644
 
  // A no-op expansion that can be followed by a semicolon at class level.
  #define ABSL_COMPARE_INLINE_BASECLASS_DECL(name) static_assert(true, "")
+
