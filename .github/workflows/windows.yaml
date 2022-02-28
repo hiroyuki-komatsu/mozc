@@ -31,12 +31,6 @@ jobs:
         working-directory: .\src\third_party
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          echo "%cd%\depot_tools" >> $GITHUB_PATH
-          echo "%cd%\depot_tools"
-          cat $GITHUB_PATH
-          ls "%cd%\depot_tools"
-          gclient
-          gclient
           cd gyp
           git apply ..\..\gyp\gyp.patch
           cd ..\abseil-cpp
