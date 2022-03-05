@@ -13,7 +13,7 @@ Build Status
 
 | Linux |
 |:----------------------------:|
-[![Build Status](/../actions/workflows/main.yml/badge.svg?branch=uim)](/../actions/workflows/main.yml)|
+[![Build Status](../actions/workflows/main.yml/badge.svg?branch=uim)](../actions/workflows/main.yml)|
 
 What's Mozc?
 ------------
