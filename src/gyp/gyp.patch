@@ -11,6 +11,28 @@ index bf04e567..462af711 100644
  
          self.ninja.build(outputs, rule_name, self.GypPathToNinja(source),
                           implicit=inputs,
+diff --git a/pylib/gyp/mac_tool.py b/pylib/gyp/mac_tool.py
+index 64d21063..8483c8f2 100755
+--- a/pylib/gyp/mac_tool.py
++++ b/pylib/gyp/mac_tool.py
+@@ -136,12 +136,12 @@ class MacTool(object):
+     #     CFPropertyListCreateFromXMLData(): Old-style plist parser: missing
+     #     semicolon in dictionary.
+     # on invalid files. Do the same kind of validation.
+-    import CoreFoundation
++    # import CoreFoundation
+     s = open(source, 'rb').read()
+-    d = CoreFoundation.CFDataCreate(None, s, len(s))
+-    _, error = CoreFoundation.CFPropertyListCreateFromXMLData(None, d, 0, None)
+-    if error:
+-      return
++    # d = CoreFoundation.CFDataCreate(None, s, len(s))
++    # _, error = CoreFoundation.CFPropertyListCreateFromXMLData(None, d, 0, None)
++    # if error:
++    #   return
+ 
+     fp = open(dest, 'wb')
+     fp.write(s.decode(input_code).encode('UTF-16'))
 diff --git a/pylib/gyp/msvs_emulation.py b/pylib/gyp/msvs_emulation.py
 index 63d40e63..935af325 100644
 --- a/pylib/gyp/msvs_emulation.py
