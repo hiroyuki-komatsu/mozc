@@ -897,7 +897,7 @@ struct eqstr
   }
 };
 
-typedef std::unordered_map<const char *, int, std::unordered_map<const char *>, eqstr> KeyMap;
+typedef std::unordered_map<const char *, int, std::hash<const char *>, eqstr> KeyMap;
 static KeyMap key_map;
 
 static void install_keymap(void)
