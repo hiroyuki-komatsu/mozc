@@ -62,8 +62,8 @@
 #define USE_CASCADING_CANDIDATES	0
 
 #include <map>
-#include <unordered_map>
-using std::unordered_map;
+#include <ext/hash_map>
+using __gnu_cxx::hash_map;
 static char **argv;
 
 // for every 5 minutes, call SyncData
@@ -897,7 +897,7 @@ struct eqstr
   }
 };
 
-typedef std::unordered_map<const char *, int, std::hash<const char *>, eqstr> KeyMap;
+typedef hash_map<const char *, int, __gnu_cxx::hash<const char *>, eqstr> KeyMap;
 static KeyMap key_map;
 
 static void install_keymap(void)
