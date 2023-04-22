@@ -568,6 +568,8 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SET_COMBOBOX(verboseLevelComboBox, int, verbose_level);
   SET_CHECKBOX(checkDefaultCheckBox, check_default);
   SET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
+  timeoutEdit->setText(
+      QString::number(config.composing_timeout_threshold_msec()));
 
   characterFormEditor->Load(config);
 
@@ -661,6 +663,8 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   config->set_verbose_level(verboseLevelComboBox->currentIndex());
   GET_CHECKBOX(checkDefaultCheckBox, check_default);
   GET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
+
+  config->set_composing_timeout_threshold_msec(timeoutEdit->text().toInt());
 
   characterFormEditor->Save(config);
 }

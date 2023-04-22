@@ -105,7 +105,7 @@ enum {
 class KeyMapValidator {
  public:
   KeyMapValidator() {
-    invisible_commands_.insert(kInsertCharacterCommand);
+    // invisible_commands_.insert(kInsertCharacterCommand);
     invisible_commands_.insert(kReportBugCommand);
     // Old command name.
     invisible_commands_.insert(kEditInsertCommand);
