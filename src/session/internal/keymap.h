@@ -329,7 +329,8 @@ class KeyMapManager {
                                  ConversionState::Commands command);
 
 #if defined(__APPLE__)
-  static constexpr bool kInputModeXCommandSupported = false;
+  // static constexpr bool kInputModeXCommandSupported = false;
+  static constexpr bool kInputModeXCommandSupported = true;
 #else   // __APPLE__
   static constexpr bool kInputModeXCommandSupported = true;
 #endif  // __APPLE__

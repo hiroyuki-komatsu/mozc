@@ -104,6 +104,7 @@ GenericTableEditorDialog::GenericTableEditorDialog(QWidget *parent,
   // select multiple items. See b/6488800.
   editorTableWidget->setEditTriggers(QAbstractItemView::AnyKeyPressed |
                                      QAbstractItemView::DoubleClicked |
+                                     QAbstractItemView::EditKeyPressed |
                                      QAbstractItemView::SelectedClicked);
   editorTableWidget->setSortingEnabled(true);
 

@@ -44,8 +44,11 @@ class KeyBindingEditorTriggerButton : public QPushButton {
   explicit KeyBindingEditorTriggerButton(QWidget *parent)
       : QPushButton(parent), editor_(new KeyBindingEditor(parent, this)) {
     editor_->setModal(true);  // create a modal dialog
+    setDefault(true);
+    setAutoDefault(true);
     setFocusProxy(editor_.get());
     connect(this, SIGNAL(clicked()), editor_.get(), SLOT(show()));
+    connect(this, SIGNAL(entered()), editor_.get(), SLOT(show()));
   }
 
   KeyBindingEditor *mutable_editor() { return editor_.get(); }
