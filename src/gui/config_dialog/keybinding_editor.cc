@@ -310,20 +310,20 @@ KeyBindingFilter::KeyState KeyBindingFilter::Encode(QString *result) const {
   }
 
   // Don't support Shift + 'a' only
-  if (shift_pressed_ && !ctrl_pressed_ && !alt_pressed_ &&
-      !modifier_required_key_.isEmpty() && IsAlphabet(key)) {
-    result_state = KeyBindingFilter::DENY_KEY;
-  }
+  // if (shift_pressed_ && !ctrl_pressed_ && !alt_pressed_ &&
+  //     !modifier_required_key_.isEmpty() && IsAlphabet(key)) {
+  //   result_state = KeyBindingFilter::DENY_KEY;
+  // }
 
   // Don't support Shift + Ctrl + '@'
   if (shift_pressed_ && !modifier_required_key_.isEmpty() && !IsAlphabet(key)) {
     result_state = KeyBindingFilter::DENY_KEY;
   }
 
-  // no modifer for modifier_required_key
-  if (!has_modifier && !modifier_required_key_.isEmpty()) {
-    result_state = KeyBindingFilter::DENY_KEY;
-  }
+  // no modifer for modifier_required_key (e.g. 'a' only).
+  // if (!has_modifier && !modifier_required_key_.isEmpty()) {
+  //   result_state = KeyBindingFilter::DENY_KEY;
+  // }
 
   // modifier_required_key and modifier_non_required_key
   // cannot co-exist
