@@ -209,7 +209,7 @@ ImeContext::State GetEffectiveStateForTestSendKey(const commands::KeyEvent &key,
 
 // TODO(komatsu): Remove these argument by using/making singletons.
 Session::Session(EngineInterface *engine)
-    : engine_(engine), context_(new ImeContext) {
+    : engine_(engine), context_(new ImeContext), hide_composition_(false) {
   InitContext(context_.get());
 }
 
@@ -459,6 +459,8 @@ bool Session::TestSendKey(commands::Command *command) {
     // TODO(komatsu): This is a hack to work around the problem with
     // the inconsistency between TestSendKey and SendKey.
     switch (key_command) {
+      case keymap::PrecompositionState::HIDE_COMPOSITION:
+        return DoNothing(command);
       case keymap::PrecompositionState::INSERT_SPACE:
         if (!IsFullWidthInsertSpace(command->input()) && IsPureSpaceKey(key)) {
           return EchoBackAndClearUndoContext(command);
@@ -596,6 +598,10 @@ bool Session::SendKeyPrecompositionState(commands::Command *command) {
   }
 
   switch (key_command) {
+    case keymap::PrecompositionState::HIDE_COMPOSITION:
+      hide_composition_ = true;
+      return DoNothing(command);
+
     case keymap::PrecompositionState::INSERT_CHARACTER:
       return InsertCharacter(command);
     case keymap::PrecompositionState::INSERT_SPACE:
@@ -1129,6 +1135,7 @@ bool Session::ResetContext(commands::Command *command) {
 
   context_->mutable_converter()->Reset();
 
+  hide_composition_ = false;
   SetSessionState(ImeContext::PRECOMPOSITION, context_.get());
   OutputMode(command);
   return true;
@@ -1769,6 +1776,7 @@ bool Session::CommitInternal(commands::Command *command,
   Output(command);
   // Copy the previous output for Undo.
   *context_->mutable_output() = command->output();
+  hide_composition_ = false;
   return true;
 }
 
@@ -2744,6 +2752,10 @@ void Session::Output(commands::Command *command) {
   OutputMode(command);
   context_->mutable_converter()->PopOutput(context_->composer(),
                                            command->mutable_output());
+  if (hide_composition_) {
+    command->mutable_output()->clear_candidates();
+    command->mutable_output()->clear_preedit();
+  }
 }
 
 void Session::OutputMode(commands::Command *command) const {
@@ -2769,6 +2781,10 @@ void Session::OutputComposition(commands::Command *command) const {
   OutputMode(command);
   commands::Preedit *preedit = command->mutable_output()->mutable_preedit();
   SessionOutput::FillPreedit(context_->composer(), preedit);
+  if (hide_composition_) {
+    command->mutable_output()->clear_candidates();
+    command->mutable_output()->clear_preedit();
+  }
 }
 
 void Session::OutputKey(commands::Command *command) const {

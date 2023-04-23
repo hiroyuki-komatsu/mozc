@@ -67,6 +67,7 @@ struct PrecompositionState {
     NONE = 0,
     IME_OFF,
     IME_ON,
+    HIDE_COMPOSITION,
     INSERT_CHARACTER,  // Move to Composition status.
     INSERT_SPACE,      // To handle spaces.
     // to handle shift+spaces (useally toggle half/full with)

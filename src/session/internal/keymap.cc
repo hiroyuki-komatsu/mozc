@@ -426,6 +426,9 @@ void KeyMapManager::InitCommandData() {
   // Precomposition
   RegisterPrecompositionCommand("IMEOff", PrecompositionState::IME_OFF);
   RegisterPrecompositionCommand("IMEOn", PrecompositionState::IME_ON);
+  RegisterPrecompositionCommand("HideComposition",
+                                PrecompositionState::HIDE_COMPOSITION);
+
   RegisterPrecompositionCommand("InsertCharacter",
                                 PrecompositionState::INSERT_CHARACTER);
   RegisterPrecompositionCommand("InsertSpace",

@@ -286,6 +286,9 @@ class Session : public SessionInterface {
   // Undo stack. *begin is the oldest, and *back is the newest.
   std::deque<std::unique_ptr<ImeContext>> undo_contexts_;
 
+  // Hide the composing text and the candidate window if true.
+  bool hide_composition_;
+
   void InitContext(ImeContext *context) const;
 
   void PushUndoContext();

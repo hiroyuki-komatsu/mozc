@@ -360,9 +360,9 @@ bool IsBannedApplication(const std::set<std::string, std::less<>> *bundleIdSet,
 - (void)setValue:(id)value forTag:(long)tag client:(id)sender {
   CompositionMode new_mode = GetCompositionMode(value);
 
-  if (new_mode == mozc::commands::HALF_ASCII && [composedString_ length] == 0) {
-    new_mode = mozc::commands::DIRECT;
-  }
+  // if (new_mode == mozc::commands::HALF_ASCII && [composedString_ length] == 0) {
+  //   new_mode = mozc::commands::DIRECT;
+  // }
 
   [self switchMode:new_mode client:sender];
   [self handleConfig];
@@ -615,11 +615,11 @@ bool IsBannedApplication(const std::set<std::string, std::less<>> *bundleIdSet,
     CompositionMode new_mode = output->mode();
     // Do not allow HALF_ASCII with empty composition.  This should be
     // handled in the converter, but just in case.
-    if (new_mode == mozc::commands::HALF_ASCII &&
-        (!output->has_preedit() || output->preedit().segment_size() == 0)) {
-      new_mode = mozc::commands::DIRECT;
-      [self switchMode:new_mode client:sender];
-    }
+    // if (new_mode == mozc::commands::HALF_ASCII &&
+    //     (!output->has_preedit() || output->preedit().segment_size() == 0)) {
+    //   new_mode = mozc::commands::DIRECT;
+    //   [self switchMode:new_mode client:sender];
+    // }
     if (new_mode != mode_) {
       mode_ = new_mode;
       [self switchDisplayMode];
