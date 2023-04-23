@@ -1,3 +1,20 @@
+# Keyboard Input Hackathon 2023 branch
+
+This branch has addtional experimentral features developed through the hackathon
+event, [KIH2023](https://k-i-hackathon.notion.site/Keyboard-Input-Hackathon-2023-1d0ac21fd70e4a78b46c39272ddb4acf)
+
+There are three experimental features as follows:
+
+* Nicola input (aka 親指シフト)
+* Customization feature to bind normal keys to function keys (e.g. `y` to `BackSpace`)
+* Command to temporary hide IME UIs until the next commit
+
+Here's the slides describing the details and background.
+
+https://docs.google.com/presentation/d/1i7vbGn3MP53lNBsa-lMTvukIwShpgAg59nWiid__dN0/edit
+
+----
+
 [Mozc - a Japanese Input Method Editor designed for multi-platform](https://github.com/google/mozc)
 ===================================
 
