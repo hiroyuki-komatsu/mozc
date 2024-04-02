@@ -123,6 +123,8 @@ jobs:
       - name: Install pip dependencies
         working-directory: ./src
         run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
           python3 -m pip install requests
 
       - name: Try to restore update_deps cache
@@ -169,6 +171,8 @@ jobs:
       - name: Install pip dependencies
         working-directory: ./src
         run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
           python3 -m pip install requests
 
       - name: Try to restore update_deps cache
