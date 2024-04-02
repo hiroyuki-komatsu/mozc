@@ -40,6 +40,7 @@ jobs:
         working-directory: ./src
         # This command uses src/third_party_cache as the download cache.
         run: |
+          source .venv/bin/activate
           python3 build_tools/update_deps.py
 
       - name: Build Qt
@@ -180,6 +181,7 @@ jobs:
         working-directory: ./src
         # This command uses src/third_party_cache as the download cache.
         run: |
+          source .venv/bin/activate
           python3 build_tools/update_deps.py
 
       - name: Build Qt
@@ -222,4 +224,5 @@ jobs:
         working-directory: ./src
         # This command uses src/third_party_cache as the download cache.
         run: |
+          source .venv/bin/activate
           python3 build_tools/update_deps.py --cache_only
