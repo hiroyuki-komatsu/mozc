@@ -16,3 +16,11 @@ body:
         > will be updated in 10 mins.
         >
         > See https://github.com/google/mozc/issues/1056
+
+  - type: input
+    id: na
+    attributes:
+      label: 'N/A'
+      placeholder: Do not use this field.
+    validations:
+      required: true
