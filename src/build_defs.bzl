@@ -264,9 +264,6 @@ _mozc_win_build_rule = rule(
         ),
         "static_crt": attr.bool(),
         "cpu": attr.string(),
-        "visibility": attr.label_list(
-            default = ["//visibility:private"],
-        ),
     },
 )
 
