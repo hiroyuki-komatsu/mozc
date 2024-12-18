@@ -337,6 +337,7 @@ def mozc_win32_cc_prod_binary(
         executable_name_map = {},  # @unused
         srcs = [],
         deps = [],
+        features = None,
         linkopts = [],
         cpu = CPU.X64,
         static_crt = False,
@@ -359,6 +360,7 @@ def mozc_win32_cc_prod_binary(
       executable_name_map: a map from the branding name to the executable name.
       srcs: .cc files to build the executable.
       deps: deps to build the executable.
+      features: features to be passed to mozc_cc_binary.
       linkopts: linker options to build the executable.
       cpu: optional. The target CPU architecture.
       static_crt: optional. True if the target should be built with static CRT.
@@ -373,6 +375,7 @@ def mozc_win32_cc_prod_binary(
         name = target_name,
         srcs = srcs,
         deps = deps,
+        features = features,
         linkopts = linkopts,
         linkshared = static_crt,
         win_def_file = win_def_file,
