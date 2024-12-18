@@ -264,6 +264,9 @@ _mozc_win_build_rule = rule(
         ),
         "static_crt": attr.bool(),
         "cpu": attr.string(),
+        "visibility": attr.label_list(
+            default = ["//visibility:private"],
+        ),
     },
 )
 
@@ -343,7 +346,7 @@ def mozc_win32_cc_prod_binary(
         tags = MOZC_TAGS.WIN_ONLY,
         win_def_file = None,  # @unused
         target_compatible_with = ["@platforms//os:windows"],
-        visibility = ["//visibility:public"],
+        visibility = None,
         **kwargs):
     """A rule to build production binaries for Windows.
 
@@ -388,6 +391,7 @@ def mozc_win32_cc_prod_binary(
         static_crt = static_crt,
         target_compatible_with = target_compatible_with,
         tags = tags,
+        visibility = visibility,
         **kwargs
     )
 
