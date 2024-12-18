@@ -374,6 +374,7 @@ def mozc_win32_cc_prod_binary(
         srcs = srcs,
         deps = deps,
         linkopts = linkopts,
+        linkshared = static_crt,
         win_def_file = win_def_file,
         tags = tags,
         target_compatible_with = target_compatible_with,
