@@ -36,6 +36,23 @@ load(
 
 package(default_visibility = ["//visibility:private"])
 
+cc_static_library(
+    name = "mozc_client",
+    visibility = ["//visibility:public"],
+    deps = [":mozc_client_lib"],
+)
+
+mozc_cc_library(
+    name = "mozc_client_lib",
+    srcs = ["mozc_client.cc"],
+    hdrs = ["mozc_client.h"],
+    deps = [
+        ":client",
+        "//protocol:commands_cc_proto",
+        "//protocol:config_cc_proto",
+    ],
+)
+
 mozc_cc_library(
     name = "client_interface",
     hdrs = ["client_interface.h"],
